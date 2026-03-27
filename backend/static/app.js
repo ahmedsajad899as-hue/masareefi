@@ -340,11 +340,12 @@ function closeSidebar() {
 
 // ── Theme ────────────────────────────────────────────────────
 function toggleTheme() {
-  const light = document.body.classList.toggle('light-theme');
-  localStorage.setItem('theme', light ? 'light' : 'dark');
-  document.getElementById('theme-btn').innerHTML = light ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+  const isDark = document.body.classList.toggle('dark-theme');
+  document.body.classList.toggle('light-theme', !isDark);
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  document.getElementById('theme-btn').innerHTML = isDark ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
   const sw = document.getElementById('dark-toggle');
-  if (sw) sw.checked = !light;
+  if (sw) sw.checked = isDark;
 }
 
 // ── Categories ───────────────────────────────────────────────
@@ -1941,10 +1942,20 @@ async function deleteAdminUser(userId, name) {
 
 // ── Bootstrap ────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Apply saved theme
-  if (localStorage.getItem('theme') === 'light') {
+  // Default is light theme; only apply dark if user explicitly chose it
+  if (localStorage.getItem('theme') === 'dark') {
+    document.body.classList.add('dark-theme');
+    const btn = document.getElementById('theme-btn');
+    if (btn) btn.innerHTML = '<i class="fas fa-moon"></i>';
+    const sw = document.getElementById('dark-toggle');
+    if (sw) sw.checked = true;
+  } else {
+    document.body.classList.remove('dark-theme');
     document.body.classList.add('light-theme');
-    document.getElementById('theme-btn').innerHTML = '<i class="fas fa-sun"></i>';
+    const btn = document.getElementById('theme-btn');
+    if (btn) btn.innerHTML = '<i class="fas fa-sun"></i>';
+    const sw = document.getElementById('dark-toggle');
+    if (sw) sw.checked = false;
   }
 
   // Swipe to open sidebar (swipe right in RTL = from left edge)
