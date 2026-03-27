@@ -276,6 +276,10 @@ function updateSidebarUser() {
   setText('s-email', S.user.email || '');
   setText('s-avatar', name.charAt(0));
   setText('dash-name', name);
+  // Show admin link only for admins
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = S.user.is_admin ? '' : 'none';
+  });
 }
 
 function setText(id, val) {
@@ -293,6 +297,7 @@ const PAGE_TITLES = {
   'voice-assistant': 'المساعد الصوتي',
   'statistics':      'الإحصائيات',
   'settings':        'الإعدادات',
+  'admin-users':     'إدارة المستخدمين',
 };
 
 function goTo(page) {
@@ -319,6 +324,7 @@ function goTo(page) {
     case 'voice-assistant':  initVoiceAssistant(); break;
     case 'statistics':       initStats();     break;
     case 'settings':         loadSettings();  break;
+    case 'admin-users':      loadAdminUsers(); break;
   }
 }
 
@@ -1804,6 +1810,131 @@ function esc(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// ── Admin Users ───────────────────────────────────────────────
+let _adminUsers = [];
+
+async function loadAdminUsers() {
+  const wrap = document.getElementById('admin-users-table');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+  try {
+    _adminUsers = await api('GET', '/admin/users');
+    renderAdminTable();
+  } catch(e) {
+    wrap.innerHTML = `<div class="text-danger p-3">${esc(e.message)}</div>`;
+  }
+}
+
+function renderAdminTable() {
+  const wrap = document.getElementById('admin-users-table');
+  if (!wrap) return;
+  if (!_adminUsers.length) {
+    wrap.innerHTML = '<p class="text-muted text-center py-3">لا يوجد مستخدمون</p>';
+    return;
+  }
+  wrap.innerHTML = `
+    <div class="table-responsive">
+      <table class="table table-dark table-hover align-middle mb-0">
+        <thead><tr>
+          <th>الاسم</th>
+          <th>البريد</th>
+          <th>العملة</th>
+          <th>الحالة</th>
+          <th>أدمن</th>
+          <th>الإجراءات</th>
+        </tr></thead>
+        <tbody>
+          ${_adminUsers.map(u => `
+            <tr>
+              <td>${esc(u.full_name)}</td>
+              <td dir="ltr">${esc(u.email)}</td>
+              <td>${esc(u.currency)}</td>
+              <td><span class="badge ${u.is_active ? 'bg-success' : 'bg-secondary'}">${u.is_active ? 'مفعّل' : 'معطّل'}</span></td>
+              <td>${u.is_admin ? '<span class="badge bg-warning text-dark">أدمن</span>' : ''}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="openEditUserModal('${u.id}')"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteAdminUser('${u.id}', '${esc(u.full_name)}')"><i class="fas fa-trash"></i></button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function openAddUserModal() {
+  document.getElementById('userModalTitle').textContent = 'مستخدم جديد';
+  document.getElementById('um-id').value = '';
+  document.getElementById('um-name').value = '';
+  document.getElementById('um-email').value = '';
+  document.getElementById('um-email').disabled = false;
+  document.getElementById('um-pass').value = '';
+  document.getElementById('um-pass').placeholder = 'كلمة المرور (مطلوبة)';
+  document.getElementById('um-currency').value = 'IQD';
+  document.getElementById('um-admin').checked = false;
+  document.getElementById('um-active').checked = true;
+  new bootstrap.Modal(document.getElementById('userModal')).show();
+}
+
+function openEditUserModal(userId) {
+  const u = _adminUsers.find(x => x.id === userId);
+  if (!u) return;
+  document.getElementById('userModalTitle').textContent = 'تعديل المستخدم';
+  document.getElementById('um-id').value = u.id;
+  document.getElementById('um-name').value = u.full_name;
+  document.getElementById('um-email').value = u.email;
+  document.getElementById('um-email').disabled = true;
+  document.getElementById('um-pass').value = '';
+  document.getElementById('um-pass').placeholder = 'اتركه فارغاً للإبقاء على القديم';
+  document.getElementById('um-currency').value = u.currency || 'IQD';
+  document.getElementById('um-admin').checked = u.is_admin;
+  document.getElementById('um-active').checked = u.is_active;
+  new bootstrap.Modal(document.getElementById('userModal')).show();
+}
+
+async function saveUser() {
+  const id       = document.getElementById('um-id').value;
+  const name     = document.getElementById('um-name').value.trim();
+  const email    = document.getElementById('um-email').value.trim();
+  const pass     = document.getElementById('um-pass').value;
+  const currency = document.getElementById('um-currency').value;
+  const isAdmin  = document.getElementById('um-admin').checked;
+  const isActive = document.getElementById('um-active').checked;
+
+  if (!name) { toast('أدخل الاسم', 'err'); return; }
+
+  loading(true);
+  try {
+    if (!id) {
+      // Create
+      if (!email) { toast('أدخل البريد', 'err'); return; }
+      if (!pass)  { toast('أدخل كلمة المرور', 'err'); return; }
+      await api('POST', '/admin/users', { full_name: name, email, password: pass, currency, is_admin: isAdmin });
+      toast('تم إنشاء الحساب ✅');
+    } else {
+      // Update
+      const body = { full_name: name, currency, is_admin: isAdmin, is_active: isActive };
+      if (pass) body.password = pass;
+      await api('PATCH', `/admin/users/${id}`, body);
+      toast('تم التحديث ✅');
+    }
+    bootstrap.Modal.getInstance(document.getElementById('userModal'))?.hide();
+    await loadAdminUsers();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+async function deleteAdminUser(userId, name) {
+  if (!confirm(`هل تريد حذف حساب "${name}"؟ سيتم حذف جميع بياناته.`)) return;
+  loading(true);
+  try {
+    await api('DELETE', `/admin/users/${userId}`);
+    toast('تم حذف الحساب');
+    await loadAdminUsers();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
 }
 
 // ── FAB Voice Assistant code is in inline script in index.html ──

@@ -119,6 +119,7 @@
       <a class="s-link" data-page="wallets" onclick="goTo('wallets')"><i class="fas fa-wallet"></i> المحافظ</a>
       <a class="s-link" data-page="voice-assistant" onclick="goTo('voice-assistant')"><i class="fas fa-robot"></i> المساعد الصوتي</a>
       <a class="s-link" data-page="statistics" onclick="goTo('statistics')"><i class="fas fa-chart-pie"></i> الإحصائيات</a>
+      <a class="s-link admin-only" data-page="admin-users" onclick="goTo('admin-users')" style="display:none"><i class="fas fa-users-cog"></i> إدارة المستخدمين</a>
     </nav>
     <div class="sidebar-footer">
       <a class="s-link s-link-settings" data-page="settings" onclick="goTo('settings')"><i class="fas fa-cog"></i> الإعدادات</a>
@@ -504,6 +505,68 @@
           <span>الوضع الداكن</span>
           <div class="form-check form-switch mb-0">
             <input class="form-check-input" type="checkbox" id="dark-toggle" onchange="toggleTheme()" checked>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Admin Users ── -->
+    <section id="pg-admin-users" class="pg" style="display:none">
+      <div class="pg-head">
+        <h2><i class="fas fa-users-cog me-2"></i>إدارة المستخدمين</h2>
+        <button class="btn btn-primary btn-sm" onclick="openAddUserModal()"><i class="fas fa-user-plus me-2"></i>مستخدم جديد</button>
+      </div>
+
+      <div class="glass-card">
+        <div id="admin-users-table">
+          <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+        </div>
+      </div>
+
+      <!-- Add/Edit User Modal -->
+      <div class="modal fade" id="userModal" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content" style="background:#1e1e2e;color:#fff;border:1px solid #333">
+            <div class="modal-header border-secondary">
+              <h5 class="modal-title" id="userModalTitle">مستخدم جديد</h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <input type="hidden" id="um-id">
+              <div class="mb-3">
+                <label class="form-label">الاسم الكامل</label>
+                <input type="text" id="um-name" class="form-control">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">البريد الإلكتروني</label>
+                <input type="email" id="um-email" class="form-control" dir="ltr">
+              </div>
+              <div class="mb-3" id="um-pass-wrap">
+                <label class="form-label">كلمة المرور</label>
+                <input type="password" id="um-pass" class="form-control" dir="ltr" placeholder="اتركه فارغاً للإبقاء على القديم">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">العملة</label>
+                <select id="um-currency" class="form-select">
+                  <option value="IQD">🇮🇶 دينار عراقي (IQD)</option>
+                  <option value="USD">🇺🇸 دولار أمريكي (USD)</option>
+                  <option value="SAR">🇸🇦 ريال سعودي (SAR)</option>
+                  <option value="AED">🇦🇪 درهم إماراتي (AED)</option>
+                </select>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="um-admin">
+                <label class="form-check-label" for="um-admin">صلاحية أدمن</label>
+              </div>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="um-active" checked>
+                <label class="form-check-label" for="um-active">حساب مفعّل</label>
+              </div>
+            </div>
+            <div class="modal-footer border-secondary">
+              <button class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+              <button class="btn btn-primary" onclick="saveUser()">حفظ</button>
+            </div>
           </div>
         </div>
       </div>
