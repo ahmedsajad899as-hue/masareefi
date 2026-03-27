@@ -112,6 +112,10 @@ body.light-theme {
   display: flex; align-items: center; gap: 10px; padding: 0 14px;
   z-index: 300;
 }
+.impersonating .topbar { top: 40px; }
+.impersonating .app-main { margin-top: 98px; }
+.impersonating #sidebar { top: 40px; }
+.impersonating #sidebar-overlay { top: 40px; }
 .topbar-btn {
   background: none; border: none; color: var(--text);
   font-size: 1.2rem; padding: 8px; border-radius: 8px;

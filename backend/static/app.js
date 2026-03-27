@@ -1837,6 +1837,7 @@ async function viewAsUser(userId, userName) {
     // Show banner
     document.getElementById('impersonate-banner').style.display = '';
     document.getElementById('impersonate-name').textContent = `أنت تشاهد حساب: ${userName}`;
+    document.getElementById('app-screen').classList.add('impersonating');
     // Re-init app as target user
     await loadCategories();
     await loadWalletsData();
@@ -1864,6 +1865,7 @@ async function exitImpersonation() {
   localStorage.removeItem('admin_backup_user');
   // Hide banner
   document.getElementById('impersonate-banner').style.display = 'none';
+  document.getElementById('app-screen').classList.remove('impersonating');
   // Re-init as admin
   await loadCategories();
   await loadWalletsData();
@@ -2077,6 +2079,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (localStorage.getItem('admin_backup_token') && S.user) {
       document.getElementById('impersonate-banner').style.display = '';
       document.getElementById('impersonate-name').textContent = `أنت تشاهد حساب: ${S.user.full_name}`;
+      document.getElementById('app-screen').classList.add('impersonating');
     }
   } else {
     showAuthTab('login');
