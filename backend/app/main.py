@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.database import create_all_tables
+from app.database import create_all_tables, _is_sqlite
 from app.routers import auth, expenses, categories, statistics, budgets, voice, wallets, admin
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
@@ -15,8 +15,9 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables and seed on every startup (seed is idempotent — checks if data exists)
-    await create_all_tables()
+    # SQLite (local dev): auto-create tables. PostgreSQL: use Alembic migrations.
+    if _is_sqlite:
+        await create_all_tables()
     await seed_default_user()
     yield
 
