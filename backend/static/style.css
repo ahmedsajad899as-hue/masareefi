@@ -71,9 +71,18 @@ body.light-theme {
 }
 
 .auth-logo { text-align: center; margin-bottom: 28px; }
-.logo-emoji { font-size: 3.2rem; line-height: 1; }
+.logo-svg-wrap {
+  display: flex; justify-content: center; align-items: center;
+  margin-bottom: 4px;
+  filter: drop-shadow(0 8px 24px rgba(108,99,255,.45));
+  animation: logoFloat 3s ease-in-out infinite;
+}
+@keyframes logoFloat {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-6px); }
+}
 .logo-name {
-  font-size: 2rem; font-weight: 900; margin-top: 8px;
+  font-size: 2rem; font-weight: 900; margin-top: 4px;
   background: linear-gradient(135deg, #6C63FF, #a78bfa);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
@@ -127,7 +136,13 @@ body.light-theme {
 }
 #sidebar.open { right: 0; }
 
-.sidebar-brand { padding: 20px; font-size: 1.25rem; font-weight: 900; color: var(--primary); border-bottom: 1px solid var(--border); }
+.sidebar-brand {
+  padding: 16px 20px;
+  font-size: 1.2rem; font-weight: 900;
+  color: var(--primary);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 4px;
+}
 
 .sidebar-user {
   display: flex; align-items: center; gap: 12px;

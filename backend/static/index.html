@@ -10,6 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="مصاريفي">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
   <link rel="icon" type="image/png" href="/static/icons/icon-192.png">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -39,9 +40,75 @@
   <div class="auth-bg">
     <div class="auth-card">
       <div class="auth-logo">
-        <div class="logo-emoji">💰</div>
+        <div class="logo-svg-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="110" height="110">
+            <defs>
+              <linearGradient id="bgG" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#1e1b4b"/>
+                <stop offset="100%" style="stop-color:#312e81"/>
+              </linearGradient>
+              <linearGradient id="wG" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#7c3aed"/>
+                <stop offset="100%" style="stop-color:#6d28d9"/>
+              </linearGradient>
+              <linearGradient id="wT" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#8b5cf6"/>
+                <stop offset="100%" style="stop-color:#7c3aed"/>
+              </linearGradient>
+              <linearGradient id="n1G" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#16a34a"/>
+                <stop offset="100%" style="stop-color:#15803d"/>
+              </linearGradient>
+              <linearGradient id="n2G" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#2563eb"/>
+                <stop offset="100%" style="stop-color:#1d4ed8"/>
+              </linearGradient>
+              <linearGradient id="n3G" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#dc2626"/>
+                <stop offset="100%" style="stop-color:#b91c1c"/>
+              </linearGradient>
+              <linearGradient id="cG" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#fde047"/>
+                <stop offset="100%" style="stop-color:#f59e0b"/>
+              </linearGradient>
+              <filter id="sh"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000" flood-opacity="0.4"/></filter>
+              <filter id="cs"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.3"/></filter>
+            </defs>
+            <circle cx="100" cy="100" r="96" fill="url(#bgG)"/>
+            <circle cx="100" cy="100" r="96" fill="none" stroke="#6d28d9" stroke-width="2" opacity="0.5"/>
+            <g transform="rotate(-18,100,95)" filter="url(#cs)">
+              <rect x="42" y="68" width="72" height="42" rx="5" fill="url(#n1G)"/>
+              <line x1="52" y1="82" x2="85" y2="82" stroke="#86efac" stroke-width="1.2" opacity="0.6"/>
+              <line x1="52" y1="87" x2="75" y2="87" stroke="#86efac" stroke-width="1" opacity="0.5"/>
+              <line x1="52" y1="92" x2="80" y2="92" stroke="#86efac" stroke-width="1" opacity="0.4"/>
+              <text x="99" y="91" font-size="7.5" fill="#dcfce7" text-anchor="middle" font-family="Arial" font-weight="bold">١٠٠٠</text>
+            </g>
+            <g transform="rotate(15,100,95)" filter="url(#cs)">
+              <rect x="46" y="65" width="72" height="42" rx="5" fill="url(#n3G)"/>
+              <line x1="56" y1="80" x2="89" y2="80" stroke="#fca5a5" stroke-width="1.2" opacity="0.6"/>
+              <line x1="56" y1="85" x2="79" y2="85" stroke="#fca5a5" stroke-width="1" opacity="0.5"/>
+              <line x1="56" y1="90" x2="84" y2="90" stroke="#fca5a5" stroke-width="1" opacity="0.4"/>
+              <text x="103" y="89" font-size="7.5" fill="#fee2e2" text-anchor="middle" font-family="Arial" font-weight="bold">٥٠٠٠</text>
+            </g>
+            <g transform="rotate(-4,100,95)" filter="url(#cs)">
+              <rect x="44" y="62" width="76" height="44" rx="5" fill="url(#n2G)"/>
+              <line x1="54" y1="77" x2="91" y2="77" stroke="#93c5fd" stroke-width="1.3" opacity="0.7"/>
+              <line x1="54" y1="83" x2="81" y2="83" stroke="#93c5fd" stroke-width="1.1" opacity="0.6"/>
+              <line x1="54" y1="89" x2="86" y2="89" stroke="#93c5fd" stroke-width="1.1" opacity="0.5"/>
+              <text x="104" y="92" font-size="8" fill="#dbeafe" text-anchor="middle" font-family="Arial" font-weight="bold">١٠٠٠٠</text>
+            </g>
+            <rect x="34" y="98" width="132" height="82" rx="12" fill="url(#wG)" filter="url(#sh)"/>
+            <rect x="34" y="85" width="132" height="30" rx="10" fill="url(#wT)"/>
+            <rect x="40" y="112" width="120" height="60" rx="8" fill="#4c1d95" opacity="0.5"/>
+            <rect x="118" y="118" width="34" height="22" rx="6" fill="#5b21b6" opacity="0.7"/>
+            <circle cx="135" cy="129" r="7" fill="url(#cG)"/>
+            <text x="135" y="133" font-size="8" fill="#78350f" text-anchor="middle" font-family="Arial" font-weight="bold">د.ع</text>
+            <circle cx="100" cy="85" r="6" fill="#a78bfa"/>
+            <circle cx="100" cy="85" r="3.5" fill="#7c3aed"/>
+          </svg>
+        </div>
         <h1 class="logo-name">مصاريفي</h1>
-        <p class="logo-sub">تتبع مصاريفك بذكاء</p>
+        <p class="logo-sub">تتبع مصاريفك بذكاء 🇮🇶</p>
       </div>
 
       <div class="auth-tabs-bar">
@@ -120,7 +187,41 @@
 
   <!-- Sidebar -->
   <aside id="sidebar">
-    <div class="sidebar-brand">💰 مصاريفي</div>
+    <div class="sidebar-brand">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="32" height="32" style="vertical-align:middle;margin-left:8px;flex-shrink:0">
+        <defs>
+          <linearGradient id="sbBg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#1e1b4b"/><stop offset="100%" style="stop-color:#312e81"/>
+          </linearGradient>
+          <linearGradient id="sbW" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#8b5cf6"/><stop offset="100%" style="stop-color:#6d28d9"/>
+          </linearGradient>
+          <linearGradient id="sbC" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#fde047"/><stop offset="100%" style="stop-color:#f59e0b"/>
+          </linearGradient>
+        </defs>
+        <circle cx="100" cy="100" r="96" fill="url(#sbBg)"/>
+        <g transform="rotate(-14,100,95)">
+          <rect x="44" y="65" width="68" height="40" rx="5" fill="#16a34a"/>
+          <text x="78" y="89" font-size="10" fill="#dcfce7" text-anchor="middle" font-family="Arial" font-weight="bold">١٠٠٠</text>
+        </g>
+        <g transform="rotate(12,100,95)">
+          <rect x="48" y="63" width="68" height="40" rx="5" fill="#dc2626"/>
+          <text x="82" y="87" font-size="10" fill="#fee2e2" text-anchor="middle" font-family="Arial" font-weight="bold">٥٠٠٠</text>
+        </g>
+        <g transform="rotate(-3,100,95)">
+          <rect x="46" y="61" width="72" height="42" rx="5" fill="#2563eb"/>
+          <text x="82" y="86" font-size="10" fill="#dbeafe" text-anchor="middle" font-family="Arial" font-weight="bold">١٠٠٠٠</text>
+        </g>
+        <rect x="34" y="98" width="132" height="78" rx="12" fill="url(#sbW)"/>
+        <rect x="34" y="87" width="132" height="26" rx="9" fill="#8b5cf6"/>
+        <circle cx="100" cy="87" r="5.5" fill="#a78bfa"/>
+        <circle cx="100" cy="87" r="3" fill="#6d28d9"/>
+        <circle cx="132" cy="127" r="8" fill="url(#sbC)"/>
+        <text x="132" y="131" font-size="9" fill="#78350f" text-anchor="middle" font-family="Arial" font-weight="bold">د.ع</text>
+      </svg>
+      <span>مصاريفي</span>
+    </div>
     <div class="sidebar-user">
       <div class="s-avatar" id="s-avatar">م</div>
       <div>
