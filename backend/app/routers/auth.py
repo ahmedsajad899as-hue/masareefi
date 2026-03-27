@@ -34,6 +34,9 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
     # Seed system categories for new user
     await _seed_system_categories(db, user.id)
 
+    # Seed default wallets for new user
+    await _seed_default_wallets(db, user.id, user.currency)
+
     access_token = create_access_token(str(user.id))
     raw_refresh, refresh_hash, expires_at = create_refresh_token()
 
@@ -174,3 +177,18 @@ async def _seed_system_categories(db: AsyncSession, user_id: uuid.UUID):
             sort_order=i,
         )
         db.add(c)
+
+
+_DEFAULT_WALLETS = [
+    {"name": "راتب شهري",    "wallet_type": "salary",     "icon": "💵", "color": "#4CAF50", "is_default": True},
+    {"name": "حساب بنكي",    "wallet_type": "bank",       "icon": "🏦", "color": "#2196F3", "is_default": False},
+    {"name": "فلوس تحت اليد", "wallet_type": "cash",       "icon": "💰", "color": "#FF9800", "is_default": False},
+    {"name": "Zain Cash",      "wallet_type": "zaincash",   "icon": "📱", "color": "#7B1FA2", "is_default": False},
+    {"name": "Master Card",    "wallet_type": "mastercard", "icon": "💳", "color": "#1A237E", "is_default": False},
+]
+
+
+async def _seed_default_wallets(db: AsyncSession, user_id: uuid.UUID, currency: str = "IQD"):
+    from app.models.wallet import Wallet
+    for w in _DEFAULT_WALLETS:
+        db.add(Wallet(user_id=user_id, currency=currency, **w))

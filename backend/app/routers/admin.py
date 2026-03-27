@@ -71,9 +71,10 @@ async def create_user(
     db.add(user)
 
     # Seed system categories for new user
-    from app.routers.auth import _seed_system_categories
+    from app.routers.auth import _seed_system_categories, _seed_default_wallets
     await db.flush()
     await _seed_system_categories(db, user.id)
+    await _seed_default_wallets(db, user.id, user.currency)
 
     await db.commit()
     await db.refresh(user)
