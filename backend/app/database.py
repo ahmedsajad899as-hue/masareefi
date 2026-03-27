@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
+import os
 
 from app.config import settings
 
@@ -9,6 +10,11 @@ if _raw_url.startswith("postgresql://"):
     _raw_url = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 elif _raw_url.startswith("postgres://"):
     _raw_url = _raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
+
+# On Railway (ephemeral FS): redirect SQLite to persistent /data/ volume
+if _raw_url.startswith("sqlite") and os.environ.get("RAILWAY_ENVIRONMENT"):
+    os.makedirs("/data", exist_ok=True)
+    _raw_url = "sqlite+aiosqlite:////data/masareefi.db"
 
 _is_sqlite = _raw_url.startswith("sqlite")
 
