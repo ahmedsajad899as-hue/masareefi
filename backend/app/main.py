@@ -24,6 +24,15 @@ async def lifespan(app: FastAPI):
 
 async def seed_default_user():
     """Create a default test account on first run."""
+    import logging
+    logger = logging.getLogger("masareefi.seed")
+    try:
+        await _do_seed()
+    except Exception as e:
+        logger.error(f"Seed failed (non-fatal): {e}")
+
+
+async def _do_seed():
     from sqlalchemy import select
     from app.database import AsyncSessionLocal
     from app.models.user import User
