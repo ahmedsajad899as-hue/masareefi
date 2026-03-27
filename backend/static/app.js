@@ -1872,7 +1872,8 @@ function openAddUserModal() {
   document.getElementById('um-email').value = '';
   document.getElementById('um-email').disabled = false;
   document.getElementById('um-pass').value = '';
-  document.getElementById('um-pass').placeholder = 'كلمة المرور (مطلوبة)';
+  document.getElementById('um-pass').placeholder = 'أدخل كلمة المرور (مطلوبة)';
+  document.getElementById('um-pass-hint').style.display = 'none';
   document.getElementById('um-currency').value = 'IQD';
   document.getElementById('um-admin').checked = false;
   document.getElementById('um-active').checked = true;
@@ -1888,11 +1889,24 @@ function openEditUserModal(userId) {
   document.getElementById('um-email').value = u.email;
   document.getElementById('um-email').disabled = true;
   document.getElementById('um-pass').value = '';
-  document.getElementById('um-pass').placeholder = 'اتركه فارغاً للإبقاء على القديم';
+  document.getElementById('um-pass').placeholder = 'أدخل كلمة مرور جديدة';
+  document.getElementById('um-pass-hint').style.display = '';
   document.getElementById('um-currency').value = u.currency || 'IQD';
   document.getElementById('um-admin').checked = u.is_admin;
   document.getElementById('um-active').checked = u.is_active;
   new bootstrap.Modal(document.getElementById('userModal')).show();
+}
+
+function toggleAdminPass(btn) {
+  const inp = document.getElementById('um-pass');
+  const icon = btn.querySelector('i');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    icon.className = 'fas fa-eye-slash';
+  } else {
+    inp.type = 'password';
+    icon.className = 'fas fa-eye';
+  }
 }
 
 async function saveUser() {

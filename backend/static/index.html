@@ -543,7 +543,13 @@
               </div>
               <div class="mb-3" id="um-pass-wrap">
                 <label class="form-label">كلمة المرور</label>
-                <input type="password" id="um-pass" class="form-control" dir="ltr" placeholder="اتركه فارغاً للإبقاء على القديم">
+                <div class="input-group">
+                  <input type="password" id="um-pass" class="form-control" dir="ltr" placeholder="أدخل كلمة المرور">
+                  <button class="btn btn-outline-secondary" type="button" onclick="toggleAdminPass(this)" tabindex="-1">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+                <div class="form-text text-muted" id="um-pass-hint" style="display:none">اتركها فارغاً للإبقاء على كلمة المرور الحالية</div>
               </div>
               <div class="mb-3">
                 <label class="form-label">العملة</label>
