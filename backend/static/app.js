@@ -2017,7 +2017,7 @@ async function deleteAdminUser(userId, name) {
 // ── FAB Voice Assistant code is in inline script in index.html ──
 
 // ── Bootstrap ────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // Default is light theme; only apply dark if user explicitly chose it
   if (localStorage.getItem('theme') === 'dark') {
     document.body.classList.add('dark-theme');
@@ -2074,7 +2074,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }, { passive: true });
 
   if (S.token && S.user) {
-    initApp();
+    await initApp();
     // Restore impersonation banner if page was refreshed while impersonating
     if (localStorage.getItem('admin_backup_token') && S.user) {
       document.getElementById('impersonate-banner').style.display = '';
