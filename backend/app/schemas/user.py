@@ -44,6 +44,7 @@ class UserOut(BaseModel):
     preferred_language: str
     currency: str
     is_active: bool
+    is_admin: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}

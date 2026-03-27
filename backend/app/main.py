@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import create_all_tables
-from app.routers import auth, expenses, categories, statistics, budgets, voice, wallets
+from app.routers import auth, expenses, categories, statistics, budgets, voice, wallets, admin
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 
@@ -61,9 +61,10 @@ async def seed_default_user():
         user = User(
             email=DEFAULT_EMAIL,
             password_hash=hash_password(DEFAULT_PASS),
-            full_name="مستخدم تجريبي",
+            full_name="مدير النظام",
             preferred_language="ar",
             currency="IQD",
+            is_admin=True,
         )
         db.add(user)
         await db.flush()
@@ -109,6 +110,7 @@ app.include_router(statistics.router, prefix="/api/v1/statistics", tags=["Statis
 app.include_router(budgets.router, prefix="/api/v1/budgets", tags=["Budgets"])
 app.include_router(voice.router, prefix="/api/v1/voice", tags=["Voice AI"])
 app.include_router(wallets.router, prefix="/api/v1/wallets", tags=["Wallets"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 
 
 @app.get("/health", tags=["Health"])
