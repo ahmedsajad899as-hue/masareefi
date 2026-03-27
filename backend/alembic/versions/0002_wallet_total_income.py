@@ -17,8 +17,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("wallets", sa.Column("total_income", sa.Numeric(14, 2), nullable=False, server_default="0"))
+    # No-op: wallets table with total_income is created in 0003
+    pass
 
 
 def downgrade() -> None:
-    op.drop_column("wallets", "total_income")
+    pass
