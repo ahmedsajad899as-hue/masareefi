@@ -3,6 +3,11 @@
 // مصاريفي — SPA JavaScript
 // ═══════════════════════════════════════════════
 
+// Register Service Worker (PWA)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
 const API = '/api/v1';
 
 // ── State ────────────────────────────────────────────────────
@@ -1813,6 +1818,60 @@ function esc(str) {
     .replace(/'/g, '&#039;');
 }
 
+// ── Admin Impersonation ────────────────────────────────────────
+async function viewAsUser(userId, userName) {
+  loading(true);
+  try {
+    const data = await api('POST', `/admin/users/${userId}/impersonate`);
+    // Backup admin session
+    localStorage.setItem('admin_backup_token', S.token);
+    localStorage.setItem('admin_backup_refresh', S.refreshToken || '');
+    localStorage.setItem('admin_backup_user', JSON.stringify(S.user));
+    // Switch to target user session
+    S.token        = data.access_token;
+    S.refreshToken = null;
+    S.user         = data.user;
+    localStorage.setItem('access_token', data.access_token);
+    localStorage.removeItem('refresh_token');
+    localStorage.setItem('user', JSON.stringify(data.user));
+    // Show banner
+    document.getElementById('impersonate-banner').style.display = '';
+    document.getElementById('impersonate-name').textContent = `أنت تشاهد حساب: ${userName}`;
+    // Re-init app as target user
+    await loadCategories();
+    await loadWalletsData();
+    updateSidebarUser();
+    goTo('dashboard');
+    toast(`تم فتح حساب ${userName} 👁`);
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+async function exitImpersonation() {
+  const backupToken   = localStorage.getItem('admin_backup_token');
+  const backupRefresh = localStorage.getItem('admin_backup_refresh');
+  const backupUser    = localStorage.getItem('admin_backup_user');
+  if (!backupToken || !backupUser) { doLogout(); return; }
+  // Restore admin session
+  S.token        = backupToken;
+  S.refreshToken = backupRefresh || null;
+  S.user         = JSON.parse(backupUser);
+  localStorage.setItem('access_token', backupToken);
+  if (backupRefresh) localStorage.setItem('refresh_token', backupRefresh);
+  localStorage.setItem('user', backupUser);
+  localStorage.removeItem('admin_backup_token');
+  localStorage.removeItem('admin_backup_refresh');
+  localStorage.removeItem('admin_backup_user');
+  // Hide banner
+  document.getElementById('impersonate-banner').style.display = 'none';
+  // Re-init as admin
+  await loadCategories();
+  await loadWalletsData();
+  updateSidebarUser();
+  goTo('admin-users');
+  toast('عدت إلى حسابك كأدمن ✅');
+}
+
 // ── Admin Users ───────────────────────────────────────────────
 let _adminUsers = [];
 
@@ -1855,6 +1914,7 @@ function renderAdminTable() {
               <td><span class="badge ${u.is_active ? 'bg-success' : 'bg-secondary'}">${u.is_active ? 'مفعّل' : 'معطّل'}</span></td>
               <td>${u.is_admin ? '<span class="badge bg-warning text-dark">أدمن</span>' : ''}</td>
               <td>
+                <button class="btn btn-sm btn-primary me-1" onclick="viewAsUser('${u.id}', '${esc(u.full_name)}')" title="مشاهدة الحساب"><i class="fas fa-eye"></i></button>
                 <button class="btn btn-sm btn-outline-primary me-1" onclick="openEditUserModal('${u.id}')"><i class="fas fa-edit"></i></button>
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteAdminUser('${u.id}', '${esc(u.full_name)}')"><i class="fas fa-trash"></i></button>
               </td>
@@ -2013,6 +2073,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (S.token && S.user) {
     initApp();
+    // Restore impersonation banner if page was refreshed while impersonating
+    if (localStorage.getItem('admin_backup_token') && S.user) {
+      document.getElementById('impersonate-banner').style.display = '';
+      document.getElementById('impersonate-name').textContent = `أنت تشاهد حساب: ${S.user.full_name}`;
+    }
   } else {
     showAuthTab('login');
   }
