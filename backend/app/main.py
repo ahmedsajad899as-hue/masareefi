@@ -56,8 +56,13 @@ async def seed_default_user():
 
     async with AsyncSessionLocal() as db:
         existing = await db.execute(select(User).where(User.email == DEFAULT_EMAIL))
-        if existing.scalar_one_or_none():
-            return  # already seeded
+        admin_user = existing.scalar_one_or_none()
+        if admin_user:
+            # Ensure admin flag is set (may be False after migration)
+            if not admin_user.is_admin:
+                admin_user.is_admin = True
+                await db.commit()
+            return
 
         user = User(
             email=DEFAULT_EMAIL,
