@@ -10,8 +10,12 @@ if not exist "venv\Scripts\python.exe" (
 echo [2] تثبيت المكتبات...
 venv\Scripts\python.exe -m pip install --quiet fastapi "uvicorn[standard]" "sqlalchemy[asyncio]" aiosqlite "pydantic[email]" pydantic-settings python-dotenv "python-jose[cryptography]" "passlib[bcrypt]" python-multipart openai httpx aiofiles python-dateutil
 
-echo [3] حذف قاعدة البيانات القديمة وإنشاء جديدة...
-if exist "masareefi.db" del "masareefi.db"
+echo [3] التحقق من قاعدة البيانات...
+if not exist "masareefi.db" (
+    echo    قاعدة بيانات جديدة سيتم إنشاؤها تلقائياً
+) else (
+    echo    قاعدة البيانات موجودة — البيانات محفوظة ✓
+)
 
 echo [4] تشغيل السيرفر...
 set DATABASE_URL=sqlite+aiosqlite:///./masareefi.db
