@@ -1,13 +1,9 @@
-const CACHE_NAME = 'masareefi-v1';
+const CACHE_NAME = 'masareefi-v3';
 const PRECACHE = [
   '/',
-  '/static/style.css',
-  '/static/app.js',
-  '/static/icons/icon-192.png',
-  '/static/icons/icon-512.png'
 ];
 
-// Install — cache shell
+// Install — cache shell, force activate immediately
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_NAME)
@@ -16,7 +12,7 @@ self.addEventListener('install', e => {
   );
 });
 
-// Activate — clean old caches
+// Activate — clean ALL old caches
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -25,10 +21,17 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Fetch — network first, cache fallback
+// Fetch — network first, cache fallback (never cache CSS/JS to avoid stale versions)
 self.addEventListener('fetch', e => {
   // Skip non-GET and API calls
   if (e.request.method !== 'GET' || e.request.url.includes('/api/')) return;
+
+  // Never cache CSS/JS — always fetch fresh
+  const url = e.request.url;
+  if (url.endsWith('.css') || url.endsWith('.js') || url.includes('.css?') || url.includes('.js?')) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
 
   e.respondWith(
     fetch(e.request)
