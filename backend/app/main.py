@@ -123,6 +123,20 @@ if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+# PWA files at root level
+@app.get("/manifest.json", include_in_schema=False)
+async def pwa_manifest():
+    path = os.path.join(STATIC_DIR, "manifest.json")
+    if os.path.isfile(path):
+        return FileResponse(path, media_type="application/manifest+json")
+
+@app.get("/sw.js", include_in_schema=False)
+async def pwa_sw():
+    path = os.path.join(STATIC_DIR, "sw.js")
+    if os.path.isfile(path):
+        return FileResponse(path, media_type="application/javascript")
+
+
 # SPA catch-all — returns index.html for every non-API route
 @app.get("/{full_path:path}", include_in_schema=False)
 async def serve_spa(full_path: str):
