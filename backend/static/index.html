@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مصاريفي 💰</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css?v=21">
+</head>
+<body class="dark-theme">
+
+<!-- Loading -->
+<div id="loading-overlay" class="loading-overlay">
+  <div class="spinner-border text-primary" style="width:3rem;height:3rem" role="status"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:9999">
+  <div id="app-toast" class="toast align-items-center border-0" role="alert" aria-live="assertive">
+    <div class="d-flex">
+      <div class="toast-body" id="toast-msg">رسالة</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ AUTH SCREEN ═══════════════ -->
+<div id="auth-screen">
+  <div class="auth-bg">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="logo-emoji">💰</div>
+        <h1 class="logo-name">مصاريفي</h1>
+        <p class="logo-sub">تتبع مصاريفك بذكاء</p>
+      </div>
+
+      <div class="auth-tabs-bar">
+        <button class="auth-tab-btn active" id="tab-btn-login" onclick="showAuthTab('login')">تسجيل الدخول</button>
+        <button class="auth-tab-btn" id="tab-btn-register" onclick="showAuthTab('register')">حساب جديد</button>
+      </div>
+
+      <!-- Login -->
+      <div id="auth-login">
+        <div class="mb-3">
+          <label class="form-label">البريد الإلكتروني</label>
+          <input type="email" id="l-email" class="form-control" placeholder="example@email.com" dir="ltr">
+        </div>
+        <div class="mb-4">
+          <label class="form-label">كلمة المرور</label>
+          <input type="password" id="l-pass" class="form-control" dir="ltr" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button class="btn btn-primary w-100 btn-lg" onclick="doLogin()">
+          <i class="fas fa-sign-in-alt me-2"></i>دخول
+        </button>
+      </div>
+
+      <!-- Register -->
+      <div id="auth-register" style="display:none">
+        <div class="mb-3">
+          <label class="form-label">الاسم الكامل</label>
+          <input type="text" id="r-name" class="form-control" placeholder="اسمك الكامل">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">البريد الإلكتروني</label>
+          <input type="email" id="r-email" class="form-control" placeholder="example@email.com" dir="ltr">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">كلمة المرور</label>
+          <input type="password" id="r-pass" class="form-control" dir="ltr">
+        </div>
+        <div class="mb-4">
+          <label class="form-label">العملة الافتراضية</label>
+          <select id="r-currency" class="form-select">
+            <option value="IQD">🇮🇶 دينار عراقي (IQD)</option>
+            <option value="SAR">🇸🇦 ريال سعودي (SAR)</option>
+            <option value="AED">🇦🇪 درهم إماراتي (AED)</option>
+            <option value="KWD">🇰🇼 دينار كويتي (KWD)</option>
+            <option value="USD">🇺🇸 دولار أمريكي (USD)</option>
+          </select>
+        </div>
+        <button class="btn btn-primary w-100 btn-lg" onclick="doRegister()">
+          <i class="fas fa-user-plus me-2"></i>إنشاء الحساب
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ MAIN APP ═══════════════ -->
+<div id="app-screen" style="display:none">
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <button class="topbar-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+    <span class="topbar-title" id="page-title"></span>
+    <button class="topbar-btn" onclick="toggleTheme()" id="theme-btn"><i class="fas fa-moon"></i></button>
+  </header>
+
+  <!-- Overlay -->
+  <div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="sidebar-brand">💰 مصاريفي</div>
+    <div class="sidebar-user">
+      <div class="s-avatar" id="s-avatar">م</div>
+      <div>
+        <div class="s-name" id="s-name">مستخدم</div>
+        <div class="s-email" id="s-email">user@email.com</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="s-link active" data-page="dashboard" onclick="goTo('dashboard')"><i class="fas fa-home"></i> الرئيسية</a>
+      <a class="s-link" data-page="expenses" onclick="goTo('expenses')"><i class="fas fa-receipt"></i> المصاريف</a>
+      <a class="s-link" data-page="categories" onclick="goTo('categories')"><i class="fas fa-tags"></i> الفئات والميزانيات</a>
+      <a class="s-link" data-page="wallets" onclick="goTo('wallets')"><i class="fas fa-wallet"></i> المحافظ</a>
+      <a class="s-link" data-page="voice-assistant" onclick="goTo('voice-assistant')"><i class="fas fa-robot"></i> المساعد الصوتي</a>
+      <a class="s-link" data-page="statistics" onclick="goTo('statistics')"><i class="fas fa-chart-pie"></i> الإحصائيات</a>
+    </nav>
+    <div class="sidebar-footer">
+      <a class="s-link s-link-settings" data-page="settings" onclick="goTo('settings')"><i class="fas fa-cog"></i> الإعدادات</a>
+      <button class="logout-btn" onclick="doLogout()"><i class="fas fa-sign-out-alt me-2"></i>تسجيل الخروج</button>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <main class="app-main">
+
+    <!-- ── Dashboard ── -->
+    <section id="pg-dashboard" class="pg active">
+      <div class="pg-head">
+        <div>
+          <h2>مرحباً، <span id="dash-name">👋</span></h2>
+          <p class="text-muted mb-0 small" id="dash-date"></p>
+        </div>
+        <button class="btn btn-primary btn-lg px-4" onclick="openExpenseDrawer()" style="font-size:1.1rem;border-radius:14px">
+          <i class="fas fa-plus me-2"></i>مصروف جديد
+        </button>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-4"><div class="kpi-card c-purple"><div class="kpi-icon">📅</div><div class="kpi-val" id="kpi-month">0</div><div class="kpi-lbl">هذا الشهر</div></div></div>
+        <div class="col-4"><div class="kpi-card c-green"><div class="kpi-icon">☀️</div><div class="kpi-val" id="kpi-today">0</div><div class="kpi-lbl">اليوم</div></div></div>
+        <div class="col-4"><div class="kpi-card c-orange"><div class="kpi-icon">🧾</div><div class="kpi-val" id="kpi-count">0</div><div class="kpi-lbl">عدد المصاريف</div></div></div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-12 col-lg-5">
+          <div class="glass-card">
+            <div class="gc-title">توزيع المصاريف</div>
+            <div class="chart-wrap"><canvas id="dash-pie"></canvas></div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-7">
+          <div class="glass-card">
+            <div class="gc-title d-flex justify-content-between">
+              آخر المصاريف
+              <a href="javascript:void(0)" onclick="goTo('expenses')" class="link-sm">عرض الكل ←</a>
+            </div>
+            <div id="dash-recent"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Expenses ── -->
+    <section id="pg-expenses" class="pg" style="display:none">
+      <div class="pg-head">
+        <h2>المصاريف</h2>
+        <div class="d-flex gap-2">
+          <div class="btn-group btn-group-sm" id="exp-view-toggle">
+            <button class="btn btn-outline-secondary active" id="btn-view-sector" onclick="setExpView('sector')" title="حسب الفئة"><i class="fas fa-tags"></i></button>
+            <button class="btn btn-outline-secondary" id="btn-view-date" onclick="setExpView('date')" title="حسب التاريخ"><i class="fas fa-calendar-alt"></i></button>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openExpenseDrawer()"><i class="fas fa-plus me-1"></i>إضافة</button>
+        </div>
+      </div>
+
+      <div class="glass-card mb-3">
+        <div class="row g-2">
+          <div class="col-sm-5">
+            <select id="f-month" class="form-select form-select-sm" onchange="loadExpenses()">
+              <option value="">كل الأشهر</option>
+              <option value="1">يناير</option><option value="2">فبراير</option><option value="3">مارس</option>
+              <option value="4">أبريل</option><option value="5">مايو</option><option value="6">يونيو</option>
+              <option value="7">يوليو</option><option value="8">أغسطس</option><option value="9">سبتمبر</option>
+              <option value="10">أكتوبر</option><option value="11">نوفمبر</option><option value="12">ديسمبر</option>
+            </select>
+          </div>
+          <div class="col-sm-5">
+            <select id="f-cat" class="form-select form-select-sm" onchange="loadExpenses()">
+              <option value="">كل الفئات</option>
+            </select>
+          </div>
+          <div class="col-sm-2">
+            <button class="btn btn-outline-secondary btn-sm w-100" onclick="loadExpenses()"><i class="fas fa-sync"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div id="exp-list">
+        <div class="empty-state"><i class="fas fa-receipt"></i><p>لا توجد مصاريف</p></div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mt-3" id="exp-pagination" style="display:none!important">
+        <button class="btn btn-outline-secondary btn-sm" id="exp-prev" onclick="changePage(-1)">← السابق</button>
+        <span class="text-muted small" id="exp-page-info"></span>
+        <button class="btn btn-outline-secondary btn-sm" id="exp-next" onclick="changePage(1)">التالي →</button>
+      </div>
+    </section>
+
+    <!-- ── Statistics ── -->
+    <section id="pg-statistics" class="pg" style="display:none">
+      <div class="pg-head"><h2>الإحصائيات</h2></div>
+
+      <div class="glass-card mb-3">
+        <div class="row g-2 align-items-end">
+          <div class="col">
+            <label class="form-label small">الشهر</label>
+            <select id="st-month" class="form-select form-select-sm">
+              <option value="1">يناير</option><option value="2">فبراير</option><option value="3">مارس</option>
+              <option value="4">أبريل</option><option value="5">مايو</option><option value="6">يونيو</option>
+              <option value="7">يوليو</option><option value="8">أغسطس</option><option value="9">سبتمبر</option>
+              <option value="10">أكتوبر</option><option value="11">نوفمبر</option><option value="12">ديسمبر</option>
+            </select>
+          </div>
+          <div class="col-3">
+            <label class="form-label small">السنة</label>
+            <input type="number" id="st-year" class="form-control form-control-sm" value="2026" min="2020" max="2035" dir="ltr">
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-primary btn-sm" onclick="loadStats()"><i class="fas fa-search"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="total-banner mb-3">
+        <div class="total-lbl">إجمالي الشهر</div>
+        <div class="total-num" id="st-total">0</div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-5">
+          <div class="glass-card">
+            <div class="gc-title">توزيع الفئات</div>
+            <div class="chart-wrap"><canvas id="st-pie"></canvas></div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-7">
+          <div class="glass-card">
+            <div class="gc-title">الإنفاق اليومي</div>
+            <div class="chart-wrap"><canvas id="st-bar"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card mb-3">
+        <div class="gc-title">تفصيل الفئات</div>
+        <div id="st-cats"></div>
+      </div>
+
+      <div class="glass-card">
+        <div class="gc-title d-flex justify-content-between align-items-center">
+          <span><i class="fas fa-robot me-2 text-purple"></i>تحليل ذكي</span>
+          <button class="btn btn-sm btn-outline-primary" onclick="loadInsights()">تحليل الآن</button>
+        </div>
+        <div id="st-insights" class="text-muted small p-2">اضغط "تحليل الآن" لتحليل إنفاقك بالذكاء الاصطناعي</div>
+      </div>
+    </section>
+
+    <!-- ── Voice Assistant ── -->
+    <section id="pg-voice-assistant" class="pg" style="display:none">
+      <div class="pg-head"><h2>المساعد الصوتي الذكي</h2></div>
+
+      <div class="glass-card va-main-card mb-4">
+        <div class="va-header">
+          <div class="va-avatar"><i class="fas fa-robot"></i></div>
+          <div>
+            <h5 class="mb-0">مساعدك المالي الذكي</h5>
+            <small class="text-muted">تكلّم أو اكتب مصاريفك وأنا أسجّلها لك</small>
+          </div>
+        </div>
+
+        <!-- Chat area -->
+        <div id="va-chat" class="va-chat">
+          <div class="va-msg va-bot">
+            <div class="va-bubble">مرحباً! 👋 أنا مساعدك الصوتي. قُل لي مصاريفك وأنا أسجّلها.<br>
+            <small class="text-muted">مثال: "صرفت خمسة آلاف على الأكل وألفين تاكسي"</small></div>
+          </div>
+        </div>
+
+        <!-- Input area -->
+        <div class="va-input-area">
+          <div class="va-input-row">
+            <input type="text" id="va-text-input" class="form-control" placeholder="اكتب مصاريفك هنا..." autocomplete="off">
+            <button id="va-mic-btn" class="va-mic-btn" onclick="vaToggleMic()" title="تسجيل صوتي">
+              <i class="fas fa-microphone" id="va-mic-ico"></i>
+            </button>
+            <button class="va-send-btn" onclick="vaSendText()" title="إرسال">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </div>
+          <div id="va-mic-status" class="va-mic-status" style="display:none">
+            <span class="va-pulse-dot"></span>
+            <span id="va-mic-label">جاري الاستماع...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Parsed results -->
+      <div id="va-results" class="glass-card mb-4" style="display:none">
+        <div class="gc-title"><i class="fas fa-list-check me-2 text-success"></i>المصاريف المستخرجة</div>
+        <div id="va-items-list"></div>
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-primary flex-fill" onclick="vaConfirmAll()"><i class="fas fa-check-double me-1"></i>حفظ الكل</button>
+          <button class="btn btn-outline-secondary" onclick="vaClearResults()"><i class="fas fa-times me-1"></i>إلغاء</button>
+        </div>
+      </div>
+
+      <!-- Tips -->
+      <div class="glass-card va-tips">
+        <div class="gc-title"><i class="fas fa-lightbulb me-2 text-warning"></i>نصائح للاستخدام</div>
+        <div class="row g-2">
+          <div class="col-sm-6"><div class="va-tip">🗣️ "دفعت عشرة آلاف على الأكل اليوم"</div></div>
+          <div class="col-sm-6"><div class="va-tip">🗣️ "أكل 5000 وتاكسي 3000 وفاتورة 10000"</div></div>
+          <div class="col-sm-6"><div class="va-tip">🗣️ "صرفت ألفين دينار على الدكتور"</div></div>
+          <div class="col-sm-6"><div class="va-tip">🗣️ "اشتريت ملابس بخمسة وعشرين ألف"</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Categories & Budgets ── -->
+    <section id="pg-categories" class="pg" style="display:none">
+      <div class="pg-head"><h2>الفئات والميزانيات</h2></div>
+
+      <!-- Add Custom Category (collapsible) -->
+      <div class="glass-card mb-4">
+        <div class="gc-title collapsible-title" onclick="toggleSection('cc-form')">
+          <span><i class="fas fa-plus-circle me-2 text-success"></i>إضافة فئة جديدة</span>
+          <i class="fas fa-chevron-down collapsible-icon" id="cc-form-icon"></i>
+        </div>
+        <div id="cc-form" style="display:none; padding-top:12px">
+          <form onsubmit="addCustomCategory(event)">
+            <div class="row g-2">
+              <div class="col-sm-4">
+                <label class="form-label small mb-1">اسم الفئة (عربي)</label>
+                <input type="text" id="cc-name" class="form-control form-control-sm" placeholder="مثال: مواصلات" required>
+              </div>
+              <div class="col-sm-3">
+                <label class="form-label small mb-1">الاسم بالإنجليزي</label>
+                <input type="text" id="cc-name-en" class="form-control form-control-sm" placeholder="e.g. Transport" dir="ltr">
+              </div>
+              <div class="col-sm-2">
+                <label class="form-label small mb-1">الأيقونة</label>
+                <input type="text" id="cc-icon" class="form-control form-control-sm" placeholder="🎯" maxlength="4" value="💰">
+              </div>
+              <div class="col-sm-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-success btn-sm w-100"><i class="fas fa-plus me-1"></i>إضافة</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Categories List -->
+      <div id="categories-list" class="row g-3"></div>
+    </section>
+
+    <!-- ── Wallets ── -->
+    <section id="pg-wallets" class="pg" style="display:none">
+      <div class="pg-head"><h2>المحافظ</h2></div>
+
+      <!-- Wallet Cards -->
+      <div id="wallets-cards" class="row g-3 mb-4"></div>
+
+      <!-- Add Custom Wallet (collapsible) -->
+      <div class="glass-card mb-3">
+        <div class="gc-title collapsible-title" onclick="toggleSection('cw-form')">
+          <span><i class="fas fa-plus-circle me-2 text-primary"></i>إضافة محفظة جديدة</span>
+          <i class="fas fa-chevron-down collapsible-icon" id="cw-form-icon"></i>
+        </div>
+        <div id="cw-form" style="display:none; padding-top:12px">
+          <form onsubmit="addCustomWallet(event)">
+            <div class="row g-2">
+              <div class="col-sm-5">
+                <input type="text" id="cw-name" class="form-control form-control-sm" placeholder="اسم المحفظة" required>
+              </div>
+              <div class="col-sm-5">
+                <select id="cw-type" class="form-select form-select-sm">
+                  <option value="cash">💵 نقدي</option>
+                  <option value="zaincash">⚫ زين كاش</option>
+                  <option value="mastercard">🟢 ماستر كارت</option>
+                  <option value="bank">🏦 حساب بنكي</option>
+                  <option value="salary">💼 راتب</option>
+                  <option value="custom">💳 أخرى</option>
+                </select>
+              </div>
+              <div class="col-sm-2">
+                <input type="text" id="cw-icon" class="form-control form-control-sm" placeholder="💰" maxlength="4" value="💰">
+              </div>
+              <div class="col-sm-4">
+                <input type="text" data-money id="cw-balance" class="form-control form-control-sm" placeholder="رصيد ابتدائي" dir="ltr" value="">
+              </div>
+              <div class="col-sm-8">
+                <button type="submit" class="btn btn-primary btn-sm w-100"><i class="fas fa-plus me-1"></i>إضافة</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Transfer (collapsible) -->
+      <div class="glass-card mb-3">
+        <div class="gc-title collapsible-title" onclick="toggleSection('tr-form')">
+          <span><i class="fas fa-exchange-alt me-2 text-info"></i>تحويل بين المحافظ</span>
+          <i class="fas fa-chevron-down collapsible-icon" id="tr-form-icon"></i>
+        </div>
+        <div id="tr-form" style="display:none; padding-top:12px">
+          <form onsubmit="doTransfer(event)">
+            <div class="row g-2">
+              <div class="col-sm-4">
+                <label class="form-label small">من</label>
+                <select id="tr-from" class="form-select form-select-sm"></select>
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label small">إلى</label>
+                <select id="tr-to" class="form-select form-select-sm"></select>
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label small">المبلغ</label>
+                <input type="text" data-money id="tr-amount" class="form-control form-control-sm" placeholder="المبلغ" dir="ltr" required>
+              </div>
+              <div class="col-12">
+                <input type="text" id="tr-note" class="form-control form-control-sm" placeholder="ملاحظة (اختياري)">
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-info btn-sm w-100"><i class="fas fa-exchange-alt me-1"></i>تحويل</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Transfer History (collapsible) -->
+      <div class="glass-card">
+        <div class="gc-title collapsible-title" onclick="toggleSection('tr-hist')">
+          <span><i class="fas fa-history me-2"></i>سجل التحويلات</span>
+          <i class="fas fa-chevron-down collapsible-icon" id="tr-hist-icon"></i>
+        </div>
+        <div id="tr-hist" style="display:none; padding-top:8px">
+          <div id="transfers-list">
+            <div class="empty-state"><i class="fas fa-exchange-alt"></i><p>لا توجد تحويلات</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Settings ── -->
+    <section id="pg-settings" class="pg" style="display:none">
+      <div class="pg-head"><h2>الإعدادات</h2></div>
+
+      <div class="glass-card mb-3">
+        <div class="gc-title">الملف الشخصي</div>
+        <div class="mb-3">
+          <label class="form-label">الاسم الكامل</label>
+          <input type="text" id="set-name" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">البريد الإلكتروني</label>
+          <input type="email" id="set-email" class="form-control" dir="ltr" disabled>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">العملة</label>
+          <select id="set-currency" class="form-select">
+            <option value="IQD">🇮🇶 دينار عراقي (IQD)</option>
+            <option value="SAR">🇸🇦 ريال سعودي (SAR)</option>
+            <option value="AED">🇦🇪 درهم إماراتي (AED)</option>
+            <option value="KWD">🇰🇼 دينار كويتي (KWD)</option>
+            <option value="USD">🇺🇸 دولار أمريكي (USD)</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="saveProfile()"><i class="fas fa-save me-2"></i>حفظ</button>
+      </div>
+
+      <div class="glass-card mb-3">
+        <div class="gc-title">تغيير كلمة المرور</div>
+        <div class="mb-3">
+          <label class="form-label">كلمة المرور الحالية</label>
+          <input type="password" id="set-cur-pass" class="form-control" dir="ltr">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">كلمة المرور الجديدة</label>
+          <input type="password" id="set-new-pass" class="form-control" dir="ltr">
+        </div>
+        <button class="btn btn-warning" onclick="changePass()"><i class="fas fa-key me-2"></i>تغيير</button>
+      </div>
+
+      <div class="glass-card">
+        <div class="gc-title">المظهر</div>
+        <div class="d-flex align-items-center justify-content-between py-1">
+          <span>الوضع الداكن</span>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="dark-toggle" onchange="toggleTheme()" checked>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Expense Drawer ── -->
+  <div id="expense-drawer-overlay" class="drawer-overlay" onclick="closeExpenseDrawer()"></div>
+  <div id="expense-drawer" class="expense-drawer">
+    <div class="drawer-header">
+      <h5 class="mb-0"><i class="fas fa-plus-circle me-2 text-purple"></i>مصروف جديد</h5>
+      <div class="drawer-header-actions">
+        <input type="date" id="ae-date" class="drawer-date-input" dir="ltr">
+        <button class="drawer-close" onclick="closeExpenseDrawer()"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+    <div class="drawer-body">
+      <form id="expense-form" onsubmit="submitExpense(event)">
+        <div class="mb-3">
+          <label class="form-label">المبلغ <span class="text-danger">*</span></label>
+          <div class="amount-currency-row">
+            <input type="text" data-money id="ae-amount" class="form-control" placeholder="0" required dir="ltr">
+            <button type="button" class="currency-toggle" id="ae-currency-btn" onclick="toggleCurrencyPicker()">
+              <span id="ae-currency-label">IQD</span>
+            </button>
+          </div>
+          <input type="hidden" id="ae-currency" value="IQD">
+          <div id="currency-picker" class="currency-picker" style="display:none">
+            <div class="cur-section">
+              <div class="cur-chip active" data-cur="IQD" onclick="pickCurrency('IQD')">🇮🇶 IQD</div>
+              <div class="cur-chip" data-cur="USD" onclick="pickCurrency('USD')">🇺🇸 USD</div>
+            </div>
+            <div class="cur-divider"></div>
+            <div class="cur-section">
+              <div class="cur-chip" data-cur="TRY" onclick="pickCurrency('TRY')">🇹🇷 TRY</div>
+              <div class="cur-chip" data-cur="IRR" onclick="pickCurrency('IRR')">🇮🇷 IRR</div>
+              <div class="cur-chip" data-cur="AED" onclick="pickCurrency('AED')">🇦🇪 AED</div>
+              <div class="cur-chip" data-cur="SAR" onclick="pickCurrency('SAR')">🇸🇦 SAR</div>
+              <div class="cur-chip" data-cur="JOD" onclick="pickCurrency('JOD')">🇯🇴 JOD</div>
+              <div class="cur-chip" data-cur="EUR" onclick="pickCurrency('EUR')">🇪🇺 EUR</div>
+            </div>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">الفئة</label>
+          <select id="ae-cat" class="form-select">
+            <option value="">بدون فئة</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">المحفظة (الدفع من)</label>
+          <select id="ae-wallet" class="form-select">
+            <option value="">بدون محفظة</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">الوصف</label>
+          <input type="text" id="ae-desc" class="form-control" placeholder="وصف المصروف (اختياري)">
+        </div>
+        <button type="submit" class="btn btn-primary w-100 btn-lg">
+          <i class="fas fa-check me-2"></i>حفظ المصروف
+        </button>
+      </form>
+    </div>
+    <div class="drawer-footer">
+      <button class="btn btn-outline-secondary btn-sm" onclick="fabVaOpenAndRecord()">
+        <i class="fas fa-microphone me-1"></i>الإدخال الصوتي الذكي
+      </button>
+    </div>
+  </div>
+
+  <!-- Floating Voice Assistant -->
+  <div id="fab-va" class="fab-va" onclick="fabVaOpenAndRecord()">
+    <i class="fas fa-microphone" id="fab-va-ico"></i>
+  </div>
+
+  <div id="fab-va-popup" class="fab-va-popup" style="display:none">
+    <div class="fab-va-header">
+      <span><i class="fas fa-robot me-2"></i>المساعد الصوتي</span>
+      <button class="fab-va-close" onclick="fabVaClose()"><i class="fas fa-times"></i></button>
+    </div>
+    <div id="fab-va-chat" class="fab-va-chat">
+      <div class="va-msg va-bot"><div class="va-bubble">قُل مصاريفك أو اكتبها 💬</div></div>
+    </div>
+    <div id="fab-va-results" style="display:none">
+      <div id="fab-va-items" class="fab-va-items"></div>
+      <div class="d-flex gap-2 mt-2 px-2 pb-2">
+        <button class="btn btn-primary btn-sm flex-fill" onclick="fabVaConfirm()"><i class="fas fa-check me-1"></i>حفظ</button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="fabVaClearResults()"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+    <div class="fab-va-input">
+      <input type="text" id="fab-va-text" class="form-control form-control-sm" placeholder="اكتب مصاريفك..." autocomplete="off">
+      <button class="fab-va-mic" id="fab-va-mic" onclick="fabVaMic()" title="تسجيل صوتي">
+        <i class="fas fa-microphone" id="fab-va-mic-ico"></i>
+      </button>
+      <button class="fab-va-send" onclick="fabVaSend()" title="إرسال">
+        <i class="fas fa-paper-plane"></i>
+      </button>
+    </div>
+    <div id="fab-va-mic-status" class="fab-va-mic-status" style="display:none">
+      <span class="va-pulse-dot"></span>
+      <span id="fab-va-mic-label">جاري الاستماع...</span>
+    </div>
+  </div>
+
+  <!-- Wallet Picker Modal (used after voice/FAB) -->
+  <div id="wallet-picker-overlay" class="wallet-picker-overlay" style="display:none" onclick="walletPickerCancel()">
+    <div class="wallet-picker" onclick="event.stopPropagation()">
+      <div class="wallet-picker-title">اختر المحفظة للدفع</div>
+      <div id="wallet-picker-list" class="wallet-picker-list"></div>
+      <button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="walletPickerCancel()">بدون محفظة</button>
+    </div>
+  </div>
+
+</div><!-- #app-screen -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/app.js?v=30"></script>
+
+<script>
+// ═══ FAB Voice Assistant - Standalone ═══
+(function() {
+  var fabRecog = null;
+  var fabParsed = [];
+
+  function getToken() {
+    return localStorage.getItem('access_token') || '';
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function addMsg(text, bot) {
+    var chat = document.getElementById('fab-va-chat');
+    if (!chat) return;
+    var d = document.createElement('div');
+    d.className = 'va-msg ' + (bot ? 'va-bot' : 'va-user');
+    d.innerHTML = '<div class="va-bubble">' + esc(text) + '</div>';
+    chat.appendChild(d);
+    chat.scrollTop = 999999;
+  }
+
+  function sendText(txt) {
+    if (!txt) return;
+    addMsg(txt, false);
+    addMsg('⏳ جاري التحليل...', true);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/v1/voice/parse-text', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + getToken());
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        try {
+          var data = JSON.parse(xhr.responseText);
+          var items = data.parsed_expenses || data.items || [];
+          if (items.length > 0) {
+            fabParsed = items;
+            addMsg('تم التعرف على ' + items.length + ' مصروف ✅', true);
+            showResults();
+          } else {
+            addMsg('لم أتمكن من تحديد مصاريف 😕', true);
+          }
+        } catch(e) {
+          addMsg('خطأ في قراءة الرد: ' + e.message, true);
+        }
+      } else if (xhr.status === 401) {
+        addMsg('⚠️ انتهت الجلسة - سجل دخول مرة ثانية', true);
+      } else {
+        addMsg('خطأ من السيرفر: ' + xhr.status, true);
+      }
+    };
+    xhr.onerror = function() {
+      addMsg('خطأ بالاتصال بالسيرفر', true);
+    };
+    xhr.send(JSON.stringify({text: txt, lang: 'ar'}));
+  }
+
+  function showResults() {
+    var div = document.getElementById('fab-va-items');
+    var walletNames = {salary: 'الراتب', bank: 'البنك', cash: 'كاش', zaincash: 'زين كاش', mastercard: 'ماستر كارت'};
+    var html = '';
+    for (var i = 0; i < fabParsed.length; i++) {
+      var it = fabParsed[i];
+      var walletTag = it.wallet_hint ? ' <span class="badge bg-info badge-sm">' + (walletNames[it.wallet_hint] || it.wallet_hint) + '</span>' : '';
+      html += '<div class="fab-va-item">';
+      html += '<div class="fab-va-item-info">' + esc(it.description || it.category_hint || '') + walletTag + '</div>';
+      html += '<div class="fab-va-item-amt">' + Number(it.amount).toLocaleString() + ' IQD</div>';
+      html += '<button class="fab-va-item-del" data-idx="' + i + '"><i class="fas fa-trash-alt"></i></button>';
+      html += '</div>';
+    }
+    div.innerHTML = html;
+    document.getElementById('fab-va-results').style.display = 'block';
+    // Attach delete handlers
+    var btns = div.querySelectorAll('.fab-va-item-del');
+    for (var j = 0; j < btns.length; j++) {
+      btns[j].onclick = function() {
+        var idx = parseInt(this.getAttribute('data-idx'));
+        fabParsed.splice(idx, 1);
+        if (fabParsed.length === 0) { clearResults(); } else { showResults(); }
+      };
+    }
+  }
+
+  function clearResults() {
+    fabParsed = [];
+    document.getElementById('fab-va-results').style.display = 'none';
+    document.getElementById('fab-va-items').innerHTML = '';
+  }
+
+  function confirmAll() {
+    if (fabParsed.length === 0) return;
+    var tok = getToken();
+    // Get categories first
+    var xhr1 = new XMLHttpRequest();
+    xhr1.open('GET', '/api/v1/categories', false); // sync for simplicity
+    xhr1.setRequestHeader('Authorization', 'Bearer ' + tok);
+    try { xhr1.send(); } catch(e) {}
+    var cats = [];
+    try { cats = JSON.parse(xhr1.responseText); } catch(e) {}
+    var today = new Date().toISOString().slice(0,10);
+
+    // Determine wallet: from voice hint, default, or picker
+    var walletHint = null;
+    for (var h = 0; h < fabParsed.length; h++) {
+      if (fabParsed[h].wallet_hint) { walletHint = fabParsed[h].wallet_hint; break; }
+    }
+
+    var wallets = (typeof S !== 'undefined' && S.wallets) ? S.wallets : [];
+    var walletId = null;
+
+    // Priority: voice hint > default wallet > ask user
+    if (walletHint) {
+      var hintW = wallets.find(function(w) { return w.wallet_type === walletHint; });
+      if (hintW) walletId = hintW.id;
+    }
+    if (!walletId) {
+      var defW = wallets.find(function(w) { return w.is_default; });
+      if (defW) walletId = defW.id;
+    }
+
+    function doSave(wid) {
+      var expenses = [];
+      for (var i = 0; i < fabParsed.length; i++) {
+        var it = fabParsed[i];
+        var hint = (it.category_hint || '').toLowerCase();
+        var catId = cats.length > 0 ? cats[0].id : 1;
+        for (var c = 0; c < cats.length; c++) {
+          if (cats[c].name === hint || cats[c].name_ar === hint || (cats[c].name_ar || '').indexOf(hint) >= 0) { catId = cats[c].id; break; }
+        }
+        expenses.push({category_id: catId, amount: it.amount, currency: it.currency || 'IQD', description: it.description || it.category_hint || '', expense_date: today, wallet_id: wid || null});
+      }
+      var xhr2 = new XMLHttpRequest();
+      xhr2.open('POST', '/api/v1/expenses/bulk', true);
+      xhr2.setRequestHeader('Content-Type', 'application/json');
+      xhr2.setRequestHeader('Authorization', 'Bearer ' + tok);
+      xhr2.onload = function() {
+        if (xhr2.status === 200 || xhr2.status === 201) {
+          addMsg('تم حفظ ' + expenses.length + ' مصروف بنجاح ✅' + (wid ? '' : ' (بدون محفظة)'), true);
+          clearResults();
+          if (typeof loadWalletsData === 'function') loadWalletsData();
+          if (typeof refreshActivePage === 'function') refreshActivePage();
+        } else {
+          addMsg('خطأ في حفظ المصاريف: ' + xhr2.status, true);
+        }
+      };
+      xhr2.onerror = function() { addMsg('خطأ بالاتصال', true); };
+      xhr2.send(JSON.stringify({expenses: expenses}));
+    }
+
+    if (walletId) {
+      doSave(walletId);
+    } else if (wallets.length > 0 && typeof showWalletPicker === 'function') {
+      addMsg('اختر المحفظة للدفع...', true);
+      showWalletPicker().then(function(pickedId) {
+        doSave(pickedId);
+      });
+    } else {
+      doSave(null);
+    }
+  }
+
+  function resetMicUI() {
+    fabRecog = null;
+    var btn = document.getElementById('fab-va-mic');
+    if (btn) btn.classList.remove('active');
+    var fab = document.getElementById('fab-va');
+    if (fab) fab.classList.remove('active');
+    var ico = document.getElementById('fab-va-mic-ico');
+    if (ico) ico.className = 'fas fa-microphone';
+    var st = document.getElementById('fab-va-mic-status');
+    if (st) st.style.display = 'none';
+  }
+
+  // === Global handlers (called from HTML onclick) ===
+  window.fabVaToggle = function() {
+    var popup = document.getElementById('fab-va-popup');
+    if (popup) popup.style.display = (popup.style.display === 'none') ? 'flex' : 'none';
+  };
+
+  window.fabVaOpenAndRecord = function() {
+    var popup = document.getElementById('fab-va-popup');
+    if (popup) {
+      if (popup.style.display === 'none') {
+        popup.style.display = 'flex';
+        setTimeout(function() { window.fabVaMic(); }, 300);
+      } else {
+        popup.style.display = 'none';
+        if (fabRecog) { try { fabRecog.stop(); } catch(e) {} }
+        resetMicUI();
+      }
+    }
+  };
+
+  window.fabVaClose = function() {
+    var popup = document.getElementById('fab-va-popup');
+    if (popup) popup.style.display = 'none';
+    if (fabRecog) { try { fabRecog.stop(); } catch(e) {} }
+    resetMicUI();
+  };
+
+  window.fabVaSend = function() {
+    var inp = document.getElementById('fab-va-text');
+    if (!inp) return;
+    var txt = inp.value.trim();
+    if (!txt) { addMsg('اكتب شي اول! مثلاً: اكل 10000 وبنزين 5000', true); return; }
+    inp.value = '';
+    sendText(txt);
+  };
+
+  window.fabVaConfirm = function() { confirmAll(); };
+  window.fabVaClearResults = function() { clearResults(); };
+
+  window.fabVaMic = function() {
+    var btn = document.getElementById('fab-va-mic');
+    if (!btn) return;
+    // If already recording, stop
+    if (fabRecog) {
+      try { fabRecog.stop(); } catch(e) {}
+      resetMicUI();
+      return;
+    }
+    // Check support
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      addMsg('المتصفح لا يدعم التسجيل الصوتي - اكتب نصياً 📝', true);
+      return;
+    }
+    var gotResult = false;
+    var gotError = false;
+    fabRecog = new SR();
+    fabRecog.lang = 'ar';
+    fabRecog.interimResults = false;
+    fabRecog.continuous = false;
+
+    fabRecog.onresult = function(ev) {
+      gotResult = true;
+      var transcript = ev.results[0][0].transcript;
+      resetMicUI();
+      sendText(transcript);
+    };
+
+    fabRecog.onerror = function(ev) {
+      gotError = true;
+      resetMicUI();
+      var msg = 'خطأ: ' + (ev.error || 'غير معروف');
+      if (ev.error === 'not-allowed') msg = '⚠️ اسمح للمتصفح بالوصول للميكروفون';
+      if (ev.error === 'no-speech') msg = 'لم يتم التقاط صوت 🎤 حاول مرة أخرى';
+      if (ev.error === 'network') msg = '⚠️ خطأ شبكة - اكتب نصياً';
+      addMsg(msg, true);
+    };
+
+    fabRecog.onend = function() {
+      if (!gotResult && !gotError) {
+        addMsg('انتهى الاستماع - لم يتم التعرف على كلام. اكتب نصياً 📝', true);
+      }
+      resetMicUI();
+    };
+
+    try {
+      fabRecog.start();
+      btn.classList.add('active');
+      document.getElementById('fab-va').classList.add('active');
+      document.getElementById('fab-va-mic-ico').className = 'fas fa-stop';
+      document.getElementById('fab-va-mic-status').style.display = 'flex';
+      addMsg('🎤 تكلم الآن...', true);
+    } catch(err) {
+      addMsg('خطأ: ' + err.message, true);
+      resetMicUI();
+    }
+  };
+
+  // Enter key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.target && e.target.id === 'fab-va-text') {
+      window.fabVaSend();
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
