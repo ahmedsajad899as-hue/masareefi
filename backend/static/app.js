@@ -258,6 +258,7 @@ async function saveSession(data) {
 }
 
 function doLogout() {
+  loading(false);
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
   localStorage.removeItem('user');
@@ -273,8 +274,11 @@ async function initApp() {
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('app-screen').style.display  = '';
     updateSidebarUser();
+    // If token expired during load, api() calls doLogout() which calls loading(false). Stop here.
     await loadCategories();
+    if (!S.token) return;
     await loadWalletsData();
+    if (!S.token) return;
     const savedPage = localStorage.getItem('last_page') || location.hash.replace('#', '') || 'dashboard';
     const validPages = Object.keys(PAGE_TITLES);
     goTo(validPages.includes(savedPage) ? savedPage : 'dashboard');
