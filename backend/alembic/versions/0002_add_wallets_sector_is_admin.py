@@ -4,6 +4,9 @@ Revision ID: 0002_add_wallets_sector_is_admin
 Revises: 0001_initial
 Create Date: 2026-03-28
 
+NOTE: This migration is a no-op. All schema changes here were superseded by
+0003_add_wallets_admin_sector which is on the main branch. This file exists
+only so Alembic can track this branch head without errors.
 """
 from typing import Sequence, Union
 
@@ -18,6 +21,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    pass  # No-op: schema managed by the 0002_wallet_total_income → 0003 branch
+
+
+def downgrade() -> None:
+    pass  # No-op
+
     # Add is_admin column to users (if not exists)
     op.add_column(
         "users",
