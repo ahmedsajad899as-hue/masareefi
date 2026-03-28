@@ -17,6 +17,30 @@
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="/static/style.css?v=24">
+  <script>
+    // Early auth check — runs before app.js loads.
+    // If no token stored, immediately hide spinner & show login screen.
+    // This prevents a forever-spinner even if app.js fails to load.
+    (function(){
+      try {
+        var hasToken = !!localStorage.getItem('access_token') && !!localStorage.getItem('user');
+        if (!hasToken) {
+          document.addEventListener('DOMContentLoaded', function() {
+            var ov = document.getElementById('loading-overlay');
+            if (ov) ov.classList.remove('on');
+            var auth = document.getElementById('auth-screen');
+            if (auth) auth.style.display = '';
+          });
+        }
+        // Also unregister any stale Service Workers so users get fresh code
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(r) { r.update(); });
+          });
+        }
+      } catch(e) {}
+    })();
+  </script>
 </head>
 <body class="light-theme">
 
