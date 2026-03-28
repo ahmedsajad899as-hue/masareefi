@@ -1253,8 +1253,20 @@ function buildCardFace(w, theme, balance, name) {
           </div>`;
   }
 
-  /* ── Mastercard: Rafidain Bank style ── */
+  /* ── Mastercard: dynamic bank name ── */
+  const _bankEnMap = {
+    'مصرف الرافدين':'RAFIDAIN BANK','بنك الرافدين':'RAFIDAIN BANK',
+    'مصرف الرشيد':'RASHEED BANK','بنك الرشيد':'RASHEED BANK',
+    'بنك بغداد':'BANK OF BAGHDAD','المصرف التجاري العراقي':'TRADE BANK OF IRAQ',
+    'بنك الاستثمار العراقي':'INVESTMENT BANK OF IRAQ','بنك آسيا':'ASIA BANK',
+    'بنك الشرق الأوسط':'MIDDLE EAST BANK','بنك الإسكان العراقي':'IRAQ HOUSING BANK',
+    'المصرف العراقي للتجارة (TBI)':'TRADE BANK OF IRAQ','بنك كردستان الدولي':'KURDISTAN INTL BANK',
+    'بنك الخليج التجاري':'GULF COMMERCIAL BANK','بنك سومر':'SUMER BANK','بنك النهرين':'NAHRAIN BANK',
+    'زين كاش':'ZAIN CASH','آسيا حوالة':'ASIA HAWALA',
+  };
   if (w.wallet_type === 'mastercard') {
+    const bankAr = esc(w.name);
+    const bankEn = _bankEnMap[w.name] || w.name.toUpperCase();
     return `<div class="phys-card phys-rafidain" style="background:${theme.bg}">
             <div class="rf-top">
               <div class="rf-qi">
@@ -1266,8 +1278,8 @@ function buildCardFace(w, theme, balance, name) {
                 </svg>
               </div>
               <div class="rf-bank-block">
-                <div class="rf-bank-ar">مصرف الرافدين</div>
-                <div class="rf-bank-en">RAFIDAIN BANK</div>
+                <div class="rf-bank-ar">${bankAr}</div>
+                <div class="rf-bank-en">${bankEn}</div>
                 <svg class="rf-nfc-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
                   <path d="M12 2a10 10 0 0 1 0 20"/>
                   <path d="M12 6a6 6 0 0 1 0 12"/>
@@ -1399,8 +1411,8 @@ function renderWalletCards() {
               : `<button class="btn btn-outline-success btn-xs" onclick="setDefaultWallet('${w.id}')"><i class="fas fa-check me-1"></i>افتراضية</button>`}
             <select class="form-select form-select-sm wallet-type-sel ms-auto" onchange="changeWalletType('${w.id}',this.value)" title="نوع المحفظة">
               <option value="cash"      ${w.wallet_type==='cash'      ?'selected':''}>💵 نقدي</option>
-              <option value="zaincash"  ${w.wallet_type==='zaincash'  ?'selected':''}>⚫ زين كاش</option>
-              <option value="mastercard"${w.wallet_type==='mastercard'?'selected':''}>🟢 ماستر كارت</option>
+              <option value="zaincash"  ${w.wallet_type==='zaincash'  ?'selected':''}>⚫ Zain Cash</option>
+              <option value="mastercard"${w.wallet_type==='mastercard'?'selected':''}>🟢 Master Card</option>
               <option value="bank"      ${w.wallet_type==='bank'      ?'selected':''}>🏦 بنكي</option>
               <option value="salary"    ${w.wallet_type==='salary'    ?'selected':''}>💼 راتب</option>
               <option value="custom"    ${w.wallet_type==='custom'||!['cash','zaincash','mastercard','bank','salary'].includes(w.wallet_type)?'selected':''}>💳 أخرى</option>
