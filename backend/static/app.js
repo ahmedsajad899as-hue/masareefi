@@ -1527,13 +1527,19 @@ function toggleSection(id) {
 }
 
 // ── Custom Wallet ────────────────────────────────────────────
+const _typeIconMap = {
+  cash: '💵', zaincash: '⚫', mastercard: '🟢', bank: '🏦', salary: '💼', custom: '💳'
+};
+
 function toggleCustomType(sel) {
   const row = document.getElementById('cw-custom-type-row');
   const inp = document.getElementById('cw-custom-type');
+  const iconEl = document.getElementById('cw-icon');
   if (!row) return;
   const isCustom = sel.value === 'custom';
   row.style.display = isCustom ? 'block' : 'none';
   if (inp) inp.required = isCustom;
+  if (iconEl) iconEl.value = _typeIconMap[sel.value] || '💳';
 }
 
 async function addCustomWallet(e) {
@@ -1542,7 +1548,7 @@ async function addCustomWallet(e) {
   const typeSelect  = document.getElementById('cw-type')?.value || 'custom';
   const customName  = document.getElementById('cw-custom-type')?.value.trim();
   const wallet_type = (typeSelect === 'custom' && customName) ? customName : typeSelect;
-  const icon        = document.getElementById('cw-icon').value.trim() || '💰';
+  const icon        = document.getElementById('cw-icon')?.value || '💰';
   const balance     = getRaw('cw-balance');
   if (!name) { toast('أدخل اسم المحفظة', 'err'); return; }
   if (typeSelect === 'custom' && !customName) { toast('أدخل اسم نوع المحفظة المخصص', 'err'); return; }

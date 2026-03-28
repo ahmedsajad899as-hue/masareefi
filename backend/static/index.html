@@ -503,31 +503,61 @@
         <div id="cw-form" style="display:none; padding-top:12px">
           <form onsubmit="addCustomWallet(event)">
             <div class="row g-2">
-              <div class="col-sm-5">
-                <input type="text" id="cw-name" class="form-control form-control-sm" placeholder="اسم المحفظة" required>
-              </div>
-              <div class="col-sm-5">
+
+              <!-- 1️⃣ نوع المحفظة -->
+              <div class="col-12">
                 <select id="cw-type" class="form-select form-select-sm" onchange="toggleCustomType(this)">
                   <option value="cash">💵 نقدي</option>
                   <option value="zaincash">⚫ زين كاش</option>
                   <option value="mastercard">🟢 ماستر كارت</option>
                   <option value="bank">🏦 حساب بنكي</option>
                   <option value="salary">💼 راتب</option>
-                  <option value="custom">💳 أخرى</option>
+                  <option value="custom">✏️ أخرى — اكتب اسماً جديداً</option>
                 </select>
               </div>
-              <div class="col-sm-2">
-                <input type="text" id="cw-icon" class="form-control form-control-sm" placeholder="💰" maxlength="4" value="💰">
-              </div>
               <div class="col-12" id="cw-custom-type-row" style="display:none">
-                <input type="text" id="cw-custom-type" class="form-control form-control-sm" placeholder="اكتب اسم النوع المخصص…" maxlength="50">
+                <input type="text" id="cw-custom-type" class="form-control form-control-sm"
+                  placeholder="اسم النوع الجديد (مثال: فيزا، كريم باي…)" maxlength="50">
               </div>
-              <div class="col-sm-4">
-                <input type="text" data-money id="cw-balance" class="form-control form-control-sm" placeholder="رصيد ابتدائي" dir="ltr" value="">
+
+              <!-- 2️⃣ اسم المحفظة / المصرف -->
+              <div class="col-12">
+                <input type="text" id="cw-name" list="cw-banks-list"
+                  class="form-control form-control-sm"
+                  placeholder="اسم المحفظة أو المصرف" autocomplete="off" required>
+                <datalist id="cw-banks-list">
+                  <option value="بنك الرافدين">
+                  <option value="بنك الرشيد">
+                  <option value="المصرف التجاري العراقي">
+                  <option value="بنك بغداد">
+                  <option value="بنك الاستثمار العراقي">
+                  <option value="بنك آسيا">
+                  <option value="بنك الشرق الأوسط">
+                  <option value="بنك الإسكان العراقي">
+                  <option value="المصرف العراقي للتجارة (TBI)">
+                  <option value="بنك كردستان الدولي">
+                  <option value="بنك الخليج التجاري">
+                  <option value="بنك سومر">
+                  <option value="بنك النهرين">
+                  <option value="زين كاش">
+                  <option value="آسيا حوالة">
+                </datalist>
               </div>
-              <div class="col-sm-8">
-                <button type="submit" class="btn btn-primary btn-sm w-100"><i class="fas fa-plus me-1"></i>إضافة</button>
+
+              <!-- 3️⃣ الرصيد الابتدائي -->
+              <div class="col-sm-5">
+                <input type="text" data-money id="cw-balance"
+                  class="form-control form-control-sm" placeholder="الرصيد الابتدائي" dir="ltr" value="">
               </div>
+              <div class="col-sm-7">
+                <button type="submit" class="btn btn-primary btn-sm w-100">
+                  <i class="fas fa-plus me-1"></i>إضافة
+                </button>
+              </div>
+
+              <!-- حقل الأيقونة مخفي — يُحدَّد تلقائياً حسب النوع -->
+              <input type="hidden" id="cw-icon" value="💰">
+
             </div>
           </form>
         </div>
