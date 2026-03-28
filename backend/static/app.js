@@ -269,15 +269,20 @@ function doLogout() {
 
 // ── App Init ─────────────────────────────────────────────────
 async function initApp() {
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app-screen').style.display  = '';
-  updateSidebarUser();
-  await loadCategories();
-  await loadWalletsData();
-  const savedPage = localStorage.getItem('last_page') || location.hash.replace('#', '') || 'dashboard';
-  const validPages = Object.keys(PAGE_TITLES);
-  goTo(validPages.includes(savedPage) ? savedPage : 'dashboard');
-  loading(false);
+  try {
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display  = '';
+    updateSidebarUser();
+    await loadCategories();
+    await loadWalletsData();
+    const savedPage = localStorage.getItem('last_page') || location.hash.replace('#', '') || 'dashboard';
+    const validPages = Object.keys(PAGE_TITLES);
+    goTo(validPages.includes(savedPage) ? savedPage : 'dashboard');
+  } catch(e) {
+    console.error('initApp error:', e);
+  } finally {
+    loading(false);
+  }
 }
 
 function updateSidebarUser() {
@@ -2104,12 +2109,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   }, { passive: true });
 
   if (S.token && S.user) {
-    await initApp();
-    // Restore impersonation banner if page was refreshed while impersonating
-    if (localStorage.getItem('admin_backup_token') && S.user) {
-      document.getElementById('impersonate-banner').style.display = '';
-      document.getElementById('impersonate-name').textContent = `أنت تشاهد حساب: ${S.user.full_name}`;
-      document.getElementById('app-screen').classList.add('impersonating');
+    try {
+      await initApp();
+      // Restore impersonation banner if page was refreshed while impersonating
+      if (localStorage.getItem('admin_backup_token') && S.user) {
+        document.getElementById('impersonate-banner').style.display = '';
+        document.getElementById('impersonate-name').textContent = `أنت تشاهد حساب: ${S.user.full_name}`;
+        document.getElementById('app-screen').classList.add('impersonating');
+      }
+    } catch(e) {
+      console.error('Boot error:', e);
+      loading(false);
     }
   } else {
     showAuthTab('login');
