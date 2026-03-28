@@ -51,3 +51,20 @@ async def create_all_tables() -> None:
     import app.models  # noqa: F401 — ensure all models are registered
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Ensure critical columns exist even if Alembic migrations didn't run fully.
+    # PostgreSQL supports ADD COLUMN IF NOT EXISTS; SQLite needs a try/except fallback.
+    if not _is_sqlite:
+        from sqlalchemy import text
+        async with engine.begin() as conn:
+            for stmt in [
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20) NULL",
+                "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sector VARCHAR(50) NULL",
+                "ALTER TABLE wallets ADD COLUMN IF NOT EXISTS total_income NUMERIC(14,2) NOT NULL DEFAULT 0",
+                "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS wallet_id UUID NULL REFERENCES wallets(id) ON DELETE SET NULL",
+            ]:
+                try:
+                    await conn.execute(text(stmt))
+                except Exception:
+                    pass  # Column/table may already exist or table not yet created
