@@ -1,4 +1,4 @@
-const CACHE_NAME = 'masareefi-v3';
+const CACHE_NAME = 'masareefi-v4';
 const PRECACHE = [
   '/',
 ];

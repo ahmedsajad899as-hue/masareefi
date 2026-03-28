@@ -173,9 +173,11 @@ async function api(method, path, body = null, formData = false) {
   let res;
   try {
     res = await fetch(API + path, opts);
-  } finally {
+  } catch(fetchErr) {
     clearTimeout(_tid);
+    throw fetchErr;  // network error or abort — propagate to caller
   }
+  clearTimeout(_tid);
 
   if (res.status === 401 && S.refreshToken) {
     const ok = await tryRefresh();
