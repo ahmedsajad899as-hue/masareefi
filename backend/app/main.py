@@ -15,9 +15,9 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # SQLite (local dev): auto-create tables. PostgreSQL: use Alembic migrations.
-    if _is_sqlite:
-        await create_all_tables()
+    # Always create tables if they don't exist (safe: uses CREATE TABLE IF NOT EXISTS).
+    # On PostgreSQL, Alembic handles schema changes; this is a safety net for fresh deployments.
+    await create_all_tables()
     await seed_default_user()
     yield
 
