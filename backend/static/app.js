@@ -2023,7 +2023,6 @@ function togglePass(inputId, btn) {
 function toggleAdminPass(btn) {
   togglePass('um-pass', btn);
 }
-}
 
 async function saveUser() {
   const id       = document.getElementById('um-id').value;
