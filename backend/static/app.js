@@ -386,29 +386,21 @@ async function loadDashboard() {
   const dashDate = document.getElementById('dash-date');
   if (dashDate) dashDate.textContent = dateStr;
 
-  loading(true);
   try {
-    const data = await api('GET', `/statistics/monthly?year=${now.getFullYear()}&month=${now.getMonth() + 1}`);
-    const cats  = await api('GET', `/statistics/categories?year=${now.getFullYear()}&month=${now.getMonth() + 1}`);
-    const daily = await api('GET', `/statistics/daily?target_date=${today()}`);
-    const exps  = await api('GET', `/expenses?size=5`);
+    const [data, cats, daily, exps] = await Promise.all([
+      api('GET', `/statistics/monthly?year=${now.getFullYear()}&month=${now.getMonth() + 1}`),
+      api('GET', `/statistics/categories?year=${now.getFullYear()}&month=${now.getMonth() + 1}`),
+      api('GET', `/statistics/daily?target_date=${today()}`),
+      api('GET', `/expenses?size=5`),
+    ]);
 
     const cur = S.user?.currency || 'IQD';
-
-    // KPIs
     setText('kpi-month', fmt(data?.total || 0, cur));
     setText('kpi-today', fmt(daily?.total || 0, cur));
     setText('kpi-count', data?.count || 0);
-    // (daily average removed from UI)
-
-    // Recent expenses
     renderRecentExps(exps?.items || []);
-
-    // Pie chart
     if (cats?.length) renderPie('dash-pie', cats);
-
   } catch (e) { console.error(e); }
-  finally { loading(false); }
 }
 
 function renderRecentExps(items) {
@@ -441,14 +433,12 @@ async function loadExpenses() {
   if (month) url += `&date_from=${yr}-${String(month).padStart(2,'0')}-01&date_to=${yr}-${String(month).padStart(2,'0')}-31`;
   if (catId) url += `&category_id=${catId}`;
 
-  loading(true);
   try {
     const data = await api('GET', url);
     S.expTotal = data?.total || 0;
     renderExpList(data?.items || []);
     renderExpPagination(data);
   } catch (e) { toast(e.message, 'err'); }
-  finally { loading(false); }
 }
 
 function renderExpList(items) {
@@ -956,7 +946,6 @@ async function loadStats() {
   const month = document.getElementById('st-month').value;
   const year  = document.getElementById('st-year').value;
 
-  loading(true);
   try {
     const [monthly, cats, trend] = await Promise.all([
       api('GET', `/statistics/monthly?year=${year}&month=${month}`),
@@ -979,7 +968,6 @@ async function loadStats() {
     else destroyChart('st-bar');
 
   } catch (e) { toast(e.message, 'err'); }
-  finally { loading(false); }
 }
 
 async function loadInsights() {
@@ -1106,12 +1094,10 @@ function renderCatBreakdown(cats, total) {
 // ── Budgets ──────────────────────────────────────────────────
 async function loadBudgets() {
   const now = new Date();
-  loading(true);
   try {
     const data = await api('GET', `/budgets?year=${now.getFullYear()}&month=${now.getMonth() + 1}`);
     renderBudgets(data || []);
   } catch (e) { toast(e.message, 'err'); }
-  finally { loading(false); }
 }
 
 function renderBudgets(budgets) {
@@ -1193,13 +1179,11 @@ function fillWalletDropdowns() {
 }
 
 async function loadWallets() {
-  loading(true);
   try {
     await loadWalletsData();
     renderWalletCards();
     await loadTransfers();
   } catch(e) { toast(e.message, 'err'); }
-  finally { loading(false); }
 }
 
 function fakeCardLast4(id) {
@@ -1617,7 +1601,6 @@ async function clearDefaultWallet() {
 
 // ── Categories Page ──────────────────────────────────────────
 async function loadCategoriesPage() {
-  loading(true);
   try {
     const now = new Date();
     const results = await Promise.all([
@@ -1627,7 +1610,6 @@ async function loadCategoriesPage() {
     S.budgets = results[1] || [];
     renderCategoriesList();
   } catch(e) { toast(e.message, 'err'); }
-  finally { loading(false); }
 }
 
 function renderCategoriesList() {

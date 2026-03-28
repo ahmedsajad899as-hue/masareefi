@@ -192,6 +192,11 @@ body.light-theme {
 }
 
 /* ═══════════ PAGES ═══════════ */
+.pg { animation: pgFadeIn .15s ease; }
+@keyframes pgFadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 .pg-head {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 20px;
