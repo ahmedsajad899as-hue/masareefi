@@ -54,9 +54,9 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=TokenPair)
 async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
+
     result = await db.execute(select(User).where(User.email == body.email, User.is_active == True))
     user = result.scalar_one_or_none()
-
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
