@@ -180,11 +180,9 @@ async def _seed_system_categories(db: AsyncSession, user_id: uuid.UUID):
 
 
 _DEFAULT_WALLETS = [
-    {"name": "راتب شهري",    "wallet_type": "salary",     "icon": "💵", "color": "#4CAF50", "is_default": True},
-    {"name": "حساب بنكي",    "wallet_type": "bank",       "icon": "🏦", "color": "#2196F3", "is_default": False},
-    {"name": "فلوس تحت اليد", "wallet_type": "cash",       "icon": "💰", "color": "#FF9800", "is_default": False},
-    {"name": "Zain Cash",      "wallet_type": "zaincash",   "icon": "📱", "color": "#7B1FA2", "is_default": False},
-    {"name": "Master Card",    "wallet_type": "mastercard", "icon": "💳", "color": "#1A237E", "is_default": False},
+    {"name": "فلوس تحت اليد",  "wallet_type": "cash",       "icon": "💰", "color": "#FF9800", "is_default": True},
+    {"name": "Zain Cash",       "wallet_type": "zaincash",   "icon": "📱", "color": "#7B1FA2", "is_default": False},
+    {"name": "مصرف الرافدين",  "wallet_type": "mastercard", "icon": "💳", "color": "#1A237E", "is_default": False},
 ]
 
 
