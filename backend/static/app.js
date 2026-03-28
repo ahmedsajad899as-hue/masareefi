@@ -1527,19 +1527,37 @@ function toggleSection(id) {
 }
 
 // ── Custom Wallet ────────────────────────────────────────────
+function toggleCustomType(sel) {
+  const row = document.getElementById('cw-custom-type-row');
+  const inp = document.getElementById('cw-custom-type');
+  if (!row) return;
+  const isCustom = sel.value === 'custom';
+  row.style.display = isCustom ? 'block' : 'none';
+  if (inp) inp.required = isCustom;
+}
+
 async function addCustomWallet(e) {
   e.preventDefault();
   const name        = document.getElementById('cw-name').value.trim();
-  const wallet_type = document.getElementById('cw-type')?.value || 'custom';
+  const typeSelect  = document.getElementById('cw-type')?.value || 'custom';
+  const customName  = document.getElementById('cw-custom-type')?.value.trim();
+  const wallet_type = (typeSelect === 'custom' && customName) ? customName : typeSelect;
   const icon        = document.getElementById('cw-icon').value.trim() || '💰';
   const balance     = getRaw('cw-balance');
   if (!name) { toast('أدخل اسم المحفظة', 'err'); return; }
+  if (typeSelect === 'custom' && !customName) { toast('أدخل اسم نوع المحفظة المخصص', 'err'); return; }
   loading(true);
   try {
     await api('POST', '/wallets', { name, icon, wallet_type, balance, currency: S.user?.currency || 'IQD' });
     toast('تم إضافة المحفظة ✅');
     document.getElementById('cw-name').value = '';
     document.getElementById('cw-balance').value = '0';
+    const ctEl = document.getElementById('cw-custom-type');
+    if (ctEl) ctEl.value = '';
+    const ctRow = document.getElementById('cw-custom-type-row');
+    if (ctRow) ctRow.style.display = 'none';
+    const cwType = document.getElementById('cw-type');
+    if (cwType) cwType.value = 'cash';
     loadWallets();
   } catch(e) { toast(e.message, 'err'); }
   finally { loading(false); }
