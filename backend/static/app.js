@@ -162,7 +162,20 @@ async function api(method, path, body = null, formData = false) {
   const opts = { method, headers };
   if (body) opts.body = formData ? body : JSON.stringify(body);
 
-  let res = await fetch(API + path, opts);
+  // 10-second timeout for non-file requests (prevents cold-start hangs)
+  let controller, _tid;
+  if (!formData) {
+    controller = new AbortController();
+    _tid = setTimeout(() => controller.abort(), 10000);
+    opts.signal = controller.signal;
+  }
+
+  let res;
+  try {
+    res = await fetch(API + path, opts);
+  } finally {
+    clearTimeout(_tid);
+  }
 
   if (res.status === 401 && S.refreshToken) {
     const ok = await tryRefresh();
@@ -2112,9 +2125,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }, { passive: true });
 
+  // Safety net: if boot takes > 10 s, force-dismiss spinner and show login
+  const _bootTimeout = setTimeout(() => {
+    loading(false);
+    if (!S.token) {
+      document.getElementById('auth-screen').style.display = '';
+      showAuthTab('login');
+    }
+  }, 10000);
+
   if (S.token && S.user) {
     try {
       await initApp();
+      clearTimeout(_bootTimeout);
       // Restore impersonation banner if page was refreshed while impersonating
       if (localStorage.getItem('admin_backup_token') && S.user) {
         document.getElementById('impersonate-banner').style.display = '';
@@ -2126,7 +2149,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       loading(false);
     }
   } else {
+    document.getElementById('auth-screen').style.display = '';
     showAuthTab('login');
     loading(false);
+    clearTimeout(_bootTimeout);
   }
 });
