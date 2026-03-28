@@ -124,7 +124,10 @@
         </div>
         <div class="mb-4">
           <label class="form-label">كلمة المرور</label>
-          <input type="password" id="l-pass" class="form-control" dir="ltr" onkeydown="if(event.key==='Enter')doLogin()">
+          <div class="input-group">
+            <input type="password" id="l-pass" class="form-control" dir="ltr" onkeydown="if(event.key==='Enter')doLogin()">
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePass('l-pass',this)" tabindex="-1"><i class="fas fa-eye"></i></button>
+          </div>
         </div>
         <button class="btn btn-primary w-100 btn-lg" onclick="doLogin()">
           <i class="fas fa-sign-in-alt me-2"></i>دخول
@@ -147,7 +150,10 @@
         </div>
         <div class="mb-3">
           <label class="form-label">كلمة المرور</label>
-          <input type="password" id="r-pass" class="form-control" dir="ltr">
+          <div class="input-group">
+            <input type="password" id="r-pass" class="form-control" dir="ltr">
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePass('r-pass',this)" tabindex="-1"><i class="fas fa-eye"></i></button>
+          </div>
         </div>
         <div class="mb-4">
           <label class="form-label">العملة الافتراضية</label>
@@ -644,11 +650,17 @@
         <div class="gc-title">تغيير كلمة المرور</div>
         <div class="mb-3">
           <label class="form-label">كلمة المرور الحالية</label>
-          <input type="password" id="set-cur-pass" class="form-control" dir="ltr">
+          <div class="input-group">
+            <input type="password" id="set-cur-pass" class="form-control" dir="ltr">
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePass('set-cur-pass',this)" tabindex="-1"><i class="fas fa-eye"></i></button>
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label">كلمة المرور الجديدة</label>
-          <input type="password" id="set-new-pass" class="form-control" dir="ltr">
+          <div class="input-group">
+            <input type="password" id="set-new-pass" class="form-control" dir="ltr">
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePass('set-new-pass',this)" tabindex="-1"><i class="fas fa-eye"></i></button>
+          </div>
         </div>
         <button class="btn btn-warning" onclick="changePass()"><i class="fas fa-key me-2"></i>تغيير</button>
       </div>

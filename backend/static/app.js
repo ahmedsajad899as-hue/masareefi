@@ -1983,9 +1983,10 @@ function openEditUserModal(userId) {
   new bootstrap.Modal(document.getElementById('userModal')).show();
 }
 
-function toggleAdminPass(btn) {
-  const inp = document.getElementById('um-pass');
+function togglePass(inputId, btn) {
+  const inp  = document.getElementById(inputId);
   const icon = btn.querySelector('i');
+  if (!inp) return;
   if (inp.type === 'password') {
     inp.type = 'text';
     icon.className = 'fas fa-eye-slash';
@@ -1993,6 +1994,11 @@ function toggleAdminPass(btn) {
     inp.type = 'password';
     icon.className = 'fas fa-eye';
   }
+}
+
+function toggleAdminPass(btn) {
+  togglePass('um-pass', btn);
+}
 }
 
 async function saveUser() {
