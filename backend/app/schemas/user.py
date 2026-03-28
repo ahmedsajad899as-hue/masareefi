@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime
 
@@ -8,8 +9,28 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str
     full_name: str
+    phone_number: str | None = None
     preferred_language: str = "ar"
     currency: str = "IQD"
+
+    @field_validator("email")
+    @classmethod
+    def validate_email_domain(cls, v: str) -> str:
+        domain = v.split("@")[-1].lower()
+        # Must have at least one dot and a valid TLD (2+ chars)
+        if not re.match(r'^[a-z0-9.-]+\.[a-z]{2,}$', domain):
+            raise ValueError("صيغة البريد الإلكتروني غير صحيحة")
+        return v
+
+    @field_validator("phone_number")
+    @classmethod
+    def validate_phone(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        digits = re.sub(r'[\s\-\(\)\+]', '', v)
+        if not digits.isdigit() or not (7 <= len(digits) <= 15):
+            raise ValueError("رقم الهاتف غير صحيح")
+        return v
 
     @field_validator("password")
     @classmethod
@@ -35,12 +56,14 @@ class UserUpdate(BaseModel):
     full_name: str | None = None
     preferred_language: str | None = None
     currency: str | None = None
+    phone_number: str | None = None
 
 
 class UserOut(BaseModel):
     id: uuid.UUID
     email: str
     full_name: str
+    phone_number: str | None
     preferred_language: str
     currency: str
     is_active: bool

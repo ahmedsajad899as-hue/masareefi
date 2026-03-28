@@ -25,6 +25,7 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
         email=body.email,
         password_hash=hash_password(body.password),
         full_name=body.full_name,
+        phone_number=body.phone_number,
         preferred_language=body.preferred_language,
         currency=body.currency,
     )

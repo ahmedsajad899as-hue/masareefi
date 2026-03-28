@@ -228,14 +228,19 @@ async function doLogin() {
 async function doRegister() {
   const name     = document.getElementById('r-name').value.trim();
   const email    = document.getElementById('r-email').value.trim();
+  const phone    = document.getElementById('r-phone').value.trim() || null;
   const pass     = document.getElementById('r-pass').value;
   const currency = document.getElementById('r-currency').value;
   if (!name || !email || !pass) { toast('يرجى ملء جميع الحقول', 'err'); return; }
   if (pass.length < 8) { toast('كلمة المرور يجب أن تكون 8 أحرف على الأقل', 'err'); return; }
+  // Basic email format check on client side
+  if (!email.includes('@') || !email.split('@')[1]?.includes('.')) {
+    toast('صيغة البريد الإلكتروني غير صحيحة', 'err'); return;
+  }
 
   loading(true);
   try {
-    const d = await api('POST', '/auth/register', { full_name: name, email, password: pass, currency, preferred_language: 'ar' });
+    const d = await api('POST', '/auth/register', { full_name: name, email, phone_number: phone, password: pass, currency, preferred_language: 'ar' });
     await saveSession(d);
     toast('تم إنشاء الحساب بنجاح 🎉');
     initApp();
