@@ -272,6 +272,7 @@ async function initApp() {
   const savedPage = localStorage.getItem('last_page') || location.hash.replace('#', '') || 'dashboard';
   const validPages = Object.keys(PAGE_TITLES);
   goTo(validPages.includes(savedPage) ? savedPage : 'dashboard');
+  loading(false);
 }
 
 function updateSidebarUser() {
@@ -2119,5 +2120,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   } else {
     showAuthTab('login');
+    loading(false);
   }
 });
