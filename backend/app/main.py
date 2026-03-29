@@ -158,6 +158,9 @@ async def serve_spa(full_path: str):
         raise HTTPException(status_code=404, detail="Not found")
     index = os.path.join(STATIC_DIR, "index.html")
     if os.path.isfile(index):
-        return FileResponse(index)
+        return FileResponse(
+            index,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
     return {"status": "ok", "app": settings.APP_NAME}
 
