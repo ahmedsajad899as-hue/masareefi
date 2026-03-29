@@ -235,7 +235,7 @@ async function doLogin() {
     if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.detail || 'بيانات خاطئة'); }
     const d = await res.json();
     await saveSession(d);
-    initApp();
+    initApp(true);
   } catch (e) { toast(e.message, 'err'); }
   finally { loading(false); }
 }
@@ -258,7 +258,7 @@ async function doRegister() {
     const d = await api('POST', '/auth/register', { full_name: name, email, phone_number: phone, password: pass, currency, preferred_language: 'ar' });
     await saveSession(d);
     toast('تم إنشاء الحساب بنجاح 🎉');
-    initApp();
+    initApp(true);
   } catch (e) { toast(e.message, 'err'); }
   finally { loading(false); }
 }
@@ -284,7 +284,7 @@ function doLogout() {
 }
 
 // ── App Init ─────────────────────────────────────────────────
-async function initApp() {
+async function initApp(freshLogin = false) {
   try {
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('app-screen').style.display  = '';
@@ -294,7 +294,7 @@ async function initApp() {
     if (!S.token) return;
     await loadWalletsData();
     if (!S.token) return;
-    const savedPage = localStorage.getItem('last_page') || location.hash.replace('#', '') || 'dashboard';
+    const savedPage = freshLogin ? 'dashboard' : (localStorage.getItem('last_page') || location.hash.replace('#', '') || 'dashboard');
     const validPages = Object.keys(PAGE_TITLES);
     goTo(validPages.includes(savedPage) ? savedPage : 'dashboard');
   } catch(e) {
@@ -1981,6 +1981,7 @@ function openAddUserModal() {
   document.getElementById('um-name').value = '';
   document.getElementById('um-email').value = '';
   document.getElementById('um-email').disabled = false;
+  document.getElementById('um-phone').value = '';
   document.getElementById('um-pass').value = '';
   document.getElementById('um-pass').placeholder = 'أدخل كلمة المرور (مطلوبة)';
   document.getElementById('um-pass-hint').style.display = 'none';
@@ -1998,6 +1999,7 @@ function openEditUserModal(userId) {
   document.getElementById('um-name').value = u.full_name;
   document.getElementById('um-email').value = u.email;
   document.getElementById('um-email').disabled = true;
+  document.getElementById('um-phone').value = u.phone_number || '';
   document.getElementById('um-pass').value = '';
   document.getElementById('um-pass').placeholder = 'أدخل كلمة مرور جديدة';
   document.getElementById('um-pass-hint').style.display = '';
@@ -2028,6 +2030,7 @@ async function saveUser() {
   const id       = document.getElementById('um-id').value;
   const name     = document.getElementById('um-name').value.trim();
   const email    = document.getElementById('um-email').value.trim();
+  const phone    = document.getElementById('um-phone').value.trim() || null;
   const pass     = document.getElementById('um-pass').value;
   const currency = document.getElementById('um-currency').value;
   const isAdmin  = document.getElementById('um-admin').checked;
@@ -2041,11 +2044,11 @@ async function saveUser() {
       // Create
       if (!email) { toast('أدخل البريد', 'err'); return; }
       if (!pass)  { toast('أدخل كلمة المرور', 'err'); return; }
-      await api('POST', '/admin/users', { full_name: name, email, password: pass, currency, is_admin: isAdmin });
+      await api('POST', '/admin/users', { full_name: name, email, phone_number: phone, password: pass, currency, is_admin: isAdmin });
       toast('تم إنشاء الحساب ✅');
     } else {
       // Update
-      const body = { full_name: name, currency, is_admin: isAdmin, is_active: isActive };
+      const body = { full_name: name, phone_number: phone, currency, is_admin: isAdmin, is_active: isActive };
       if (pass) body.password = pass;
       await api('PATCH', `/admin/users/${id}`, body);
       toast('تم التحديث ✅');

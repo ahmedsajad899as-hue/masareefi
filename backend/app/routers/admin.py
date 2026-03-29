@@ -21,6 +21,7 @@ class AdminCreateUser(BaseModel):
     email: EmailStr
     password: str
     full_name: str
+    phone_number: str | None = None
     preferred_language: str = "ar"
     currency: str = "IQD"
     is_admin: bool = False
@@ -28,6 +29,7 @@ class AdminCreateUser(BaseModel):
 
 class AdminUpdateUser(BaseModel):
     full_name: str | None = None
+    phone_number: str | None = None
     preferred_language: str | None = None
     currency: str | None = None
     is_active: bool | None = None
@@ -64,6 +66,7 @@ async def create_user(
         email=body.email,
         password_hash=hash_password(body.password),
         full_name=body.full_name,
+        phone_number=body.phone_number,
         preferred_language=body.preferred_language,
         currency=body.currency,
         is_admin=body.is_admin,
