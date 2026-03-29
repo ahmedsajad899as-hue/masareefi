@@ -1913,9 +1913,9 @@ function closeInstallSheet() {
 }
 
 function openInChrome() {
-  // Android intent to open current page in Chrome
   const url = window.location.href;
-  const intent = 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
+  const scheme = url.startsWith('https') ? 'https' : 'http';
+  const intent = 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=' + scheme + ';package=com.android.chrome;end';
   window.location.href = intent;
 }
 
