@@ -1950,6 +1950,7 @@ function renderAdminTable() {
         <thead><tr>
           <th>الاسم</th>
           <th>البريد</th>
+          <th>الهاتف</th>
           <th>العملة</th>
           <th>الحالة</th>
           <th>أدمن</th>
@@ -1960,6 +1961,7 @@ function renderAdminTable() {
             <tr>
               <td>${esc(u.full_name)}</td>
               <td dir="ltr">${esc(u.email)}</td>
+              <td dir="ltr">${u.phone_number ? esc(u.phone_number) : '<span class="text-muted">—</span>'}</td>
               <td>${esc(u.currency)}</td>
               <td><span class="badge ${u.is_active ? 'bg-success' : 'bg-secondary'}">${u.is_active ? 'مفعّل' : 'معطّل'}</span></td>
               <td>${u.is_admin ? '<span class="badge bg-warning text-dark">أدمن</span>' : ''}</td>
