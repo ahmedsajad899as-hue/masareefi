@@ -9,7 +9,7 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str
     full_name: str
-    phone_number: str | None = None
+    phone_number: str
     preferred_language: str = "ar"
     currency: str = "IQD"
 

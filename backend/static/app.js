@@ -247,6 +247,7 @@ async function doRegister() {
   const pass     = document.getElementById('r-pass').value;
   const currency = document.getElementById('r-currency').value;
   if (!name || !email || !pass) { toast('يرجى ملء جميع الحقول', 'err'); return; }
+  if (!phone) { toast('رقم الهاتف مطلوب', 'err'); return; }
   if (pass.length < 8) { toast('كلمة المرور يجب أن تكون 8 أحرف على الأقل', 'err'); return; }
   // Basic email format check on client side
   if (!email.includes('@') || !email.split('@')[1]?.includes('.')) {

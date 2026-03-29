@@ -97,6 +97,8 @@
   "passwordChanged": "Password changed",
   "profileUpdated": "Profile updated",
   "invalidEmail": "Invalid email address",
+  "phoneNumber": "Phone Number",
+  "invalidPhone": "Invalid phone number",
   "passwordTooShort": "Password must be at least 8 characters",
   "passwordsNotMatch": "Passwords do not match",
   "fieldRequired": "This field is required",

@@ -18,6 +18,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
   bool _obscure = true;
@@ -28,6 +29,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
+    _phoneCtrl.dispose();
     _passCtrl.dispose();
     _confirmCtrl.dispose();
     super.dispose();
@@ -39,6 +41,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           email: _emailCtrl.text.trim(),
           password: _passCtrl.text,
           fullName: _nameCtrl.text.trim(),
+          phoneNumber: _phoneCtrl.text.trim(),
           language: _selectedLang,
           currency: _selectedCurrency,
         );
@@ -98,6 +101,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     return null;
                   },
                 ).animate().fadeIn(delay: 150.ms).slideY(begin: 0.1),
+
+                const SizedBox(height: 16),
+
+                TextFormField(
+                  controller: _phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  textDirection: TextDirection.ltr,
+                  decoration: InputDecoration(
+                    labelText: l.phoneNumber,
+                    prefixIcon: const Icon(Icons.phone_rounded),
+                    hintText: '07xxxxxxxxx',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return l.fieldRequired;
+                    final digits = v.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
+                    if (!RegExp(r'^\d{7,15}$').hasMatch(digits)) return l.invalidPhone;
+                    return null;
+                  },
+                ).animate().fadeIn(delay: 175.ms).slideY(begin: 0.1),
 
                 const SizedBox(height: 16),
 

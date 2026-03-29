@@ -76,6 +76,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String email,
     required String password,
     required String fullName,
+    required String phoneNumber,
     String language = 'ar',
     String currency = 'IQD',
   }) async {
@@ -87,6 +88,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           'email': email,
           'password': password,
           'full_name': fullName,
+          'phone_number': phoneNumber,
           'preferred_language': language,
           'currency': currency,
         },

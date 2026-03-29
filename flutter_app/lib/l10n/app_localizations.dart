@@ -114,6 +114,8 @@ class AppLocalizations {
       'passwordChanged': 'تم تغيير كلمة المرور',
       'profileUpdated': 'تم تحديث الملف الشخصي',
       'invalidEmail': 'البريد الإلكتروني غير صحيح',
+      'phoneNumber': 'رقم الهاتف',
+      'invalidPhone': 'رقم الهاتف غير صحيح',
       'passwordTooShort': 'كلمة المرور يجب أن تكون 8 أحرف على الأقل',
       'passwordsNotMatch': 'كلمتا المرور غير متطابقتين',
       'fieldRequired': 'هذا الحقل مطلوب',
@@ -229,6 +231,8 @@ class AppLocalizations {
       'passwordChanged': 'Password changed',
       'profileUpdated': 'Profile updated',
       'invalidEmail': 'Invalid email address',
+      'phoneNumber': 'Phone Number',
+      'invalidPhone': 'Invalid phone number',
       'passwordTooShort': 'Password must be at least 8 characters',
       'passwordsNotMatch': 'Passwords do not match',
       'fieldRequired': 'This field is required',
@@ -351,6 +355,8 @@ class AppLocalizations {
   String get passwordChanged => _t('passwordChanged');
   String get profileUpdated => _t('profileUpdated');
   String get invalidEmail => _t('invalidEmail');
+  String get phoneNumber => _t('phoneNumber');
+  String get invalidPhone => _t('invalidPhone');
   String get passwordTooShort => _t('passwordTooShort');
   String get passwordsNotMatch => _t('passwordsNotMatch');
   String get fieldRequired => _t('fieldRequired');
