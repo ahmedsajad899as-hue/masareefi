@@ -1870,7 +1870,7 @@ async function triggerInstall() {
     toast('التطبيق مثبت بالفعل على شاشتك 📱');
     return;
   }
-  // Android / Chrome — native install dialog
+  // Android / Chrome — native install dialog (best case)
   if (_installPrompt) {
     _installPrompt.prompt();
     const { outcome } = await _installPrompt.userChoice;
@@ -1881,19 +1881,42 @@ async function triggerInstall() {
     }
     return;
   }
-  // iOS Safari — scroll to iOS guide
+  // iOS Safari — show bottom sheet with steps
   if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-    goTo('settings');
-    showInstallTab('ios');
-    setTimeout(() => document.getElementById('install-guide-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
-    toast('اتبع الخطوات المذكورة أدناه 👇');
+    _showInstallSheet('ios-install-sheet');
     return;
   }
-  // Fallback — show Android guide
+  // Android but prompt not ready yet — show helper sheet
+  if (/Android/i.test(navigator.userAgent)) {
+    _showInstallSheet('android-install-sheet');
+    return;
+  }
+  // Desktop fallback
   goTo('settings');
-  showInstallTab('android');
   setTimeout(() => document.getElementById('install-guide-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
-  toast('اتبع الخطوات المذكورة أدناه 👇');
+}
+
+function _showInstallSheet(id) {
+  const sheet = document.getElementById(id);
+  if (!sheet) return;
+  sheet.style.display = '';
+  requestAnimationFrame(() => sheet.classList.add('open'));
+}
+
+function closeInstallSheet() {
+  ['ios-install-sheet', 'android-install-sheet'].forEach(id => {
+    const sheet = document.getElementById(id);
+    if (!sheet) return;
+    sheet.classList.remove('open');
+    setTimeout(() => sheet.style.display = 'none', 300);
+  });
+}
+
+function openInChrome() {
+  // Android intent to open current page in Chrome
+  const url = window.location.href;
+  const intent = 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
+  window.location.href = intent;
 }
 
 async function saveProfile() {

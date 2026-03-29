@@ -1263,3 +1263,56 @@ body.light-theme {
   cursor: pointer; transition: opacity .2s;
 }
 .install-pwa-link:hover { opacity: .88; }
+
+/* Install bottom sheet (iOS / Android fallback) */
+#ios-install-sheet, #android-install-sheet {
+  position: fixed; inset: 0; z-index: 9000;
+}
+.ios-sheet-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,.55);
+  opacity: 0; transition: opacity .3s;
+}
+#ios-install-sheet.open .ios-sheet-overlay,
+#android-install-sheet.open .ios-sheet-overlay { opacity: 1; }
+
+.ios-sheet-panel {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: var(--surface); border-radius: 20px 20px 0 0;
+  padding: 16px 20px 30px; box-shadow: 0 -8px 30px rgba(0,0,0,.4);
+  transform: translateY(100%); transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+#ios-install-sheet.open .ios-sheet-panel,
+#android-install-sheet.open .ios-sheet-panel { transform: translateY(0); }
+
+.ios-sheet-handle {
+  width: 40px; height: 4px; border-radius: 2px;
+  background: var(--border); margin: 0 auto 16px;
+}
+.ios-sheet-title {
+  font-size: 1.05rem; font-weight: 700;
+  text-align: center; margin-bottom: 16px;
+}
+.ios-sheet-steps { display: flex; flex-direction: column; gap: 12px; }
+.ios-sheet-step {
+  display: flex; align-items: flex-start; gap: 12px;
+  font-size: .88rem; line-height: 1.5;
+}
+.ios-step-num {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--primary); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: .78rem; flex-shrink: 0;
+}
+.ios-share-icon { font-size: 1rem; }
+.ios-arrow-wrap {
+  text-align: center; margin-top: 14px; color: var(--primary);
+  font-weight: 700; font-size: .9rem;
+}
+.ios-arrow-bounce {
+  font-size: 1.6rem; animation: bounce-down 1s infinite;
+}
+@keyframes bounce-down {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(6px); }
+}
