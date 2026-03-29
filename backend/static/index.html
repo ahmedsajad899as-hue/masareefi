@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=24">
+  <link rel="stylesheet" href="/static/style.css?v=25">
   <script>
     // Early auth check — runs before app.js loads.
     // If no token stored, immediately hide spinner & show login screen.
@@ -698,6 +698,164 @@
           </div>
         </div>
       </div>
+
+      <!-- ── تثبيت التطبيق ── -->
+      <div class="glass-card mt-3">
+        <div class="gc-title"><i class="fas fa-mobile-alt me-2 text-success"></i>تثبيت التطبيق على هاتفك</div>
+        <p style="font-size:.83rem;color:var(--muted)" class="mb-3">
+          أضف مصاريفي إلى شاشتك الرئيسية كتطبيق مباشر — بدون تحميل من المتجر!
+        </p>
+
+        <!-- OS tabs -->
+        <div class="d-flex gap-2 mb-3">
+          <button class="btn btn-primary btn-sm" id="itab-android" onclick="showInstallTab('android')">
+            <i class="fab fa-android me-1"></i>Android
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" id="itab-ios" onclick="showInstallTab('ios')">
+            <i class="fab fa-apple me-1"></i>iPhone / iPad
+          </button>
+        </div>
+
+        <!-- ── Android ── -->
+        <div id="install-tab-android">
+
+          <div class="install-step">
+            <div class="step-bubble">1</div>
+            <div class="step-body">
+              <div class="step-title">افتح الموقع في متصفح Chrome</div>
+              <div class="step-desc">تأكد من استخدام Google Chrome على هاتفك</div>
+              <div class="step-screen">
+                <div class="ss-bar">
+                  <div class="ss-url">🔒 masareefi.co</div>
+                  <div class="ss-dots">⋮</div>
+                </div>
+                <div class="ss-content">💰 مصاريفي</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="install-step">
+            <div class="step-bubble">2</div>
+            <div class="step-body">
+              <div class="step-title">اضغط على القائمة <span class="ss-dots-hl">⋮</span></div>
+              <div class="step-desc">الثلاث نقاط في أعلى يسار المتصفح</div>
+              <div class="step-screen">
+                <div class="ss-bar">
+                  <div class="ss-url">🔒 masareefi.co</div>
+                  <div class="ss-dots ss-dots-hl">⋮</div>
+                </div>
+                <div class="ss-dropdown">
+                  <div class="ss-menu-item">↗ مشاركة</div>
+                  <div class="ss-menu-item ss-menu-hl">🏠 إضافة إلى الشاشة الرئيسية</div>
+                  <div class="ss-menu-item">⬇ تنزيل الصفحة</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="install-step">
+            <div class="step-bubble">3</div>
+            <div class="step-body">
+              <div class="step-title">اختر "إضافة إلى الشاشة الرئيسية"</div>
+              <div class="step-desc">أو قد تظهر رسالة "تثبيت التطبيق" مباشرة</div>
+              <div class="step-screen">
+                <div class="ss-dialog">
+                  <div class="ss-dialog-icon">💰</div>
+                  <div class="ss-dialog-name">مصاريفي</div>
+                  <div class="ss-dialog-url">masareefi.co</div>
+                  <div class="ss-dialog-btn" style="background:#6C63FF">تثبيت</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="install-step">
+            <div class="step-bubble" style="background:var(--green)">✓</div>
+            <div class="step-body">
+              <div class="step-title">التطبيق جاهز! 🎉</div>
+              <div class="step-desc">ستجد أيقونة مصاريفي على شاشتك الرئيسية</div>
+              <div class="step-screen">
+                <div class="ss-homescreen">
+                  <div class="ss-app-icon">💰</div>
+                  <div class="ss-app-lbl">مصاريفي</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /android -->
+
+        <!-- ── iOS ── -->
+        <div id="install-tab-ios" style="display:none">
+
+          <div class="install-step">
+            <div class="step-bubble" style="background:#555">1</div>
+            <div class="step-body">
+              <div class="step-title">افتح الموقع في متصفح Safari</div>
+              <div class="step-desc">يجب استخدام Safari — المتصفح الافتراضي لـ iPhone</div>
+              <div class="step-screen">
+                <div class="ss-bar" style="background:#1a1a2e;justify-content:center">
+                  <div class="ss-url" style="max-width:130px;flex:none;text-align:center">masareefi.co</div>
+                </div>
+                <div class="ss-content">💰 مصاريفي</div>
+                <div class="ss-safari-bottom">
+                  <span>‹</span><span>›</span><span class="ss-share-hl">⬆</span><span>📚</span><span>⊞</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="install-step">
+            <div class="step-bubble" style="background:#555">2</div>
+            <div class="step-body">
+              <div class="step-title">اضغط على أيقونة المشاركة <span class="ss-share-hl">⬆</span></div>
+              <div class="step-desc">الأيقونة في شريط الأدوات السفلي بالمتصفح</div>
+              <div class="step-screen">
+                <div class="ss-sharesheet">
+                  <div class="ss-sharesheet-title">masareefi.co</div>
+                  <div class="ss-sharesheet-row">
+                    <div class="ss-share-icon active">🏠<div>إضافة للشاشة</div></div>
+                    <div class="ss-share-icon">📋<div>نسخ الرابط</div></div>
+                    <div class="ss-share-icon">✉️<div>إرسال</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="install-step">
+            <div class="step-bubble" style="background:#555">3</div>
+            <div class="step-body">
+              <div class="step-title">اضغط "إضافة إلى الشاشة الرئيسية"</div>
+              <div class="step-desc">ثم اضغط "إضافة" في أعلى يسار النافذة</div>
+              <div class="step-screen">
+                <div class="ss-dialog">
+                  <div class="ss-dialog-icon">💰</div>
+                  <div class="ss-dialog-name">مصاريفي</div>
+                  <div class="ss-dialog-url">masareefi.co</div>
+                  <div class="ss-dialog-btn" style="background:#007AFF">إضافة</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="install-step">
+            <div class="step-bubble" style="background:var(--green)">✓</div>
+            <div class="step-body">
+              <div class="step-title">التطبيق جاهز! 🎉</div>
+              <div class="step-desc">ستجد أيقونة مصاريفي على شاشتك الرئيسية</div>
+              <div class="step-screen">
+                <div class="ss-homescreen">
+                  <div class="ss-app-icon">💰</div>
+                  <div class="ss-app-lbl">مصاريفي</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /ios -->
+      </div><!-- /install-guide card -->
+
     </section>
 
     <!-- ── Admin Users ── -->

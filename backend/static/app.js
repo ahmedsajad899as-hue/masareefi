@@ -1827,6 +1827,13 @@ function loadSettings() {
   if (sw) sw.checked = !document.body.classList.contains('light-theme');
 }
 
+function showInstallTab(tab) {
+  document.getElementById('install-tab-android').style.display = tab === 'android' ? '' : 'none';
+  document.getElementById('install-tab-ios').style.display     = tab === 'ios'     ? '' : 'none';
+  document.getElementById('itab-android').className = `btn btn-sm ${tab === 'android' ? 'btn-primary' : 'btn-outline-secondary'}`;
+  document.getElementById('itab-ios').className     = `btn btn-sm ${tab === 'ios'     ? 'btn-primary' : 'btn-outline-secondary'}`;
+}
+
 async function saveProfile() {
   const name     = document.getElementById('set-name').value.trim();
   const currency = document.getElementById('set-currency').value;
