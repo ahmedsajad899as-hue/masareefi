@@ -11,20 +11,28 @@ if ('serviceWorker' in navigator) {
 // ── PWA Install Prompt ────────────────────────────────────────
 let _installPrompt = null;
 
+// Hide install buttons if already running as installed PWA
+if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn     = document.getElementById('pwa-install-btn');
+    const sideBtn = document.getElementById('sidebar-install-btn');
+    if (btn)     btn.style.display = 'none';
+    if (sideBtn) sideBtn.style.display = 'none';
+  });
+}
+
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   _installPrompt = e;
-  // Show the quick-install button once the prompt is ready
+  // Upgrade button to green on Android when native prompt is ready
   const btn = document.getElementById('pwa-install-btn');
-  if (btn) { btn.style.display = ''; btn.classList.add('btn-success'); btn.classList.remove('btn-outline-success'); }
-  const sideBtn = document.getElementById('sidebar-install-btn');
-  if (sideBtn) sideBtn.style.display = '';
+  if (btn) { btn.textContent = ''; btn.innerHTML = '<i class="fas fa-download me-2"></i>تثبيت مصاريفي الآن — اضغط هنا!'; }
 });
 
 window.addEventListener('appinstalled', () => {
   _installPrompt = null;
   const btn = document.getElementById('pwa-install-btn');
-  if (btn) btn.style.display = 'none';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-check me-2"></i>تم التثبيت ✅'; }
   const sideBtn = document.getElementById('sidebar-install-btn');
   if (sideBtn) sideBtn.style.display = 'none';
   toast('تم تثبيت مصاريفي على شاشتك! 🎉');

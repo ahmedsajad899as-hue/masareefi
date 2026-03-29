@@ -273,7 +273,7 @@
       <a class="s-link admin-only" data-page="admin-users" onclick="goTo('admin-users')" style="display:none"><i class="fas fa-users-cog"></i> إدارة المستخدمين</a>
     </nav>
     <div class="sidebar-footer">
-      <button id="sidebar-install-btn" class="install-pwa-link" onclick="triggerInstall()" style="display:none">
+      <button id="sidebar-install-btn" class="install-pwa-link" onclick="triggerInstall()">
         <i class="fas fa-download me-2"></i>تثبيت التطبيق
       </button>
       <a class="s-link s-link-settings" data-page="settings" onclick="goTo('settings')"><i class="fas fa-cog"></i> الإعدادات</a>
@@ -709,8 +709,8 @@
           أضف مصاريفي إلى شاشتك الرئيسية كتطبيق مباشر — بدون تحميل من المتجر!
         </p>
 
-        <!-- Quick install button (shown on Android Chrome when prompt is ready) -->
-        <button id="pwa-install-btn" class="btn btn-outline-success w-100 mb-3" onclick="triggerInstall()" style="display:none">
+        <!-- Quick install button - always visible on mobile -->
+        <button id="pwa-install-btn" class="btn btn-success w-100 mb-3" onclick="triggerInstall()">
           <i class="fas fa-download me-2"></i>تثبيت مصاريفي الآن
         </button>
 
@@ -1052,7 +1052,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=35"></script>
+<script src="/static/app.js?v=36"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══
