@@ -2143,7 +2143,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (S.token && S.user) {
     try {
-      await initApp();
+      await initApp(true);
       clearTimeout(_bootTimeout);
       // Restore impersonation banner if page was refreshed while impersonating
       if (localStorage.getItem('admin_backup_token') && S.user) {
