@@ -1252,3 +1252,14 @@ body.light-theme {
   box-shadow: 0 4px 14px rgba(108,99,255,.4);
 }
 .ss-app-lbl { font-size: .7rem; color: #ccc; }
+
+/* Sidebar install button */
+.install-pwa-link {
+  display: flex; align-items: center;
+  width: 100%; padding: 9px 16px; margin-bottom: 4px;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff; border: none; border-radius: 10px;
+  font-family: 'Cairo', sans-serif; font-size: .88rem; font-weight: 600;
+  cursor: pointer; transition: opacity .2s;
+}
+.install-pwa-link:hover { opacity: .88; }

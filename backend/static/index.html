@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=25">
+  <link rel="stylesheet" href="/static/style.css?v=26">
   <script>
     // Early auth check — runs before app.js loads.
     // If no token stored, immediately hide spinner & show login screen.
@@ -273,6 +273,9 @@
       <a class="s-link admin-only" data-page="admin-users" onclick="goTo('admin-users')" style="display:none"><i class="fas fa-users-cog"></i> إدارة المستخدمين</a>
     </nav>
     <div class="sidebar-footer">
+      <button id="sidebar-install-btn" class="install-pwa-link" onclick="triggerInstall()" style="display:none">
+        <i class="fas fa-download me-2"></i>تثبيت التطبيق
+      </button>
       <a class="s-link s-link-settings" data-page="settings" onclick="goTo('settings')"><i class="fas fa-cog"></i> الإعدادات</a>
       <button class="logout-btn" onclick="doLogout()"><i class="fas fa-sign-out-alt me-2"></i>تسجيل الخروج</button>
     </div>
@@ -700,11 +703,16 @@
       </div>
 
       <!-- ── تثبيت التطبيق ── -->
-      <div class="glass-card mt-3">
+      <div class="glass-card mt-3" id="install-guide-card">
         <div class="gc-title"><i class="fas fa-mobile-alt me-2 text-success"></i>تثبيت التطبيق على هاتفك</div>
         <p style="font-size:.83rem;color:var(--muted)" class="mb-3">
           أضف مصاريفي إلى شاشتك الرئيسية كتطبيق مباشر — بدون تحميل من المتجر!
         </p>
+
+        <!-- Quick install button (shown on Android Chrome when prompt is ready) -->
+        <button id="pwa-install-btn" class="btn btn-outline-success w-100 mb-3" onclick="triggerInstall()" style="display:none">
+          <i class="fas fa-download me-2"></i>تثبيت مصاريفي الآن
+        </button>
 
         <!-- OS tabs -->
         <div class="d-flex gap-2 mb-3">
@@ -1044,7 +1052,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=34"></script>
+<script src="/static/app.js?v=35"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══

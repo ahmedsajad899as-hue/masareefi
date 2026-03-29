@@ -8,6 +8,28 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').then(reg => reg.update()).catch(() => {});
 }
 
+// ── PWA Install Prompt ────────────────────────────────────────
+let _installPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _installPrompt = e;
+  // Show the quick-install button once the prompt is ready
+  const btn = document.getElementById('pwa-install-btn');
+  if (btn) { btn.style.display = ''; btn.classList.add('btn-success'); btn.classList.remove('btn-outline-success'); }
+  const sideBtn = document.getElementById('sidebar-install-btn');
+  if (sideBtn) sideBtn.style.display = '';
+});
+
+window.addEventListener('appinstalled', () => {
+  _installPrompt = null;
+  const btn = document.getElementById('pwa-install-btn');
+  if (btn) btn.style.display = 'none';
+  const sideBtn = document.getElementById('sidebar-install-btn');
+  if (sideBtn) sideBtn.style.display = 'none';
+  toast('تم تثبيت مصاريفي على شاشتك! 🎉');
+});
+
 const API = '/api/v1';
 
 // ── State ────────────────────────────────────────────────────
@@ -1832,6 +1854,38 @@ function showInstallTab(tab) {
   document.getElementById('install-tab-ios').style.display     = tab === 'ios'     ? '' : 'none';
   document.getElementById('itab-android').className = `btn btn-sm ${tab === 'android' ? 'btn-primary' : 'btn-outline-secondary'}`;
   document.getElementById('itab-ios').className     = `btn btn-sm ${tab === 'ios'     ? 'btn-primary' : 'btn-outline-secondary'}`;
+}
+
+async function triggerInstall() {
+  // Already installed as PWA?
+  if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+    toast('التطبيق مثبت بالفعل على شاشتك 📱');
+    return;
+  }
+  // Android / Chrome — native install dialog
+  if (_installPrompt) {
+    _installPrompt.prompt();
+    const { outcome } = await _installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      _installPrompt = null;
+      const btn = document.getElementById('pwa-install-btn');
+      if (btn) btn.style.display = 'none';
+    }
+    return;
+  }
+  // iOS Safari — scroll to iOS guide
+  if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    goTo('settings');
+    showInstallTab('ios');
+    setTimeout(() => document.getElementById('install-guide-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    toast('اتبع الخطوات المذكورة أدناه 👇');
+    return;
+  }
+  // Fallback — show Android guide
+  goTo('settings');
+  showInstallTab('android');
+  setTimeout(() => document.getElementById('install-guide-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+  toast('اتبع الخطوات المذكورة أدناه 👇');
 }
 
 async function saveProfile() {
