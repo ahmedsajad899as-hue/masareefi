@@ -207,21 +207,26 @@ async def get_activity(
     }
     try:
         sql = text("""
-            SELECT ua.id, u.full_name, u.email, ua.action, ua.created_at
+            SELECT
+                ua.id          AS act_id,
+                u.full_name    AS user_name,
+                u.email        AS user_email,
+                ua.action      AS act_action,
+                ua.created_at  AS act_created_at
             FROM user_activities ua
             JOIN users u ON ua.user_id = u.id
             ORDER BY ua.created_at DESC
             LIMIT :lim
         """)
         result = await db.execute(sql, {"lim": min(limit, 500)})
-        rows = result.fetchall()
+        rows = result.mappings().fetchall()
         return [
             {
-                "id":         row.id,
-                "user_name":  row.full_name,
-                "user_email": row.email,
-                "action":     ACTION_LABELS.get(row.action, row.action),
-                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "id":         row["act_id"],
+                "user_name":  row["user_name"],
+                "user_email": row["user_email"],
+                "action":     ACTION_LABELS.get(row["act_action"], row["act_action"]),
+                "created_at": row["act_created_at"].isoformat() if row["act_created_at"] else None,
             }
             for row in rows
         ]
