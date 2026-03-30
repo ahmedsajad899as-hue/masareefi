@@ -2318,44 +2318,80 @@ async function deleteAdminUser(userId, name) {
 }
 
 // ── Referral ─────────────────────────────────────────────────
-async function loadReferral() {
+let _referralLink = '';
+
+async function toggleReferralDropdown() {
+  const drop = document.getElementById('sidebar-referral-dropdown');
+  const chevron = document.getElementById('ref-chevron');
+  if (!drop) return;
+
+  const isOpen = drop.style.display !== 'none';
+  drop.style.display = isOpen ? 'none' : '';
+  if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+
+  if (!isOpen && !_referralLink) {
+    await _fetchReferralLink();
+  }
+}
+
+async function _fetchReferralLink() {
   try {
     const data = await api('GET', '/auth/referral-info');
-    const linkEl   = document.getElementById('ref-link-text');
-    const countEl  = document.getElementById('ref-count');
-    const bonusEl  = document.getElementById('ref-bonus-days');
-    const copyBtn  = document.getElementById('ref-copy-btn');
-    const waBtn    = document.getElementById('ref-share-wa');
-    const tgBtn    = document.getElementById('ref-share-tg');
-    const xBtn     = document.getElementById('ref-share-x');
-
-    const link = data.referral_link || '';
-    if (linkEl) linkEl.textContent = link;
+    _referralLink = data.referral_link || '';
+    const el = document.getElementById('srd-link-text');
+    if (el) el.textContent = _referralLink || '—';
+    // Also update settings page elements if loaded
+    const linkEl  = document.getElementById('ref-link-text');
+    const countEl = document.getElementById('ref-count');
+    const bonusEl = document.getElementById('ref-bonus-days');
+    if (linkEl)  linkEl.textContent  = _referralLink;
     if (countEl) countEl.textContent = data.referral_count || 0;
     if (bonusEl) bonusEl.textContent = data.referral_bonus_days || 0;
+    _bindShareButtons(data);
+  } catch(e) { console.error('referral fetch:', e); }
+}
 
-    const shareText = `استخدم تطبيق مصاريفي لتتبع مصاريفك بسهولة! سجّل الآن: ${link}`;
+function _bindShareButtons(data) {
+  const link = data.referral_link || '';
+  const shareText = `استخدم تطبيق مصاريفي لتتبع مصاريفك بسهولة! سجّل الآن: ${link}`;
+  const copyBtn = document.getElementById('ref-copy-btn');
+  const waBtn   = document.getElementById('ref-share-wa');
+  const tgBtn   = document.getElementById('ref-share-tg');
+  const xBtn    = document.getElementById('ref-share-x');
+  if (copyBtn) copyBtn.onclick = () => _copyLink(link);
+  if (waBtn) waBtn.onclick = (e) => { e.preventDefault(); window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank'); };
+  if (tgBtn) tgBtn.onclick = (e) => { e.preventDefault(); window.open(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('استخدم تطبيق مصاريفي!')}`, '_blank'); };
+  if (xBtn)  xBtn.onclick  = (e) => { e.preventDefault(); window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}`, '_blank'); };
+}
 
-    if (copyBtn) {
-      copyBtn.onclick = () => {
-        navigator.clipboard.writeText(link)
-          .then(() => toast('تم نسخ الرابط ✅'))
-          .catch(() => { /* fallback */ const ta = document.createElement('textarea'); ta.value = link; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('تم نسخ الرابط ✅'); });
-      };
-    }
-    if (waBtn) {
-      waBtn.removeAttribute('href');
-      waBtn.onclick = (e) => { e.preventDefault(); window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank'); };
-    }
-    if (tgBtn) {
-      tgBtn.removeAttribute('href');
-      tgBtn.onclick = (e) => { e.preventDefault(); window.open(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('استخدم تطبيق مصاريفي لتتبع مصاريفك!')}`, '_blank'); };
-    }
-    if (xBtn) {
-      xBtn.removeAttribute('href');
-      xBtn.onclick = (e) => { e.preventDefault(); window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}`, '_blank'); };
-    }
-  } catch(e) { console.error('referral load:', e); }
+function _copyLink(link) {
+  navigator.clipboard.writeText(link)
+    .then(() => toast('تم نسخ الرابط ✅'))
+    .catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = link; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      toast('تم نسخ الرابط ✅');
+    });
+}
+
+function copyReferralFromSidebar() {
+  if (_referralLink) _copyLink(_referralLink);
+}
+
+function shareReferral(platform) {
+  if (!_referralLink) return;
+  const text = `استخدم تطبيق مصاريفي لتتبع مصاريفك بسهولة! سجّل الآن: ${_referralLink}`;
+  const urls = {
+    wa:    `https://wa.me/?text=${encodeURIComponent(text)}`,
+    viber: `viber://forward?text=${encodeURIComponent(text)}`,
+    tg:    `https://t.me/share/url?url=${encodeURIComponent(_referralLink)}&text=${encodeURIComponent('استخدم تطبيق مصاريفي!')}`,
+  };
+  window.open(urls[platform], '_blank');
+}
+
+async function loadReferral() {
+  if (!_referralLink) await _fetchReferralLink();
 }
 
 // ── FAB Voice Assistant code is in inline script in index.html ──

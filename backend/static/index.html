@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=30">
+  <link rel="stylesheet" href="/static/style.css?v=31">
   <script>
     // Early auth check — runs before app.js loads.
     // If no token stored, immediately hide spinner & show login screen.
@@ -334,11 +334,34 @@
       <a class="s-link admin-only" data-page="admin-users" onclick="goTo('admin-users')" style="display:none"><i class="fas fa-users-cog"></i> إدارة المستخدمين</a>
     </nav>
     <div class="sidebar-footer">
-      <!-- Referral invite button — always visible -->
-      <button class="sidebar-referral-btn" onclick="goTo('settings');closeSidebar();">
-        <i class="fas fa-user-plus me-2"></i>ادعُ صديقاً واكسب أياماً مجانية
-        <span class="sidebar-referral-badge">+7 أيام</span>
-      </button>
+      <!-- Referral invite button + dropdown -->
+      <div class="sidebar-referral-wrap" id="sidebar-referral-wrap">
+        <button class="sidebar-referral-btn" onclick="toggleReferralDropdown()">
+          <i class="fas fa-user-plus me-2"></i>ادعُ صديقاً واكسب أياماً مجانية
+          <span class="sidebar-referral-badge">+7 أيام</span>
+          <i class="fas fa-chevron-down sidebar-referral-chevron" id="ref-chevron"></i>
+        </button>
+        <div class="sidebar-referral-dropdown" id="sidebar-referral-dropdown" style="display:none">
+          <div class="srd-hint">انسخ رابطك الشخصي أو شاركه مباشرةً:</div>
+          <div class="srd-link-row">
+            <span id="srd-link-text" class="srd-link-text">جاري التحميل...</span>
+            <button class="srd-copy-btn" onclick="copyReferralFromSidebar()" title="نسخ الرابط">
+              <i class="fas fa-copy"></i>
+            </button>
+          </div>
+          <div class="srd-share-row">
+            <button class="srd-share-btn srd-wa"  onclick="shareReferral('wa')">
+              <i class="fab fa-whatsapp"></i><span>واتساب</span>
+            </button>
+            <button class="srd-share-btn srd-viber" onclick="shareReferral('viber')">
+              <i class="fab fa-viber"></i><span>فايبر</span>
+            </button>
+            <button class="srd-share-btn srd-tg"  onclick="shareReferral('tg')">
+              <i class="fab fa-telegram"></i><span>تيليغرام</span>
+            </button>
+          </div>
+        </div>
+      </div>
       <button id="sidebar-install-btn" class="install-pwa-link" onclick="triggerInstall()">
         <i class="fas fa-download me-2"></i>تثبيت التطبيق
       </button>
@@ -1287,7 +1310,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=43"></script>
+<script src="/static/app.js?v=44"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══

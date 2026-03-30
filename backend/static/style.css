@@ -1446,6 +1446,7 @@ body.light-theme {
 }
 
 /* ── Sidebar Referral Button ─────────────────────────────────── */
+.sidebar-referral-wrap { position: relative; margin-bottom: 6px; }
 .sidebar-referral-btn {
   display: flex;
   align-items: center;
@@ -1458,9 +1459,9 @@ body.light-theme {
   font-weight: 600;
   padding: 9px 14px;
   cursor: pointer;
-  margin-bottom: 6px;
   text-align: right;
   transition: background .2s, border-color .2s;
+  gap: 4px;
 }
 .sidebar-referral-btn:hover {
   background: linear-gradient(135deg, rgba(99,102,241,.3), rgba(139,92,246,.3));
@@ -1469,13 +1470,92 @@ body.light-theme {
 }
 .sidebar-referral-badge {
   margin-right: auto;
-  margin-left: 0;
   background: rgba(99,102,241,.35);
   border-radius: 20px;
   font-size: .68rem;
   padding: 2px 8px;
   color: #c4b5fd;
 }
+.sidebar-referral-chevron {
+  font-size: .65rem;
+  opacity: .7;
+  transition: transform .2s;
+}
+
+/* ── Sidebar Referral Dropdown ───────────────────────────────── */
+.sidebar-referral-dropdown {
+  background: #1a1a2e;
+  border: 1px solid rgba(99,102,241,.4);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 4px;
+  animation: fadeInDown .18s ease;
+}
+@keyframes fadeInDown {
+  from { opacity:0; transform:translateY(-6px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.srd-hint {
+  font-size: .73rem;
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+.srd-link-row {
+  display: flex;
+  align-items: center;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(99,102,241,.25);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+  gap: 8px;
+  direction: ltr;
+}
+.srd-link-text {
+  flex: 1;
+  font-size: .72rem;
+  font-family: monospace;
+  color: #a5b4fc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.srd-copy-btn {
+  background: rgba(99,102,241,.25);
+  border: none;
+  border-radius: 6px;
+  color: #a5b4fc;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: .8rem;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+.srd-copy-btn:hover { background: rgba(99,102,241,.5); }
+.srd-share-row {
+  display: flex;
+  gap: 6px;
+}
+.srd-share-btn {
+  flex: 1;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 4px;
+  font-size: .72rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transition: opacity .15s, transform .1s;
+}
+.srd-share-btn:hover { opacity: .85; transform: translateY(-1px); }
+.srd-share-btn i { font-size: 1.1rem; }
+.srd-wa    { background: #25D366; }
+.srd-viber { background: #7360F2; }
+.srd-tg    { background: #229ED9; }
 
 /* ── Upgrade Modal Referral Strip ─────────────────────────────── */
 .upgrade-referral-strip {
