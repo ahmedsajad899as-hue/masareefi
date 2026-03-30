@@ -198,23 +198,28 @@ async def get_activity(
     _admin: User = Depends(get_current_admin),
 ):
     """Return the latest user activity entries (logins, registrations)."""
-    result = await db.execute(
-        select(UserActivity, User)
-        .join(User, UserActivity.user_id == User.id)
-        .order_by(desc(UserActivity.created_at))
-        .limit(limit)
-    )
-    ACTION_LABELS = {
-        "login":    "تسجيل دخول",
-        "register": "تسجيل حساب جديد",
-    }
-    return [
-        {
-            "id":         act.id,
-            "user_name":  user.full_name,
-            "user_email": user.email,
-            "action":     ACTION_LABELS.get(act.action, act.action),
-            "created_at": act.created_at.isoformat() if act.created_at else None,
+    try:
+        result = await db.execute(
+            select(UserActivity, User)
+            .join(User, UserActivity.user_id == User.id)
+            .order_by(desc(UserActivity.created_at))
+            .limit(limit)
+        )
+        ACTION_LABELS = {
+            "login":    "تسجيل دخول",
+            "register": "تسجيل حساب جديد",
         }
-        for act, user in result.all()
-    ]
+        return [
+            {
+                "id":         act.id,
+                "user_name":  user.full_name,
+                "user_email": user.email,
+                "action":     ACTION_LABELS.get(act.action, act.action),
+                "created_at": act.created_at.isoformat() if act.created_at else None,
+            }
+            for act, user in result.all()
+        ]
+    except Exception:
+        # Table may not exist yet on first deploy — return empty list
+        await db.rollback()
+        return []

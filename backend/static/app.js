@@ -2410,10 +2410,14 @@ let _adminUsers = [];
 
 function switchAdminTab(tab) {
   const isActivity = tab === 'activity';
-  document.getElementById('admin-panel-users').style.display     = isActivity ? 'none' : '';
-  document.getElementById('admin-panel-activity').style.display  = isActivity ? '' : 'none';
-  document.getElementById('admin-tab-users').className    = isActivity ? 'btn btn-sm btn-outline-secondary' : 'btn btn-sm btn-primary';
-  document.getElementById('admin-tab-activity').className = isActivity ? 'btn btn-sm btn-info' : 'btn btn-sm btn-outline-secondary';
+  const panelUsers = document.getElementById('admin-panel-users');
+  const panelAct   = document.getElementById('admin-panel-activity');
+  const tabUsers   = document.getElementById('admin-tab-users');
+  const tabAct     = document.getElementById('admin-tab-activity');
+  if (panelUsers) panelUsers.style.display    = isActivity ? 'none' : '';
+  if (panelAct)   panelAct.style.display      = isActivity ? '' : 'none';
+  if (tabUsers)   tabUsers.className   = isActivity ? 'btn btn-sm btn-outline-secondary' : 'btn btn-sm btn-primary';
+  if (tabAct)     tabAct.className     = isActivity ? 'btn btn-sm btn-info' : 'btn btn-sm btn-outline-secondary';
   if (isActivity) loadActivityLog();
 }
 
@@ -2436,7 +2440,7 @@ async function loadActivityLog() {
   try {
     const items = await api('GET', '/admin/activity?limit=200');
     if (!items.length) {
-      wrap.innerHTML = '<p class="text-muted text-center py-3">لا توجد حركات مسجلة</p>';
+      wrap.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-clock-rotate-left fa-2x mb-2 d-block opacity-50"></i>لا توجد حركات مسجلة بعد<br><small>ستظهر الحركات بعد أول تسجيل دخول للمستخدمين</small></div>';
       return;
     }
     const ACTION_ICON = { 'تسجيل دخول': 'fas fa-sign-in-alt text-success', 'تسجيل حساب جديد': 'fas fa-user-plus text-info' };
