@@ -53,39 +53,43 @@ async def create_all_tables() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
     # Ensure critical columns exist even if Alembic migrations didn't run fully.
-    # PostgreSQL supports ADD COLUMN IF NOT EXISTS; SQLite needs a try/except fallback.
+    # IMPORTANT: Each statement runs in its OWN transaction so that a failure on
+    # one column (e.g. already exists with a different type) does NOT abort
+    # subsequent statements — PostgreSQL marks the whole tx as aborted otherwise.
     if not _is_sqlite:
         from sqlalchemy import text
-        async with engine.begin() as conn:
-            for stmt in [
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20) NULL",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(20) NOT NULL DEFAULT 'trial'",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMP WITH TIME ZONE NULL",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP WITH TIME ZONE NULL",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS voice_uses INTEGER NOT NULL DEFAULT 0",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS voice_reset_month INTEGER NOT NULL DEFAULT 0",
-                "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sector VARCHAR(50) NULL",
-                "ALTER TABLE wallets ADD COLUMN IF NOT EXISTS total_income NUMERIC(14,2) NOT NULL DEFAULT 0",
-                "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS wallet_id UUID NULL REFERENCES wallets(id) ON DELETE SET NULL",
-                # Custom flexible plan limits
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_daily_expenses INTEGER NULL",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_wallets INTEGER NULL",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_categories INTEGER NULL",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_budgets INTEGER NULL",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_goals INTEGER NULL",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_voice_monthly INTEGER NULL",
-                # Referral system
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(20) NULL",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_id UUID NULL",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_count INTEGER NOT NULL DEFAULT 0",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_bonus_days INTEGER NOT NULL DEFAULT 0",
-                "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS entry_type VARCHAR(10) NOT NULL DEFAULT 'expense'",
-                # Password reset
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_hash VARCHAR(255) NULL",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP WITH TIME ZONE NULL",
-            ]:
-                try:
+        _GUARD_STMTS = [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20) NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(20) NOT NULL DEFAULT 'trial'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMP WITH TIME ZONE NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP WITH TIME ZONE NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS voice_uses INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS voice_reset_month INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sector VARCHAR(50) NULL",
+            "ALTER TABLE wallets ADD COLUMN IF NOT EXISTS total_income NUMERIC(14,2) NOT NULL DEFAULT 0",
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS wallet_id UUID NULL REFERENCES wallets(id) ON DELETE SET NULL",
+            # Custom flexible plan limits
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_daily_expenses INTEGER NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_wallets INTEGER NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_categories INTEGER NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_budgets INTEGER NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_goals INTEGER NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_voice_monthly INTEGER NULL",
+            # Referral system
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(20) NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_id UUID NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_count INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_bonus_days INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS entry_type VARCHAR(10) NOT NULL DEFAULT 'expense'",
+            # Password reset
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_hash VARCHAR(255) NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP WITH TIME ZONE NULL",
+        ]
+        # Each statement in its own transaction — prevents PostgreSQL "tx aborted" cascade
+        for stmt in _GUARD_STMTS:
+            try:
+                async with engine.begin() as conn:
                     await conn.execute(text(stmt))
-                except Exception:
-                    pass  # Column/table may already exist or table not yet created
+            except Exception:
+                pass  # Column already exists or table not yet created — safe to ignore

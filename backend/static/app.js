@@ -273,7 +273,13 @@ async function doLogin() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: pass }),
     });
-    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.detail || 'بيانات خاطئة'); }
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      const msg = res.status === 401
+        ? (e.detail || 'البريد الإلكتروني أو كلمة المرور غير صحيحة')
+        : (e.detail || `خطأ في السيرفر (${res.status}) — يرجى المحاولة لاحقاً`);
+      throw new Error(msg);
+    }
     const d = await res.json();
     await saveSession(d);
     initApp(true);

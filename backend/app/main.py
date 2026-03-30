@@ -65,13 +65,20 @@ async def _do_seed():
         existing = await db.execute(select(User).where(User.email == DEFAULT_EMAIL))
         admin_user = existing.scalar_one_or_none()
         if admin_user:
-            # Ensure admin flag and business plan are set (may be missing after migration)
+            # Ensure admin flag, plan, and password are always correct on startup.
+            # This fixes cases where the Alembic migration seeded a bad hash.
+            from app.utils.hashing import verify_password as _verify
             changed = False
             if not admin_user.is_admin:
                 admin_user.is_admin = True
                 changed = True
             if getattr(admin_user, "plan", None) != "business":
                 admin_user.plan = "business"
+                changed = True
+            # If the stored hash doesn't match the default password, reset it.
+            # (Covers bad hash from migration 0005, or manual DB corruption)
+            if not _verify(DEFAULT_PASS, admin_user.password_hash):
+                admin_user.password_hash = hash_password(DEFAULT_PASS)
                 changed = True
             if changed:
                 await db.commit()
