@@ -81,6 +81,9 @@ async def create_all_tables() -> None:
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_count INTEGER NOT NULL DEFAULT 0",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_bonus_days INTEGER NOT NULL DEFAULT 0",
                 "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS entry_type VARCHAR(10) NOT NULL DEFAULT 'expense'",
+                # Password reset
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_hash VARCHAR(255) NULL",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP WITH TIME ZONE NULL",
             ]:
                 try:
                     await conn.execute(text(stmt))
