@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=32">
+  <link rel="stylesheet" href="/static/style.css?v=33">
   <script>
     // Early auth check — runs before app.js loads.
     // If no token stored, immediately hide spinner & show login screen.
@@ -1318,7 +1318,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=46"></script>
+<script src="/static/app.js?v=47"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══
@@ -1383,6 +1383,7 @@
   function showResults() {
     var div = document.getElementById('fab-va-items');
     var walletNames = {salary: 'الراتب', bank: 'البنك', cash: 'كاش', zaincash: 'زين كاش', mastercard: 'ماستر كارت'};
+    var cats = (typeof S !== 'undefined' && S.categories) ? S.categories : [];
     var html = '';
     for (var i = 0; i < fabParsed.length; i++) {
       var it = fabParsed[i];
@@ -1390,14 +1391,38 @@
       var incomeTag = it.entry_type === 'income' ? ' <span class="badge bg-success badge-sm">دخل</span>' : '';
       var amtSign = it.entry_type === 'income' ? '+' : '-';
       var amtClass = it.entry_type === 'income' ? 'fab-va-item-amt income-fab-amt' : 'fab-va-item-amt';
-      html += '<div class="fab-va-item">';
+
+      html += '<div class="fab-va-item" id="fvi-' + i + '">';
+      // Row 1: info + amount + delete
+      html += '<div class="fvi-row1">';
       html += '<div class="fab-va-item-info">' + esc(it.description || it.category_hint || '') + walletTag + incomeTag + '</div>';
       html += '<div class="' + amtClass + '">' + amtSign + Number(it.amount).toLocaleString() + ' IQD</div>';
       html += '<button class="fab-va-item-del" data-idx="' + i + '"><i class="fas fa-trash-alt"></i></button>';
       html += '</div>';
+
+      // Row 2: category chips
+      if (cats.length > 0) {
+        html += '<div class="fvi-cats">';
+        for (var c = 0; c < cats.length; c++) {
+          var cat = cats[c];
+          var isSelected = it.selected_cat_id ? (it.selected_cat_id === cat.id) : ((cat.name_ar || '').indexOf(it.category_hint || '') >= 0 && (it.category_hint || '').length > 1);
+          html += '<button class="fvi-cat-chip' + (isSelected ? ' active' : '') + '" data-idx="' + i + '" data-catid="' + cat.id + '" title="' + esc(cat.name_ar) + '">';
+          html += cat.icon;
+          html += '</button>';
+        }
+        html += '</div>';
+      }
+
+      // Row 3: notes input
+      html += '<div class="fvi-note-row">';
+      html += '<input class="fvi-note-input" type="text" placeholder="ملاحظة (اختياري)" data-idx="' + i + '" value="' + esc(it.user_note || '') + '">';
+      html += '</div>';
+
+      html += '</div>';
     }
     div.innerHTML = html;
     document.getElementById('fab-va-results').style.display = 'block';
+
     // Attach delete handlers
     var btns = div.querySelectorAll('.fab-va-item-del');
     for (var j = 0; j < btns.length; j++) {
@@ -1405,6 +1430,38 @@
         var idx = parseInt(this.getAttribute('data-idx'));
         fabParsed.splice(idx, 1);
         if (fabParsed.length === 0) { clearResults(); } else { showResults(); }
+      };
+    }
+
+    // Attach category chip handlers
+    var chips = div.querySelectorAll('.fvi-cat-chip');
+    for (var k = 0; k < chips.length; k++) {
+      chips[k].onclick = function() {
+        var idx = parseInt(this.getAttribute('data-idx'));
+        var catId = this.getAttribute('data-catid');
+        // Toggle: if already selected, deselect
+        if (fabParsed[idx].selected_cat_id === catId) {
+          fabParsed[idx].selected_cat_id = null;
+        } else {
+          fabParsed[idx].selected_cat_id = catId;
+        }
+        // Update chips appearance without full re-render
+        var row = document.getElementById('fvi-' + idx);
+        if (row) {
+          var allChips = row.querySelectorAll('.fvi-cat-chip');
+          for (var x = 0; x < allChips.length; x++) {
+            allChips[x].classList.toggle('active', allChips[x].getAttribute('data-catid') === fabParsed[idx].selected_cat_id);
+          }
+        }
+      };
+    }
+
+    // Attach note input handlers
+    var noteInputs = div.querySelectorAll('.fvi-note-input');
+    for (var n = 0; n < noteInputs.length; n++) {
+      noteInputs[n].oninput = function() {
+        var idx = parseInt(this.getAttribute('data-idx'));
+        fabParsed[idx].user_note = this.value;
       };
     }
   }
@@ -1450,12 +1507,16 @@
       var expenses = [];
       for (var i = 0; i < fabParsed.length; i++) {
         var it = fabParsed[i];
-        var hint = (it.category_hint || '').toLowerCase();
-        var catId = cats.length > 0 ? cats[0].id : 1;
-        for (var c = 0; c < cats.length; c++) {
-          if (cats[c].name === hint || cats[c].name_ar === hint || (cats[c].name_ar || '').indexOf(hint) >= 0) { catId = cats[c].id; break; }
+        // Use user-selected category if available, otherwise match by hint
+        var catId = it.selected_cat_id || null;
+        if (!catId) {
+          var hint = (it.category_hint || '').toLowerCase();
+          catId = cats.length > 0 ? cats[0].id : null;
+          for (var c = 0; c < cats.length; c++) {
+            if (cats[c].name === hint || cats[c].name_ar === hint || (cats[c].name_ar || '').indexOf(hint) >= 0) { catId = cats[c].id; break; }
+          }
         }
-        expenses.push({category_id: catId, amount: it.amount, currency: it.currency || 'IQD', description: it.description || it.category_hint || '', expense_date: today, wallet_id: wid || null, entry_type: it.entry_type || 'expense'});
+        expenses.push({category_id: catId, amount: it.amount, currency: it.currency || 'IQD', description: it.description || it.category_hint || '', expense_date: today, wallet_id: wid || null, entry_type: it.entry_type || 'expense', note: it.user_note || null});
       }
       var xhr2 = new XMLHttpRequest();
       xhr2.open('POST', '/api/v1/expenses/bulk', true);
