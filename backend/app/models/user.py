@@ -70,8 +70,6 @@ class UserActivity(Base):
     action: Mapped[str] = mapped_column(String(50), nullable=False, default="login")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
-    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
-
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"

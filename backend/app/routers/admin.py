@@ -3,11 +3,11 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select, desc
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.user import User, UserActivity
+from app.models.user import User
 from app.schemas.user import UserOut
 from app.utils.dependencies import get_current_admin
 from app.utils.hashing import hash_password
@@ -197,31 +197,34 @@ async def get_activity(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ):
-    """Return the latest user activity entries (logins, registrations)."""
+    """Return the latest user activity entries (logins, registrations, expenses)."""
+    from sqlalchemy import text
+    ACTION_LABELS = {
+        "login":       "تسجيل دخول",
+        "register":    "تسجيل حساب جديد",
+        "add_expense": "أضاف مصروف",
+        "add_income":  "أضاف دخل",
+    }
     try:
-        result = await db.execute(
-            select(UserActivity, User)
-            .join(User, UserActivity.user_id == User.id)
-            .order_by(desc(UserActivity.created_at))
-            .limit(limit)
-        )
-        ACTION_LABELS = {
-            "login":       "تسجيل دخول",
-            "register":    "تسجيل حساب جديد",
-            "add_expense": "أضاف مصروف",
-            "add_income":  "أضاف دخل",
-        }
+        sql = text("""
+            SELECT ua.id, u.full_name, u.email, ua.action, ua.created_at
+            FROM user_activities ua
+            JOIN users u ON ua.user_id = u.id
+            ORDER BY ua.created_at DESC
+            LIMIT :lim
+        """)
+        result = await db.execute(sql, {"lim": min(limit, 500)})
+        rows = result.fetchall()
         return [
             {
-                "id":         act.id,
-                "user_name":  user.full_name,
-                "user_email": user.email,
-                "action":     ACTION_LABELS.get(act.action, act.action),
-                "created_at": act.created_at.isoformat() if act.created_at else None,
+                "id":         row.id,
+                "user_name":  row.full_name,
+                "user_email": row.email,
+                "action":     ACTION_LABELS.get(row.action, row.action),
+                "created_at": row.created_at.isoformat() if row.created_at else None,
             }
-            for act, user in result.all()
+            for row in rows
         ]
     except Exception:
-        # Table may not exist yet on first deploy — return empty list
         await db.rollback()
         return []
