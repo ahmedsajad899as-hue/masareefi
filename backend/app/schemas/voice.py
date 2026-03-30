@@ -11,6 +11,7 @@ class ParsedExpenseItem(BaseModel):
     expense_date: date
     confidence: float = 1.0   # 0-1 confidence score from GPT
     wallet_hint: str | None = None  # wallet_type detected from speech (salary, bank, cash, zaincash, mastercard)
+    entry_type: str = "expense"  # "expense" or "income"
 
 
 class VoiceParseResponse(BaseModel):

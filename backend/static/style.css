@@ -244,6 +244,25 @@ body.light-theme {
 .exp-desc { font-weight: 600; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .exp-meta { font-size: .7rem; color: var(--muted); margin-top: 1px; }
 .exp-amt  { font-weight: 800; font-size: .85rem; color: var(--red); white-space: nowrap; }
+
+/* Income entries */
+.income-entry { border-right: 3px solid #22c55e; }
+.income-entry:hover { border-color: #22c55e; }
+.income-amt { color: #22c55e !important; }
+
+/* Drawer entry type toggle */
+.drawer-entry-type-toggle { display: flex; gap: 6px; }
+.det-btn {
+  flex: 1; border: 1px solid rgba(255,255,255,.12); border-radius: 10px;
+  background: rgba(255,255,255,.04); color: var(--muted);
+  padding: 9px 12px; font-size: .82rem; cursor: pointer; transition: all .2s;
+  font-family: inherit;
+}
+.det-btn.active { background: rgba(99,102,241,.18); border-color: rgba(99,102,241,.45); color: var(--primary); font-weight: 700; }
+.det-btn:not(.active):hover { background: rgba(255,255,255,.08); color: var(--text); }
+
+/* FAB income amount */
+.income-fab-amt { color: #22c55e !important; font-weight: 700; }
 .exp-del  {
   background: none; border: none; color: var(--muted);
   padding: 6px; border-radius: 8px; cursor: pointer;

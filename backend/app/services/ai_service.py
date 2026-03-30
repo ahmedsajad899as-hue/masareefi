@@ -135,6 +135,12 @@ def _detect_category(text: str) -> str:
     return "أخرى"
 
 
+_INCOME_VERBS = re.compile(
+    r'(?:استحصلت|استلمت|وصلني|حصلت على|حصلت\s+على|دخل|راتب|مدخول|ربحت|استلام|وردلي|نزل راتب|نزل\s+الراتب|ايراد|إيراد|مبلغ وارد)',
+    re.UNICODE
+)
+
+
 def parse_expenses_local(text: str) -> list[ParsedExpenseItem]:
     """
     Parse expenses from Arabic/English text using regex patterns.
@@ -144,9 +150,13 @@ def parse_expenses_local(text: str) -> list[ParsedExpenseItem]:
       - "أكل 3000 و تاكسي 2000"
       - "50000 فاتورة كهرباء"
       - "5000 بنزين من الراتب"
+      - "استلمت راتبي 500000" (income)
     """
     today_str = date.today().isoformat()
     items: list[ParsedExpenseItem] = []
+
+    # Detect if this is an income statement
+    entry_type = "income" if _INCOME_VERBS.search(text) else "expense"
 
     # Detect wallet from full text
     wallet_hint = _detect_wallet_hint(text)
@@ -169,7 +179,7 @@ def parse_expenses_local(text: str) -> list[ParsedExpenseItem]:
             items.append(ParsedExpenseItem(
                 amount=amount, currency="IQD", category_hint=cat,
                 description=desc.strip(), expense_date=date.today(), confidence=0.8,
-                wallet_hint=wallet_hint,
+                wallet_hint=wallet_hint, entry_type=entry_type,
             ))
 
     # Pattern 1b: "<amount> على/ل <category>" (without verb, for split segments)
@@ -187,7 +197,7 @@ def parse_expenses_local(text: str) -> list[ParsedExpenseItem]:
                     items.append(ParsedExpenseItem(
                         amount=amount, currency="IQD", category_hint=cat,
                         description=desc.strip(), expense_date=date.today(), confidence=0.75,
-                        wallet_hint=wallet_hint,
+                        wallet_hint=wallet_hint, entry_type=entry_type,
                     ))
 
     # Pattern 2: "<category> <amount>" or "<amount> <category>"
@@ -204,7 +214,7 @@ def parse_expenses_local(text: str) -> list[ParsedExpenseItem]:
                 items.append(ParsedExpenseItem(
                     amount=amount, currency="IQD", category_hint=cat,
                     description=word.strip(), expense_date=date.today(), confidence=0.7,
-                    wallet_hint=wallet_hint,
+                    wallet_hint=wallet_hint, entry_type=entry_type,
                 ))
 
     p3 = re.findall(
@@ -219,7 +229,7 @@ def parse_expenses_local(text: str) -> list[ParsedExpenseItem]:
                 items.append(ParsedExpenseItem(
                     amount=amount, currency="IQD", category_hint=cat,
                     description=word.strip(), expense_date=date.today(), confidence=0.7,
-                    wallet_hint=wallet_hint,
+                    wallet_hint=wallet_hint, entry_type=entry_type,
                 ))
 
     # Pattern 4: Arabic number words — "ألفين أكل" or "أكل ألفين"
@@ -231,7 +241,7 @@ def parse_expenses_local(text: str) -> list[ParsedExpenseItem]:
                         items.append(ParsedExpenseItem(
                             amount=float(num_val), currency="IQD", category_hint=cat,
                             description=keyword.strip(), expense_date=date.today(), confidence=0.6,
-                            wallet_hint=wallet_hint,
+                            wallet_hint=wallet_hint, entry_type=entry_type,
                         ))
                     break  # only first number per category
 
@@ -245,7 +255,7 @@ def parse_expenses_local(text: str) -> list[ParsedExpenseItem]:
                 items.append(ParsedExpenseItem(
                     amount=amount, currency="IQD", category_hint=cat,
                     description=text.strip()[:60], expense_date=date.today(), confidence=0.5,
-                    wallet_hint=wallet_hint,
+                    wallet_hint=wallet_hint, entry_type=entry_type,
                 ))
 
     return items

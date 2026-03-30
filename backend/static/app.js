@@ -582,13 +582,18 @@ function renderRecentExps(items) {
 function expHtml(exp) {
   const cat = catById(exp.category_id);
   const walletInfo = exp.wallet ? ` · ${exp.wallet.icon} ${esc(exp.wallet.name)}` : '';
-  return `<div class="exp-item">
-    <div class="exp-icon">${cat.icon}</div>
+  const isIncome = exp.entry_type === 'income';
+  const itemClass = isIncome ? 'exp-item income-entry' : 'exp-item';
+  const amtClass = isIncome ? 'exp-amt income-amt' : 'exp-amt';
+  const amtSign = isIncome ? '+' : '−';
+  const icon = isIncome ? '💰' : cat.icon;
+  return `<div class="${itemClass}">
+    <div class="exp-icon">${icon}</div>
     <div class="exp-info">
-      <div class="exp-desc">${esc(exp.description || 'مصروف')}</div>
+      <div class="exp-desc">${esc(exp.description || (isIncome ? 'إيراد' : 'مصروف'))}</div>
       <div class="exp-meta">${cat.name_ar} · ${fmtDate(exp.expense_date)}${walletInfo}</div>
     </div>
-    <div class="exp-amt">−${fmt(exp.amount, exp.currency)}</div>
+    <div class="${amtClass}">${amtSign}${fmt(exp.amount, exp.currency)}</div>
   </div>`;
 }
 
@@ -640,13 +645,17 @@ function renderExpList(items) {
     html += group.items.map(exp => {
       const cat = catById(exp.category_id);
       const walletInfo = exp.wallet ? `<span class="exp-wallet-badge">${exp.wallet.icon} ${esc(exp.wallet.name)}</span>` : '';
-      return `<div class="exp-item" id="ei-${exp.id}">
-        <div class="exp-icon">${cat.icon}</div>
+      const isIncome = exp.entry_type === 'income';
+      const itemClass = isIncome ? 'exp-item income-entry' : 'exp-item';
+      const amtClass = isIncome ? 'exp-amt income-amt' : 'exp-amt';
+      const amtSign = isIncome ? '+' : '−';
+      return `<div class="${itemClass}" id="ei-${exp.id}">
+        <div class="exp-icon">${isIncome ? '💰' : cat.icon}</div>
         <div class="exp-info">
-          <div class="exp-desc">${esc(exp.description || 'مصروف')}</div>
+          <div class="exp-desc">${esc(exp.description || (isIncome ? 'إيراد' : 'مصروف'))}</div>
           <div class="exp-meta">${cat.name_ar} · ${fmtDate(exp.expense_date)}${exp.note ? ' · ' + esc(exp.note) : ''} ${walletInfo}</div>
         </div>
-        <div class="exp-amt">−${fmt(exp.amount, exp.currency)}</div>
+        <div class="${amtClass}">${amtSign}${fmt(exp.amount, exp.currency)}</div>
         <button class="exp-del" onclick="deleteExp('${exp.id}')" title="حذف"><i class="fas fa-trash-alt"></i></button>
       </div>`;
     }).join('');
@@ -683,13 +692,17 @@ function renderExpByDate(items) {
     html += group.items.map(exp => {
       const cat = catById(exp.category_id);
       const walletInfo = exp.wallet ? `<span class="exp-wallet-badge">${exp.wallet.icon} ${esc(exp.wallet.name)}</span>` : '';
-      return `<div class="exp-item" id="ei-${exp.id}">
-        <div class="exp-icon">${cat.icon}</div>
+      const isIncome = exp.entry_type === 'income';
+      const itemClass = isIncome ? 'exp-item income-entry' : 'exp-item';
+      const amtClass = isIncome ? 'exp-amt income-amt' : 'exp-amt';
+      const amtSign = isIncome ? '+' : '−';
+      return `<div class="${itemClass}" id="ei-${exp.id}">
+        <div class="exp-icon">${isIncome ? '💰' : cat.icon}</div>
         <div class="exp-info">
-          <div class="exp-desc">${esc(exp.description || 'مصروف')}</div>
+          <div class="exp-desc">${esc(exp.description || (isIncome ? 'إيراد' : 'مصروف'))}</div>
           <div class="exp-meta">${cat.name_ar}${exp.note ? ' · ' + esc(exp.note) : ''} ${walletInfo}</div>
         </div>
-        <div class="exp-amt">−${fmt(exp.amount, exp.currency)}</div>
+        <div class="${amtClass}">${amtSign}${fmt(exp.amount, exp.currency)}</div>
         <button class="exp-del" onclick="deleteExp('${exp.id}')" title="حذف"><i class="fas fa-trash-alt"></i></button>
       </div>`;
     }).join('');
@@ -752,9 +765,29 @@ function pickCurrency(code) {
 }
 
 // ── Expense Drawer ──────────────────────────────────────────────────
-function openExpenseDrawer() {
+let _drawerType = 'expense';
+
+function setDrawerType(type) {
+  _drawerType = type;
+  document.getElementById('drawer-type-expense')?.classList.toggle('active', type === 'expense');
+  document.getElementById('drawer-type-income')?.classList.toggle('active', type === 'income');
+  const walletLabel = document.getElementById('ae-wallet-label');
+  if (walletLabel) walletLabel.textContent = type === 'income' ? 'المحفظة (الإضافة إلى)' : 'المحفظة (الدفع من)';
+  const submitBtn = document.getElementById('ae-submit-btn');
+  if (submitBtn) submitBtn.innerHTML = type === 'income'
+    ? '<i class="fas fa-check me-2"></i>حفظ الإيراد'
+    : '<i class="fas fa-check me-2"></i>حفظ المصروف';
+  const title = document.getElementById('drawer-header-title');
+  if (title) title.innerHTML = type === 'income'
+    ? '<i class="fas fa-arrow-trend-down me-2 text-success"></i>إيراد / دخل جديد'
+    : '<i class="fas fa-arrow-trend-up me-2 text-danger"></i>مصروف جديد';
+}
+
+function openExpenseDrawer(type) {
+  _drawerType = type || 'expense';
   closeSidebar();
   prepareForm();
+  setDrawerType(_drawerType);
   document.getElementById('expense-drawer-overlay').classList.add('open');
   document.getElementById('expense-drawer').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -798,9 +831,11 @@ async function submitExpense(e) {
       description:  desc || null,
       expense_date: date,
       note:         null,
+      entry_type:   _drawerType || 'expense',
     });
-    toast('تم إضافة المصروف ✅');
+    toast(_drawerType === 'income' ? 'تم إضافة الإيراد ✅' : 'تم إضافة المصروف ✅');
     document.getElementById('expense-form').reset();
+    setDrawerType('expense');
     closeExpenseDrawer();
     await loadWalletsData();
     refreshActivePage();

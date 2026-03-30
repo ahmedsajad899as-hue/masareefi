@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=31">
+  <link rel="stylesheet" href="/static/style.css?v=32">
   <script>
     // Early auth check — runs before app.js loads.
     // If no token stored, immediately hide spinner & show login screen.
@@ -1202,13 +1202,21 @@
   <div id="expense-drawer-overlay" class="drawer-overlay" onclick="closeExpenseDrawer()"></div>
   <div id="expense-drawer" class="expense-drawer">
     <div class="drawer-header">
-      <h5 class="mb-0"><i class="fas fa-plus-circle me-2 text-purple"></i>مصروف جديد</h5>
+      <h5 class="mb-0" id="drawer-header-title"><i class="fas fa-arrow-up-right-dots me-2 text-danger"></i>مصروف جديد</h5>
       <div class="drawer-header-actions">
         <input type="date" id="ae-date" class="drawer-date-input" dir="ltr">
         <button class="drawer-close" onclick="closeExpenseDrawer()"><i class="fas fa-times"></i></button>
       </div>
     </div>
     <div class="drawer-body">
+      <div class="drawer-entry-type-toggle mb-3" id="drawer-type-toggle">
+        <button type="button" id="drawer-type-expense" class="det-btn active" onclick="setDrawerType('expense')">
+          <i class="fas fa-arrow-trend-up me-1 text-danger"></i>مصروف
+        </button>
+        <button type="button" id="drawer-type-income" class="det-btn" onclick="setDrawerType('income')">
+          <i class="fas fa-arrow-trend-down me-1 text-success"></i>دخل / استحصال
+        </button>
+      </div>
       <form id="expense-form" onsubmit="submitExpense(event)">
         <div class="mb-3">
           <label class="form-label">المبلغ <span class="text-danger">*</span></label>
@@ -1242,7 +1250,7 @@
           </select>
         </div>
         <div class="mb-3">
-          <label class="form-label">المحفظة (الدفع من)</label>
+          <label class="form-label" id="ae-wallet-label">المحفظة (الدفع من)</label>
           <select id="ae-wallet" class="form-select">
             <option value="">بدون محفظة</option>
           </select>
@@ -1251,7 +1259,7 @@
           <label class="form-label">الوصف</label>
           <input type="text" id="ae-desc" class="form-control" placeholder="وصف المصروف (اختياري)">
         </div>
-        <button type="submit" class="btn btn-primary w-100 btn-lg">
+        <button type="submit" id="ae-submit-btn" class="btn btn-primary w-100 btn-lg">
           <i class="fas fa-check me-2"></i>حفظ المصروف
         </button>
       </form>
@@ -1310,7 +1318,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=45"></script>
+<script src="/static/app.js?v=46"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══
@@ -1379,9 +1387,12 @@
     for (var i = 0; i < fabParsed.length; i++) {
       var it = fabParsed[i];
       var walletTag = it.wallet_hint ? ' <span class="badge bg-info badge-sm">' + (walletNames[it.wallet_hint] || it.wallet_hint) + '</span>' : '';
+      var incomeTag = it.entry_type === 'income' ? ' <span class="badge bg-success badge-sm">دخل</span>' : '';
+      var amtSign = it.entry_type === 'income' ? '+' : '-';
+      var amtClass = it.entry_type === 'income' ? 'fab-va-item-amt income-fab-amt' : 'fab-va-item-amt';
       html += '<div class="fab-va-item">';
-      html += '<div class="fab-va-item-info">' + esc(it.description || it.category_hint || '') + walletTag + '</div>';
-      html += '<div class="fab-va-item-amt">' + Number(it.amount).toLocaleString() + ' IQD</div>';
+      html += '<div class="fab-va-item-info">' + esc(it.description || it.category_hint || '') + walletTag + incomeTag + '</div>';
+      html += '<div class="' + amtClass + '">' + amtSign + Number(it.amount).toLocaleString() + ' IQD</div>';
       html += '<button class="fab-va-item-del" data-idx="' + i + '"><i class="fas fa-trash-alt"></i></button>';
       html += '</div>';
     }
@@ -1444,7 +1455,7 @@
         for (var c = 0; c < cats.length; c++) {
           if (cats[c].name === hint || cats[c].name_ar === hint || (cats[c].name_ar || '').indexOf(hint) >= 0) { catId = cats[c].id; break; }
         }
-        expenses.push({category_id: catId, amount: it.amount, currency: it.currency || 'IQD', description: it.description || it.category_hint || '', expense_date: today, wallet_id: wid || null});
+        expenses.push({category_id: catId, amount: it.amount, currency: it.currency || 'IQD', description: it.description || it.category_hint || '', expense_date: today, wallet_id: wid || null, entry_type: it.entry_type || 'expense'});
       }
       var xhr2 = new XMLHttpRequest();
       xhr2.open('POST', '/api/v1/expenses/bulk', true);

@@ -16,6 +16,7 @@ class ExpenseCreate(BaseModel):
     is_recurring: bool = False
     recurring_type: RecurringType | None = None
     note: str | None = None
+    entry_type: str = "expense"
 
     @field_validator("amount")
     @classmethod
@@ -35,6 +36,7 @@ class ExpenseUpdate(BaseModel):
     is_recurring: bool | None = None
     recurring_type: RecurringType | None = None
     note: str | None = None
+    entry_type: str | None = None
 
 
 class CategoryOut(BaseModel):
@@ -67,6 +69,7 @@ class ExpenseOut(BaseModel):
     is_recurring: bool
     recurring_type: RecurringType | None
     note: str | None
+    entry_type: str = "expense"
     category: CategoryOut | None
     wallet: WalletInfo | None = None
     created_at: datetime

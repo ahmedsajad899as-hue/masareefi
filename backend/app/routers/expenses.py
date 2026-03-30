@@ -23,12 +23,13 @@ async def create_expense(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Plan limit: daily expense count
+    # Plan limit: daily expense count (exclude income entries)
     today = date.today()
     count_result = await db.execute(
         select(func.count()).select_from(Expense).where(
             Expense.user_id == current_user.id,
             Expense.expense_date == today,
+            Expense.entry_type == "expense",
         )
     )
     daily_count = count_result.scalar_one()
@@ -37,14 +38,18 @@ async def create_expense(
     expense = Expense(**body.model_dump(), user_id=current_user.id)
     db.add(expense)
 
-    # Deduct from wallet if specified
+    # Adjust wallet balance based on entry type
     if body.wallet_id:
         w_result = await db.execute(
             select(Wallet).where(Wallet.id == body.wallet_id, Wallet.user_id == current_user.id)
         )
         wallet = w_result.scalar_one_or_none()
         if wallet:
-            wallet.balance = float(wallet.balance) - body.amount
+            if body.entry_type == "income":
+                wallet.balance = float(wallet.balance) + body.amount
+                wallet.total_income = float(wallet.total_income or 0) + body.amount
+            else:
+                wallet.balance = float(wallet.balance) - body.amount
 
     await db.commit()
     await db.refresh(expense)
@@ -63,12 +68,13 @@ async def create_bulk_expenses(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Plan limit: daily expense count (bulk)
+    # Plan limit: daily expense count (exclude income entries)
     today = date.today()
     count_result = await db.execute(
         select(func.count()).select_from(Expense).where(
             Expense.user_id == current_user.id,
             Expense.expense_date == today,
+            Expense.entry_type == "expense",
         )
     )
     daily_count = count_result.scalar_one()
@@ -77,19 +83,25 @@ async def create_bulk_expenses(
     expenses = [Expense(**e.model_dump(), user_id=current_user.id) for e in body.expenses]
     db.add_all(expenses)
 
-    # Deduct from wallets
-    wallet_deductions: dict[str, float] = {}
+    # Adjust wallet balances based on entry type
+    wallet_expense_totals: dict[str, float] = {}
+    wallet_income_totals: dict[str, float] = {}
     for e in body.expenses:
         if e.wallet_id:
             wid = str(e.wallet_id)
-            wallet_deductions[wid] = wallet_deductions.get(wid, 0) + e.amount
-    for wid, total in wallet_deductions.items():
+            if e.entry_type == "income":
+                wallet_income_totals[wid] = wallet_income_totals.get(wid, 0) + e.amount
+            else:
+                wallet_expense_totals[wid] = wallet_expense_totals.get(wid, 0) + e.amount
+    all_wallet_ids = set(wallet_expense_totals) | set(wallet_income_totals)
+    for wid in all_wallet_ids:
         w_result = await db.execute(
             select(Wallet).where(Wallet.id == uuid.UUID(wid), Wallet.user_id == current_user.id)
         )
         wallet = w_result.scalar_one_or_none()
         if wallet:
-            wallet.balance = float(wallet.balance) - total
+            wallet.balance = float(wallet.balance) - wallet_expense_totals.get(wid, 0) + wallet_income_totals.get(wid, 0)
+            wallet.total_income = float(wallet.total_income or 0) + wallet_income_totals.get(wid, 0)
 
     await db.commit()
     ids = [e.id for e in expenses]
@@ -195,14 +207,18 @@ async def delete_expense(
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
 
-    # Refund wallet if linked
+    # Reverse wallet effect based on entry type
     if expense.wallet_id:
         w_result = await db.execute(
             select(Wallet).where(Wallet.id == expense.wallet_id, Wallet.user_id == current_user.id)
         )
         wallet = w_result.scalar_one_or_none()
         if wallet:
-            wallet.balance = float(wallet.balance) + float(expense.amount)
+            if expense.entry_type == "income":
+                wallet.balance = float(wallet.balance) - float(expense.amount)
+                wallet.total_income = max(0, float(wallet.total_income or 0) - float(expense.amount))
+            else:
+                wallet.balance = float(wallet.balance) + float(expense.amount)
 
     await db.delete(expense)
     await db.commit()
