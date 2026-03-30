@@ -41,7 +41,7 @@ _CATEGORY_MAP = {
     "food": "طعام", "lunch": "طعام", "dinner": "طعام", "breakfast": "طعام",
     "restaurant": "طعام", "coffee": "طعام", "pizza": "طعام",
     # ── سيارة ونقل (مواصلات) ──
-    "تاكسي": "مواصلات", "مواصلات": "مواصلات", "بنزين": "مواصلات", "وقود": "مواصلات",
+    "تاكسي": "مواصلات", "تكسي": "مواصلات", "مواصلات": "مواصلات", "بنزين": "مواصلات", "وقود": "مواصلات",
     "سيارة": "مواصلات", "سياره": "مواصلات", "باص": "مواصلات",
     "تصليح": "مواصلات", "تصليح سيارة": "مواصلات", "تصليح سياره": "مواصلات",
     "صيانة": "مواصلات", "صيانة سيارة": "مواصلات", "صيانه": "مواصلات",
@@ -84,6 +84,18 @@ _CATEGORY_MAP = {
     "إيجار": "سكن", "ايجار": "سكن", "سكن": "سكن", "بيت": "سكن",
     "صيانة بيت": "سكن", "نظافة": "سكن", "حارس": "سكن",
     "rent": "سكن", "housing": "سكن",
+    # ── شخصي / عائلية (personal transfers) ──
+    "اخوي": "شخصي", "أخوي": "شخصي", "أخي": "شخصي", "اخي": "شخصي",
+    "أخوك": "شخصي", "اخوك": "شخصي", "اخوه": "شخصي", "أخوه": "شخصي",
+    "أمي": "شخصي", "امي": "شخصي", "أبوي": "شخصي", "ابوي": "شخصي",
+    "قريب": "شخصي", "قريبي": "شخصي", "عمي": "شخصي", "خالي": "شخصي",
+    "صديق": "شخصي", "صديقي": "شخصي", "رفيقي": "شخصي", "زميل": "شخصي",
+    "سلفة": "شخصي", "قرض": "شخصي", "اعطيت": "شخصي", "أعطيت": "شخصي",
+    "عطيت": "شخصي",
+    "personal": "شخصي", "family": "شخصي",
+    # ── إيراد / راتب ──
+    "راتبي": "إيراد", "راتب": "إيراد", "معاشي": "إيراد", "معاش": "إيراد",
+    "مدخول": "إيراد", "ايراد": "إيراد", "إيراد": "إيراد", "ربح": "إيراد",
 }
 
 # ── Wallet hint detection from speech ──
@@ -140,145 +152,143 @@ _INCOME_VERBS = re.compile(
     re.UNICODE
 )
 
+# ── Multi-pass global patterns for expense parsing ──────────────
+_VERB = (
+    r'(?:تم\s+(?:صرف|دفع)|صرفت|دفعت|حسبت|شريت|اشتريت|'
+    r'اعطيت|أعطيت|عطيت|سلفت|دفعنا|حولت|حجزت|استحصلت|استلمت)'
+)
+_AMT        = r'([\d,٫٬.]+)'
+_CURR_NOISE = r'(?:\s*(?:دينار|دنانير|دن|دين|IQD|USD|دولار|elf|الف|ألف))?'
+_PREP       = r'(?:لل|على|ل|في|الى|إلى|لـ|لِ|ال)?'
+_W2         = r'([\u0600-\u06FFa-zA-Z]+)'
+
+# Pass 1: verb → [مبلغ] → amount → [currency] → [prep] → 1-2 word desc
+_P1 = re.compile(
+    _VERB + r'\s*(?:مبلغ\s+|قيمة\s+)?' + _AMT + _CURR_NOISE + r'\s*' + _PREP + r'\s*' + _W2,
+    re.UNICODE
+)
+# Pass 2: amount → [currency] → prep (required) → 1-2 word desc
+_P2 = re.compile(
+    _AMT + _CURR_NOISE + r'\s+(?:لل|على|ل|في|الى|إلى|لـ|لِ)\s*' + _W2,
+    re.UNICODE
+)
+
 
 def parse_expenses_local(text: str) -> list[ParsedExpenseItem]:
     """
-    Parse expenses from Arabic/English text using regex patterns.
-    Handles patterns like:
-      - "صرفت 5000 على الأكل"
-      - "دفعت ألفين دينار تاكسي"
-      - "أكل 3000 و تاكسي 2000"
-      - "50000 فاتورة كهرباء"
-      - "5000 بنزين من الراتب"
-      - "استلمت راتبي 500000" (income)
+    Smart multi-expense parser using multi-pass global regex.
+    Handles Arabic sentences with multiple expenses in one recording:
+      "تم صرف مبلغ 5000 للتكسي وصرفت 3500 للغداء واعطيت 11000 دين لاخوي علي"
+    Also handles:
+      "صرفت 5000 على الأكل" | "تاكسي 2000 وأكل 3000" | "50,000 فاتورة كهرباء"
+      "استلمت راتبي 500000 من البنك" (income)
     """
-    today_str = date.today().isoformat()
+    global_wallet_hint = _detect_wallet_hint(text)
+    global_entry_type = "income" if _INCOME_VERBS.search(text) else "expense"
+
     items: list[ParsedExpenseItem] = []
+    seen: set[tuple[int, str]] = set()  # (rounded_amount, category) dedup
 
-    # Detect if this is an income statement
-    entry_type = "income" if _INCOME_VERBS.search(text) else "expense"
+    def add(amount: float, cat: str, desc: str, match_ctx: str = "", conf: float = 0.8) -> None:
+        key = (round(amount), cat)
+        if key in seen or amount <= 0:
+            return
+        seen.add(key)
+        ctx = match_ctx or text
+        entry_type = "income" if _INCOME_VERBS.search(ctx) else "expense"
+        wallet_hint = _detect_wallet_hint(ctx) or global_wallet_hint
+        items.append(ParsedExpenseItem(
+            amount=amount, currency="IQD", category_hint=cat,
+            description=(desc or text)[:60],
+            expense_date=date.today(), confidence=conf,
+            wallet_hint=wallet_hint, entry_type=entry_type,
+        ))
 
-    # Detect wallet from full text
-    wallet_hint = _detect_wallet_hint(text)
+    # ─ Pass 1: verb + [مبلغ] + amount + [currency noise] + [prep] + 1-2 word desc ─
+    # Works even when verb is attached to "و" (e.g., "وصرفت", "واعطيت") — no \b needed
+    for m in _P1.finditer(text):
+        amount = _parse_arabic_number(m.group(1))
+        if not amount:
+            continue
+        desc = m.group(2).strip()
+        cat = _detect_category(desc) if desc else "أخرى"
+        if cat == "أخرى":
+            cat = _detect_category(m.group(0))
+        add(amount, cat, desc, m.group(0), 0.9)
 
-    # Normalize
-    normalized = text.replace("،", ",").replace("٬", ",")
+    # ─ Pass 2: amount + prep (required) + 1-2 word desc ─
+    for m in _P2.finditer(text):
+        amount = _parse_arabic_number(m.group(1))
+        if not amount:
+            continue
+        desc = m.group(2).strip()
+        cat = _detect_category(desc) if desc else "أخرى"
+        if cat == "أخرى":
+            cat = _detect_category(m.group(0))
+        add(amount, cat, desc, m.group(0), 0.8)
 
-    # Split on "و" / "and" for multi-expense input first, then process each segment
-    segments = re.split(r'\s+و\s+|\s+and\s+', normalized)
-
-    # Pattern 1: "صرفت/دفعت <amount> على/ل <category>" (applied to full text)
-    p1 = re.findall(
-        r'(?:صرفت|دفعت|حسبت|شريت|اشتريت)\s+([\d,٫٬.]+|[\u0600-\u06FF\s]+?)\s+(?:على|ل|في|عل)\s+([\u0600-\u06FFa-zA-Z\s]+)',
-        normalized
-    )
-    for amount_str, desc in p1:
-        amount = _parse_arabic_number(amount_str)
-        if amount and amount > 0:
-            cat = _detect_category(desc)
-            items.append(ParsedExpenseItem(
-                amount=amount, currency="IQD", category_hint=cat,
-                description=desc.strip(), expense_date=date.today(), confidence=0.8,
-                wallet_hint=wallet_hint, entry_type=entry_type,
-            ))
-
-    # Pattern 1b: "<amount> على/ل <category>" (without verb, for split segments)
-    for seg in segments:
-        seg = seg.strip()
-        p1b = re.findall(
-            r'([\d,٫٬.]+)\s+(?:على|ل|في|عل)\s+([\u0600-\u06FFa-zA-Z\s]+)',
-            seg
-        )
-        for amount_str, desc in p1b:
-            amount = _parse_arabic_number(amount_str)
-            if amount and amount > 0:
-                cat = _detect_category(desc)
-                if not any(abs(i.amount - amount) < 1 and i.category_hint == cat for i in items):
-                    items.append(ParsedExpenseItem(
-                        amount=amount, currency="IQD", category_hint=cat,
-                        description=desc.strip(), expense_date=date.today(), confidence=0.75,
-                        wallet_hint=wallet_hint, entry_type=entry_type,
-                    ))
-
-    # Pattern 2: "<category> <amount>" or "<amount> <category>"
-    p2 = re.findall(
-        r'([\u0600-\u06FFa-zA-Z]+)\s+([\d,٫٬.]+)\b',
-        normalized
-    )
-    for word, amount_str in p2:
-        amount = _parse_arabic_number(amount_str)
-        if amount and amount > 0 and _detect_category(word) != "أخرى":
-            cat = _detect_category(word)
-            # check not already captured (same amount or same category)
-            if not any((abs(i.amount - amount) < 1 and i.category_hint == cat) for i in items):
-                items.append(ParsedExpenseItem(
-                    amount=amount, currency="IQD", category_hint=cat,
-                    description=word.strip(), expense_date=date.today(), confidence=0.7,
-                    wallet_hint=wallet_hint, entry_type=entry_type,
-                ))
-
-    p3 = re.findall(
-        r'([\d,٫٬.]+)\s+([\u0600-\u06FFa-zA-Z]+)',
-        normalized
-    )
-    for amount_str, word in p3:
-        amount = _parse_arabic_number(amount_str)
-        if amount and amount > 0 and _detect_category(word) != "أخرى":
-            cat = _detect_category(word)
-            if not any((abs(i.amount - amount) < 1) or (i.category_hint == cat) for i in items):
-                items.append(ParsedExpenseItem(
-                    amount=amount, currency="IQD", category_hint=cat,
-                    description=word.strip(), expense_date=date.today(), confidence=0.7,
-                    wallet_hint=wallet_hint, entry_type=entry_type,
-                ))
-
-    # Pattern 4: Arabic number words — "ألفين أكل" or "أكل ألفين"
+    # ─ Pass 3: category keyword ↔ digit amount (both orders) ─
     for keyword, cat in _CATEGORY_MAP.items():
-        if keyword in normalized:
-            for num_word, num_val in sorted(_AR_NUMS.items(), key=lambda x: -len(x[0])):
-                if num_word in normalized:
-                    if not any(abs(i.amount - num_val) < 1 and i.category_hint == cat for i in items):
-                        items.append(ParsedExpenseItem(
-                            amount=float(num_val), currency="IQD", category_hint=cat,
-                            description=keyword.strip(), expense_date=date.today(), confidence=0.6,
-                            wallet_hint=wallet_hint, entry_type=entry_type,
-                        ))
-                    break  # only first number per category
+        if keyword not in text.lower() and keyword not in text:
+            continue
+        # keyword then amount
+        m = re.search(re.escape(keyword) + r'\s+([\d,٫٬.]+)', text, re.IGNORECASE | re.UNICODE)
+        if m:
+            amount = _parse_arabic_number(m.group(1))
+            if amount:
+                add(amount, cat, keyword, m.group(0), 0.75)
+            continue
+        # amount then keyword
+        m = re.search(r'([\d,٫٬.]+)\s+' + re.escape(keyword), text, re.IGNORECASE | re.UNICODE)
+        if m:
+            amount = _parse_arabic_number(m.group(1))
+            if amount:
+                add(amount, cat, keyword, m.group(0), 0.75)
 
-    # Fallback: if nothing parsed, try to find any number and use full text as description
+    # ─ Pass 4: Arabic number words + category keyword (whole-word match only) ─
+    for keyword, cat in _CATEGORY_MAP.items():
+        if keyword not in text:
+            continue
+        for num_word, num_val in sorted(_AR_NUMS.items(), key=lambda x: -len(x[0])):
+            pat = r'(?:^|\s)' + re.escape(num_word) + r'(?:\s|$)'
+            if re.search(pat, text, re.UNICODE):
+                add(float(num_val), cat, keyword, "", 0.6)
+                break
+
+    # ─ Fallback: any digit number + full text as description ─
     if not items:
-        nums = re.findall(r'[\d,٫٬.]+', normalized)
-        for n in nums:
+        for n in re.findall(r'[\d,٫٬.]+', text):
             amount = _parse_arabic_number(n)
             if amount and amount > 0:
-                cat = _detect_category(normalized)
-                items.append(ParsedExpenseItem(
-                    amount=amount, currency="IQD", category_hint=cat,
-                    description=text.strip()[:60], expense_date=date.today(), confidence=0.5,
-                    wallet_hint=wallet_hint, entry_type=entry_type,
-                ))
+                cat = _detect_category(text)
+                add(amount, cat, text[:60], text, 0.5)
 
     return items
 
 SYSTEM_PROMPT = """
-You are an intelligent expense extraction assistant. 
-The user will provide text (in Arabic or English) describing their daily expenses.
-Your job is to extract ALL mentioned expenses and return them as a JSON array.
+You are an intelligent expense/income extraction assistant.
+The user will provide text (in Arabic or English) describing their finances for the day.
+Your job is to extract ALL mentioned transactions and return them as a JSON array.
 
-Each expense object must have:
+Each object must have:
 - "amount": number (positive float)
-- "currency": string (use "IQD" if not mentioned, or whatever currency the user states)
-- "category_hint": string (the category in the user's language — e.g., "أكل", "food", "تاكسي", "transport")
-- "description": string (short description of the expense in the original language)
+- "currency": string (use "IQD" if not mentioned)
+- "category_hint": string (describe the category in the user's language — e.g., "أكل", "تاكسي", "صحة", "راتب", "شخصي")
+- "description": string (short description in the original language)
 - "expense_date": string in "YYYY-MM-DD" format (use today's date if not specified: {today})
 - "confidence": float between 0 and 1
+- "entry_type": "expense" or "income" — "income" only if the user received money (راتب, استلم, وصلني, ربح, ايراد); otherwise "expense"
+- "wallet_hint": null or one of: "cash", "bank", "salary", "zaincash", "mastercard"
+  Detect from: نقدي/كاش→cash, بنك/بطاقة→bank, راتب→salary, زين كاش→zaincash, ماستر→mastercard
 
 Rules:
-- If the user says "صرفت 50 على الأكل وعشرين على تاكسي", extract 2 separate expenses.
+- Extract EACH distinct transaction as a separate object. "صرفت 5000 تاكسي وصرفت 3000 أكل" → 2 objects.
+- "أعطيت X لـ Y" or "سلفت X لـ Y" → entry_type=expense, category_hint="شخصي"
+- Amounts with دين/دينار after them are in IQD — strip that word before parsing.
 - Always return a valid JSON array, even if empty: []
-- Do not include markdown or explanation outside the JSON array.
+- Do NOT include markdown or explanation outside the JSON array.
 - Handle mixed Arabic/English input naturally.
-- Common Arabic expense words: أكل/طعام=food, تاكسي/مواصلات=transport, تسوق/بضاعة=shopping, صحة/دكتور=health, ترفيه=entertainment, فواتير=bills, إيجار/سكن=housing, تعليم/مدرسة=education
+- Common Arabic words: أكل/طعام=food, تاكسي/مواصلات=transport, تسوق=shopping, صحة/دكتور=health, ترفيه=entertainment, فواتير/كهرباء=bills, إيجار=housing, تعليم=education, شخصي/أهل/أخ/صديق=personal
 """
 
 
@@ -320,14 +330,19 @@ async def parse_expenses_from_text(text: str) -> tuple[list[ParsedExpenseItem], 
         data = json.loads(raw)
         items = []
         for item in data:
+            amt = float(item.get("amount", 0))
+            if amt <= 0:
+                continue
             items.append(
                 ParsedExpenseItem(
-                    amount=float(item.get("amount", 0)),
+                    amount=amt,
                     currency=item.get("currency", "IQD"),
                     category_hint=item.get("category_hint", ""),
                     description=item.get("description", ""),
                     expense_date=date.fromisoformat(item.get("expense_date", today_str)),
                     confidence=float(item.get("confidence", 1.0)),
+                    wallet_hint=item.get("wallet_hint"),
+                    entry_type=item.get("entry_type", "expense"),
                 )
             )
         return items, raw
