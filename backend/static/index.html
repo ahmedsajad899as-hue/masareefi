@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=33">
+  <link rel="stylesheet" href="/static/style.css?v=34">
   <script>
     // Early auth check — runs before app.js loads.
     // If no token stored, immediately hide spinner & show login screen.
@@ -1198,6 +1198,49 @@
 
   </main>
 
+  <!-- ── Wallet Detail Drawer ── -->
+  <div id="wd-overlay" class="drawer-overlay" onclick="closeWalletDetail()"></div>
+  <div id="wd-drawer" class="expense-drawer wd-drawer">
+    <div class="drawer-header wd-header" id="wd-header">
+      <div class="wd-header-left">
+        <div class="wd-header-icon" id="wd-icon">💳</div>
+        <div>
+          <div class="wd-header-name" id="wd-name">المحفظة</div>
+          <div class="wd-header-bal" id="wd-bal">0 IQD</div>
+        </div>
+      </div>
+      <button class="drawer-close" onclick="closeWalletDetail()"><i class="fas fa-times"></i></button>
+    </div>
+    <!-- Tabs -->
+    <div class="wd-tabs">
+      <button class="wd-tab active" id="wd-tab-exp" onclick="switchWdTab('expense')">
+        <i class="fas fa-arrow-trend-up me-1"></i>الصرفيات
+        <span class="wd-tab-badge" id="wd-badge-exp">0</span>
+      </button>
+      <button class="wd-tab" id="wd-tab-inc" onclick="switchWdTab('income')">
+        <i class="fas fa-arrow-trend-down me-1"></i>الإيرادات
+        <span class="wd-tab-badge wd-tab-badge-inc" id="wd-badge-inc">0</span>
+      </button>
+    </div>
+    <!-- Summary strip -->
+    <div class="wd-summary" id="wd-summary">
+      <div class="wd-sum-item">
+        <div class="wd-sum-label">إجمالي الصرفيات</div>
+        <div class="wd-sum-val clr-red" id="wd-total-exp">0 IQD</div>
+      </div>
+      <div class="wd-sum-divider"></div>
+      <div class="wd-sum-item">
+        <div class="wd-sum-label">إجمالي الإيرادات</div>
+        <div class="wd-sum-val clr-green" id="wd-total-inc">0 IQD</div>
+      </div>
+    </div>
+    <!-- Entries list -->
+    <div class="drawer-body wd-body" id="wd-body">
+      <div class="wd-loading" id="wd-loading"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
+      <div id="wd-list"></div>
+    </div>
+  </div>
+
   <!-- ── Expense Drawer ── -->
   <div id="expense-drawer-overlay" class="drawer-overlay" onclick="closeExpenseDrawer()"></div>
   <div id="expense-drawer" class="expense-drawer">
@@ -1318,7 +1361,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=49"></script>
+<script src="/static/app.js?v=50"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══

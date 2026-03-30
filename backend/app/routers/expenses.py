@@ -118,6 +118,8 @@ async def list_expenses(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     category_id: uuid.UUID | None = None,
+    wallet_id: uuid.UUID | None = None,
+    entry_type: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     db: AsyncSession = Depends(get_db),
@@ -127,6 +129,10 @@ async def list_expenses(
 
     if category_id:
         query = query.where(Expense.category_id == category_id)
+    if wallet_id:
+        query = query.where(Expense.wallet_id == wallet_id)
+    if entry_type:
+        query = query.where(Expense.entry_type == entry_type)
     if date_from:
         query = query.where(Expense.expense_date >= date_from)
     if date_to:

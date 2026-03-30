@@ -1061,6 +1061,101 @@ body.light-theme {
 .clr-green { color: var(--clr-green); }
 .clr-red   { color: var(--clr-danger, #e74c3c); }
 
+/* ═══════════ WALLET DETAIL DRAWER ═══════════ */
+.wd-drawer { max-width: 420px; display: flex; flex-direction: column; }
+
+.wd-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px 16px;
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.wd-header-left { display: flex; align-items: center; gap: 14px; }
+.wd-header-icon { font-size: 2rem; line-height: 1; }
+.wd-header-name { font-size: 1rem; font-weight: 700; color: #fff; }
+.wd-header-bal  { font-size: .82rem; color: rgba(255,255,255,.65); margin-top: 2px; }
+
+/* Tabs */
+.wd-tabs {
+  display: flex; border-bottom: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.15);
+}
+.wd-tab {
+  flex: 1; background: none; border: none; color: var(--muted);
+  padding: 12px 10px; font-size: .82rem; cursor: pointer;
+  border-bottom: 2px solid transparent; transition: all .2s; font-family: inherit;
+}
+.wd-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 700; }
+.wd-tab-badge {
+  display: inline-block; background: rgba(239,68,68,.2); color: #f87171;
+  border-radius: 20px; font-size: .7rem; padding: 1px 6px; margin-right: 4px; font-weight: 700;
+}
+.wd-tab-badge-inc { background: rgba(34,197,94,.2); color: #4ade80; }
+
+/* Summary strip */
+.wd-summary {
+  display: flex; align-items: center;
+  padding: 10px 16px; gap: 0;
+  background: rgba(255,255,255,.03); border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.wd-sum-item { flex: 1; text-align: center; }
+.wd-sum-label { font-size: .66rem; color: var(--muted); margin-bottom: 2px; }
+.wd-sum-val { font-size: .82rem; font-weight: 700; }
+.wd-sum-divider { width: 1px; height: 30px; background: rgba(255,255,255,.12); margin: 0 8px; }
+
+/* Body */
+.wd-body { flex: 1; overflow-y: auto; padding: 12px 14px; }
+.wd-loading { text-align: center; color: var(--muted); padding: 30px; font-size: .85rem; }
+
+/* Empty state */
+.wd-empty { text-align: center; padding: 40px 20px; color: var(--muted); }
+.wd-empty i { font-size: 2.5rem; opacity: .2; margin-bottom: 10px; display: block; }
+.wd-empty p { font-size: .82rem; }
+
+/* Month group */
+.wd-month-group { margin-bottom: 16px; }
+.wd-month-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 2px 8px; border-bottom: 1px solid rgba(255,255,255,.08); margin-bottom: 8px;
+}
+.wd-month-label { font-size: .73rem; color: var(--muted); font-weight: 600; }
+.wd-month-total { font-size: .78rem; font-weight: 700; }
+
+/* Entry card */
+@keyframes wdSlideIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.wd-entry {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px; border-radius: 12px; margin-bottom: 6px;
+  background: var(--surface2); border: 1px solid var(--border);
+  animation: wdSlideIn .25s ease both;
+  transition: border-color .2s;
+}
+.wd-entry:hover { border-color: rgba(255,255,255,.18); }
+.wd-entry-exp { border-right: 3px solid rgba(239,68,68,.4); }
+.wd-entry-inc { border-right: 3px solid rgba(34,197,94,.4); }
+
+.wd-entry-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.15rem; flex-shrink: 0;
+}
+.wdei-exp { background: rgba(239,68,68,.12); }
+.wdei-inc { background: rgba(34,197,94,.12); }
+
+.wd-entry-body { flex: 1; min-width: 0; }
+.wd-entry-desc { font-size: .82rem; font-weight: 600; color: var(--text); margin-bottom: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wd-entry-cat  { font-size: .7rem; color: var(--muted); margin-bottom: 2px; }
+.wd-entry-note {
+  font-size: .7rem; color: #a5b4fc; background: rgba(99,102,241,.1);
+  border-radius: 6px; padding: 2px 6px; display: inline-block; margin-bottom: 3px;
+}
+.wd-entry-date { font-size: .65rem; color: var(--muted); opacity: .7; }
+.wd-entry-amt  { font-size: .88rem; font-weight: 800; white-space: nowrap; flex-shrink: 0; padding-top: 2px; }
+
 /* ═══════════ COLLAPSIBLE PANELS ═══════════ */
 .collapsible-title {
   cursor: pointer;

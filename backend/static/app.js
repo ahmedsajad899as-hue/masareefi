@@ -811,6 +811,131 @@ function closeExpenseDrawer() {
   document.body.style.overflow = '';
 }
 
+// ── Wallet Detail Drawer ──────────────────────────────────────────────────────
+let _wdWalletId = null;
+let _wdTab = 'expense';
+let _wdExpenses = [];
+let _wdIncome = [];
+
+async function openWalletDetail(walletId) {
+  const wallet = S.wallets.find(w => w.id === walletId);
+  if (!wallet) return;
+  _wdWalletId = walletId;
+  _wdTab = 'expense';
+
+  // Populate header
+  const theme = walletCardTheme(wallet.wallet_type);
+  const typeIconMap = { cash: '💵', bank: '🏦', zaincash: '⚫', mastercard: '💳', salary: '💼', custom: '💳' };
+  const hdr = document.getElementById('wd-header');
+  if (hdr) hdr.style.background = `linear-gradient(135deg, ${theme.from || '#1e293b'}, ${theme.to || '#0f172a'})`;
+  setText('wd-name', wallet.name);
+  setText('wd-bal', fmt(wallet.balance, wallet.currency));
+  setText('wd-icon', typeIconMap[wallet.wallet_type] || '💳');
+
+  document.getElementById('wd-overlay').classList.add('open');
+  document.getElementById('wd-drawer').classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  // Reset tabs
+  switchWdTab('expense', true); // true = loading, skip render
+  await fetchWdData();
+}
+
+function closeWalletDetail() {
+  document.getElementById('wd-overlay').classList.remove('open');
+  document.getElementById('wd-drawer').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+async function fetchWdData() {
+  document.getElementById('wd-loading').style.display = '';
+  document.getElementById('wd-list').innerHTML = '';
+  try {
+    const [expData, incData] = await Promise.all([
+      api('GET', `/expenses?wallet_id=${_wdWalletId}&entry_type=expense&size=100`),
+      api('GET', `/expenses?wallet_id=${_wdWalletId}&entry_type=income&size=100`),
+    ]);
+    _wdExpenses = expData?.items || [];
+    _wdIncome   = incData?.items || [];
+
+    // Totals
+    const totalExp = _wdExpenses.reduce((s, e) => s + parseFloat(e.amount), 0);
+    const totalInc = _wdIncome.reduce((s, e) => s + parseFloat(e.amount), 0);
+    const wallet = S.wallets.find(w => w.id === _wdWalletId);
+    const cur = wallet?.currency || 'IQD';
+    setText('wd-total-exp', fmt(totalExp, cur));
+    setText('wd-total-inc', fmt(totalInc, cur));
+    setText('wd-badge-exp', _wdExpenses.length);
+    setText('wd-badge-inc', _wdIncome.length);
+  } catch(e) { console.error(e); }
+  document.getElementById('wd-loading').style.display = 'none';
+  renderWdList();
+}
+
+function switchWdTab(tab, skipRender = false) {
+  _wdTab = tab;
+  document.getElementById('wd-tab-exp').classList.toggle('active', tab === 'expense');
+  document.getElementById('wd-tab-inc').classList.toggle('active', tab === 'income');
+  if (!skipRender) renderWdList();
+}
+
+function renderWdList() {
+  const el = document.getElementById('wd-list');
+  const wallet = S.wallets.find(w => w.id === _wdWalletId);
+  const cur = wallet?.currency || 'IQD';
+  const items = _wdTab === 'expense' ? _wdExpenses : _wdIncome;
+  const isIncome = _wdTab === 'income';
+
+  if (!items.length) {
+    el.innerHTML = `<div class="wd-empty"><i class="fas ${isIncome ? 'fa-hand-holding-dollar' : 'fa-receipt'}"></i><p>${isIncome ? 'لا توجد إيرادات مسجلة' : 'لا توجد صرفيات مسجلة'}</p></div>`;
+    return;
+  }
+
+  // Group by month
+  const groups = {};
+  items.forEach(exp => {
+    const d = new Date(exp.expense_date);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const label = d.toLocaleDateString('ar-IQ', { year: 'numeric', month: 'long' });
+    if (!groups[key]) groups[key] = { label, items: [], total: 0 };
+    groups[key].items.push(exp);
+    groups[key].total += parseFloat(exp.amount);
+  });
+
+  const sortedKeys = Object.keys(groups).sort((a,b) => b.localeCompare(a));
+  let html = '';
+
+  sortedKeys.forEach(key => {
+    const g = groups[key];
+    const sign = isIncome ? '+' : '−';
+    const cls  = isIncome ? 'clr-green' : 'clr-red';
+    html += `<div class="wd-month-group">
+      <div class="wd-month-header">
+        <span class="wd-month-label"><i class="fas fa-calendar-alt me-2 opacity-50"></i>${g.label}</span>
+        <span class="wd-month-total ${cls}">${sign}${fmt(g.total, cur)}</span>
+      </div>`;
+    g.items.forEach((exp, idx) => {
+      const cat = catById(exp.category_id);
+      const dayName = new Date(exp.expense_date).toLocaleDateString('ar-IQ', { weekday:'long', day:'numeric', month:'short' });
+      const noteHtml = exp.note ? `<div class="wd-entry-note"><i class="fas fa-sticky-note me-1"></i>${esc(exp.note)}</div>` : '';
+      const descHtml = exp.description ? `<div class="wd-entry-desc">${esc(exp.description)}</div>` : '';
+      html += `<div class="wd-entry ${isIncome ? 'wd-entry-inc' : 'wd-entry-exp'}" style="animation-delay:${idx * 40}ms">
+        <div class="wd-entry-icon ${isIncome ? 'wdei-inc' : 'wdei-exp'}">${isIncome ? '💰' : cat.icon}</div>
+        <div class="wd-entry-body">
+          ${descHtml}
+          <div class="wd-entry-cat">${isIncome ? 'إيراد' : cat.name_ar}</div>
+          ${noteHtml}
+          <div class="wd-entry-date"><i class="fas fa-clock me-1 opacity-40"></i>${dayName}</div>
+        </div>
+        <div class="wd-entry-amt ${cls}">${sign}${fmt(exp.amount, cur)}</div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+
+  el.innerHTML = html;
+}
+
 function refreshActivePage() {
   const dash = document.getElementById('pg-dashboard');
   if (dash && dash.style.display !== 'none') loadDashboard();
@@ -1431,10 +1556,11 @@ function buildCardFace(w, theme, balance, name) {
   const wName   = esc(w.name);
   const dfBadge = w.is_default ? '<span class="phys-default-badge">افتراضي ✓</span>' : '';
   const cur     = w.currency;
+  const clickAttr = `onclick="openWalletDetail('${w.id}')" title="عرض تفاصيل المحفظة" style="cursor:pointer"`;
 
   /* ── Cash: banknote design ── */
   if (w.wallet_type === 'cash') {
-    return `<div class="phys-card phys-banknote" style="background:${theme.bg}">
+    return `<div class="phys-card phys-banknote" style="background:${theme.bg}" ${clickAttr}>
             <div class="bn-header">
               <div class="bn-title">نقدي &bull; NAQDĪ</div>
               <div class="bn-deco">💵</div>
@@ -1468,7 +1594,7 @@ function buildCardFace(w, theme, balance, name) {
   if (w.wallet_type === 'mastercard') {
     const bankAr = esc(w.name);
     const bankEn = _bankEnMap[w.name] || w.name.toUpperCase();
-    return `<div class="phys-card phys-rafidain" style="background:${theme.bg}">
+    return `<div class="phys-card phys-rafidain" style="background:${theme.bg}" ${clickAttr}>
             <div class="rf-top">
               <div class="rf-qi">
                 <svg width="42" height="42" viewBox="0 0 42 42">
@@ -1512,7 +1638,7 @@ function buildCardFace(w, theme, balance, name) {
   }
 
   /* ── Default: standard physical card ── */
-  return `<div class="phys-card" style="background:${theme.bg}">
+  return `<div class="phys-card" style="background:${theme.bg}" ${clickAttr}>
             <div class="phys-card-top">
               <div class="phys-brand" style="color:${theme.accent}">${theme.brand}</div>
               <div class="phys-nfc" style="color:${theme.accent}">
