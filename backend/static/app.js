@@ -530,10 +530,10 @@ function updatePlanUI() {
     badge.textContent = '🔒 مجاني';
   } else if (effectivePlan === 'pro') {
     badge.classList.add('plan-badge-pro');
-    badge.textContent = '⭐ Pro';
+    badge.textContent = '⭐ شهري';
   } else if (effectivePlan === 'business') {
     badge.classList.add('plan-badge-pro');
-    badge.textContent = '🏢 Business';
+    badge.textContent = '🗓️ 3 أشهر';
   } else if (effectivePlan === 'custom') {
     badge.classList.add('plan-badge-custom');
     badge.textContent = '🛠️ مخصصة';
@@ -548,7 +548,7 @@ function updatePlanUI() {
       bannerText.innerHTML = '⚠️ انتهت فترة التجربة المجانية. &nbsp;<span style="opacity:.8;font-size:.85em">ادعُ صديقاً لتمديدها أو اشترك الآن</span>';
       banner.style.display = '';
     } else if (effectivePlan === 'free' && (plan === 'pro' || plan === 'business')) {
-      bannerText.innerHTML = `⚠️ انتهى اشتراك <strong>${plan === 'pro' ? 'Pro' : 'Business'}</strong>. &nbsp;<span style="opacity:.8;font-size:.85em">جدّد اشتراكك عبر واتساب أو ادعُ صديقاً</span>`;
+      bannerText.innerHTML = `⚠️ انتهى اشتراك <strong>${plan === 'pro' ? 'الشهري' : '3 الأشهر'}</strong>. &nbsp;<span style="opacity:.8;font-size:.85em">جدّد اشتراكك عبر واتساب أو ادعُ صديقاً</span>`;
       banner.style.display = '';
     } else {
       banner.style.display = 'none';

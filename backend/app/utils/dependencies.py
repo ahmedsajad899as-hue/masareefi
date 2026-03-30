@@ -52,7 +52,7 @@ TRIAL_DAYS = 14
 PLAN_LIMITS: dict[str, dict[str, int]] = {
     "trial":    {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
     "free":     {"daily_expenses":   3, "wallets":   2, "custom_categories":   0, "budgets":   1, "goals":   0, "voice_monthly":   0},
-    "pro":      {"daily_expenses": 999, "wallets":  10, "custom_categories":  20, "budgets": 999, "goals": 999, "voice_monthly":  30},
+    "pro":      {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
     "business": {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
     "custom":   {"daily_expenses":   0, "wallets":   0, "custom_categories":   0, "budgets":   0, "goals":   0, "voice_monthly":   0},
 }
@@ -68,12 +68,12 @@ _CUSTOM_FIELD: dict[str, str] = {
 }
 
 _UPGRADE_MESSAGES: dict[str, str] = {
-    "daily_expenses":    "وصلت الحد اليومي للمصاريف ({limit}/يوم). الترقية إلى Pro تتيح إضافة بلا حدود.",
-    "wallets":           "وصلت الحد الأقصى للمحافظ ({limit}). الترقية إلى Pro تتيح إضافة المزيد.",
-    "custom_categories": "الفئات المخصصة متاحة في باقة Pro فقط. قم بالترقية لإضافة فئاتك الخاصة.",
+    "daily_expenses":    "وصلت الحد اليومي للمصاريف ({limit}/يوم). الترقية إلى الباقة الشهرية تتيح إضافة بلا حدود.",
+    "wallets":           "وصلت الحد الأقصى للمحافظ ({limit}). الترقية إلى الباقة الشهرية تتيح إضافة المزيد.",
+    "custom_categories": "الفئات المخصصة متاحة في الباقة الشهرية. قم بالترقية لإضافة فئاتك الخاصة.",
     "budgets":           "وصلت الحد الأقصى للميزانيات ({limit}). قم بالترقية.",
-    "goals":             "أهداف الادخار متاحة في باقة Pro فقط. قم بالترقية.",
-    "voice_monthly":     "وصلت الحد الشهري للمساعد الصوتي. الترقية إلى Pro تمنحك 30 استخداماً شهرياً.",
+    "goals":             "أهداف الادخار متاحة في الباقة الشهرية. قم بالترقية.",
+    "voice_monthly":     "وصلت الحد الشهري للمساعد الصوتي. الترقية إلى الباقة الشهرية تمنحك استخداماً بلا حدود.",
 }
 
 
