@@ -1318,7 +1318,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=47"></script>
+<script src="/static/app.js?v=48"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══
@@ -1491,9 +1491,14 @@
     }
 
     var wallets = (typeof S !== 'undefined' && S.wallets) ? S.wallets : [];
-    var walletId = null;
+    var walletId = null;  // used for expense items
+    var cashWalletId = null;
 
-    // Priority: voice hint > default wallet > ask user
+    // Find cash wallet (default for income)
+    var cashW = wallets.find(function(w) { return w.wallet_type === 'cash'; });
+    if (cashW) cashWalletId = cashW.id;
+
+    // Determine expense wallet: voice hint > default wallet
     if (walletHint) {
       var hintW = wallets.find(function(w) { return w.wallet_type === walletHint; });
       if (hintW) walletId = hintW.id;
@@ -1516,7 +1521,14 @@
             if (cats[c].name === hint || cats[c].name_ar === hint || (cats[c].name_ar || '').indexOf(hint) >= 0) { catId = cats[c].id; break; }
           }
         }
-        expenses.push({category_id: catId, amount: it.amount, currency: it.currency || 'IQD', description: it.description || it.category_hint || '', expense_date: today, wallet_id: wid || null, entry_type: it.entry_type || 'expense', note: it.user_note || null});
+        // Income → cash wallet by default; expense → shared wallet from voice/default
+        var itemWid = (it.entry_type === 'income') ? (cashWalletId || wid) : wid;
+        // If voice hint was for this specific item, honour it
+        if (it.wallet_hint) {
+          var itHintW = wallets.find(function(w) { return w.wallet_type === it.wallet_hint; });
+          if (itHintW) itemWid = itHintW.id;
+        }
+        expenses.push({category_id: catId, amount: it.amount, currency: it.currency || 'IQD', description: it.description || it.category_hint || '', expense_date: today, wallet_id: itemWid || null, entry_type: it.entry_type || 'expense', note: it.user_note || null});
       }
       var xhr2 = new XMLHttpRequest();
       xhr2.open('POST', '/api/v1/expenses/bulk', true);

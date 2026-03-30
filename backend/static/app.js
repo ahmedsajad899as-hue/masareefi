@@ -781,6 +781,13 @@ function setDrawerType(type) {
   if (title) title.innerHTML = type === 'income'
     ? '<i class="fas fa-arrow-trend-down me-2 text-success"></i>إيراد / دخل جديد'
     : '<i class="fas fa-arrow-trend-up me-2 text-danger"></i>مصروف جديد';
+
+  // Auto-select cash wallet for income
+  const walletSel = document.getElementById('ae-wallet');
+  if (walletSel && type === 'income') {
+    const cashWallet = S.wallets.find(w => w.wallet_type === 'cash');
+    if (cashWallet) walletSel.value = cashWallet.id;
+  }
 }
 
 function openExpenseDrawer(type) {
