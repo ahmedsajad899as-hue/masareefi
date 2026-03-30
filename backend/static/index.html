@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=29">
+  <link rel="stylesheet" href="/static/style.css?v=30">
   <script>
     // Early auth check — runs before app.js loads.
     // If no token stored, immediately hide spinner & show login screen.
@@ -334,6 +334,11 @@
       <a class="s-link admin-only" data-page="admin-users" onclick="goTo('admin-users')" style="display:none"><i class="fas fa-users-cog"></i> إدارة المستخدمين</a>
     </nav>
     <div class="sidebar-footer">
+      <!-- Referral invite button — always visible -->
+      <button class="sidebar-referral-btn" onclick="goTo('settings');closeSidebar();">
+        <i class="fas fa-user-plus me-2"></i>ادعُ صديقاً واكسب أياماً مجانية
+        <span class="sidebar-referral-badge">+7 أيام</span>
+      </button>
       <button id="sidebar-install-btn" class="install-pwa-link" onclick="triggerInstall()">
         <i class="fas fa-download me-2"></i>تثبيت التطبيق
       </button>
@@ -1149,6 +1154,14 @@
                 </div>
               </div>
             </div>
+            <!-- Referral reminder inside upgrade modal -->
+            <div class="upgrade-referral-strip rounded-3 p-3 mb-3 text-center">
+              <div class="upgrade-referral-title"><i class="fas fa-user-plus me-2"></i>ادعُ صديقاً واكسب <strong>7 أيام مجانية</strong> لكل دعوة!</div>
+              <div class="text-muted small mb-2">شارك رابط الدعوة الخاص بك وامتّع أصدقاءك بتجربة مصاريفي</div>
+              <button class="btn btn-outline-info btn-sm" onclick="bootstrap.Modal.getInstance(document.getElementById('upgradeModal'))?.hide(); setTimeout(()=>{ goTo('settings'); },200);">
+                <i class="fas fa-share-alt me-1"></i>الذهاب إلى صفحة الدعوة
+              </button>
+            </div>
             <div class="upgrade-contact rounded-3 p-3 text-center">
               <p class="mb-2"><i class="fas fa-info-circle me-2 text-info"></i>الدفع عبر <strong>Zain Cash</strong> أو تحويل بنكي — تواصل معنا لتفعيل الباقة:</p>
               <a id="upgrade-whatsapp-btn" href="#" target="_blank" class="btn btn-success btn-lg px-4">
@@ -1274,7 +1287,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=42"></script>
+<script src="/static/app.js?v=43"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══

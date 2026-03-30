@@ -63,11 +63,11 @@ function loading(on) {
   document.getElementById('loading-overlay').classList.toggle('on', on);
 }
 
-function toast(msg, type = 'ok') {
+function toast(msg, type = 'ok', delay = 3200) {
   const el = document.getElementById('app-toast');
   el.className = `toast align-items-center border-0 t-${type}`;
   document.getElementById('toast-msg').textContent = msg;
-  bootstrap.Toast.getOrCreateInstance(el, { delay: 3200 }).show();
+  bootstrap.Toast.getOrCreateInstance(el, { delay }).show();
 }
 
 function fmt(amount, currency) {
@@ -432,17 +432,33 @@ function updatePlanUI() {
     badge.textContent = '🛠️ مخصصة';
   }
 
-  // Trial warning banner
+  // Trial/plan warning banner
   if (banner && bannerText) {
     if (effectivePlan === 'trial' && trialDaysLeft <= 3 && trialDaysLeft > 0) {
-      bannerText.textContent = `⚠️ تجربتك المجانية تنتهي خلال ${trialDaysLeft} ${trialDaysLeft === 1 ? 'يوم' : 'أيام'}! قم بالترقية للاستمرار.`;
+      bannerText.innerHTML = `⚠️ تجربتك المجانية تنتهي خلال <strong>${trialDaysLeft}</strong> ${trialDaysLeft === 1 ? 'يوم' : 'أيام'}! &nbsp;<span style="opacity:.8;font-size:.85em">ادعُ صديقاً واكسب 7 أيام إضافية</span>`;
       banner.style.display = '';
     } else if (effectivePlan === 'free' && plan === 'trial') {
-      bannerText.textContent = '⚠️ انتهت فترة التجربة المجانية. بعض الميزات محدودة — قم بالترقية.';
+      bannerText.innerHTML = '⚠️ انتهت فترة التجربة المجانية. &nbsp;<span style="opacity:.8;font-size:.85em">ادعُ صديقاً لتمديدها أو اشترك الآن</span>';
+      banner.style.display = '';
+    } else if (effectivePlan === 'free' && (plan === 'pro' || plan === 'business')) {
+      bannerText.innerHTML = `⚠️ انتهى اشتراك <strong>${plan === 'pro' ? 'Pro' : 'Business'}</strong>. &nbsp;<span style="opacity:.8;font-size:.85em">جدّد اشتراكك عبر واتساب أو ادعُ صديقاً</span>`;
       banner.style.display = '';
     } else {
       banner.style.display = 'none';
     }
+  }
+
+  // Referral reminder toast — shown once per session when plan expires/trial ends
+  const _refReminderKey = 'ref_reminder_shown';
+  if ((effectivePlan === 'free') && !sessionStorage.getItem(_refReminderKey)) {
+    sessionStorage.setItem(_refReminderKey, '1');
+    setTimeout(() => {
+      const hasCode = S.user?.referral_code;
+      const msg = hasCode
+        ? `💡 ادعُ صديقاً واكسب 7 أيام إضافية مجاناً! اذهب إلى الإعدادات لنسخ رابطك.`
+        : `💡 يمكنك كسب أيام إضافية مجاناً بدعوة أصدقائك — تحقق من صفحة الإعدادات.`;
+      toast(msg, 'info', 6000);
+    }, 1500);
   }
 }
 
