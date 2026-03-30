@@ -11,14 +11,14 @@
 		{
 			"label": "🚀 Start Backend + Flutter Web",
 			"type": "shell",
-			"command": "cd /d \"d:\\my code\\daily routine\" && docker-compose up -d && cd flutter_app && flutter pub get && flutter run -d chrome --web-port 8080",
+			"command": "cd /d \"d:\\my code\\daily routine\" && docker-compose up -d && cd flutter_app && flutter pub get && flutter run -d chrome --web-port 8081",
 			"isBackground": true,
 			"problemMatcher": []
 		},
 		{
 			"label": "تشغيل مصاريفي",
 			"type": "shell",
-			"command": "cd backend && (if not exist venv\\Scripts\\python.exe python -m venv venv) && venv\\Scripts\\python.exe -m pip install -q fastapi \"uvicorn[standard]\" \"sqlalchemy[asyncio]\" aiosqlite \"pydantic[email]\" pydantic-settings python-dotenv \"python-jose[cryptography]\" \"passlib[bcrypt]\" python-multipart openai httpx aiofiles python-dateutil && set DATABASE_URL=sqlite+aiosqlite:///./masareefi.db && set SECRET_KEY=local-dev-secret && set OPENAI_API_KEY=sk-placeholder && venv\\Scripts\\uvicorn.exe app.main:app --port 8000",
+			"command": "cd backend && (if not exist venv\\Scripts\\python.exe python -m venv venv) && venv\\Scripts\\python.exe -m pip install -q fastapi \"uvicorn[standard]\" \"sqlalchemy[asyncio]\" aiosqlite \"pydantic[email]\" pydantic-settings python-dotenv \"python-jose[cryptography]\" \"passlib[bcrypt]\" python-multipart openai httpx aiofiles python-dateutil && set DATABASE_URL=sqlite+aiosqlite:///./masareefi.db && set SECRET_KEY=local-dev-secret && set OPENAI_API_KEY=sk-placeholder && venv\\Scripts\\uvicorn.exe app.main:app --host 0.0.0.0 --port 8000",
 			"isBackground": true,
 			"problemMatcher": [],
 			"group": "build"
@@ -26,14 +26,14 @@
 		{
 			"label": "Start Masareefi Server",
 			"type": "shell",
-			"command": "cd backend && venv\\Scripts\\python.exe -m pip install -q \"pydantic[email]\" && set DATABASE_URL=sqlite+aiosqlite:///./masareefi.db && set SECRET_KEY=abc123 && set OPENAI_API_KEY=sk-placeholder && venv\\Scripts\\uvicorn.exe app.main:app --port 8000",
+			"command": "cd backend && venv\\Scripts\\python.exe -m pip install -q \"pydantic[email]\" && set DATABASE_URL=sqlite+aiosqlite:///./masareefi.db && set SECRET_KEY=abc123 && set OPENAI_API_KEY=sk-placeholder && venv\\Scripts\\uvicorn.exe app.main:app --host 0.0.0.0 --port 8000",
 			"isBackground": true,
 			"problemMatcher": []
 		},
 		{
 			"label": "masareefi-run",
 			"type": "shell",
-			"command": "d:\\my code\\daily routine\\backend\\venv\\Scripts\\python.exe -m pip install -q pydantic[email] & set DATABASE_URL=sqlite+aiosqlite:///./masareefi.db& set SECRET_KEY=abc123& set OPENAI_API_KEY=sk-placeholder& cd /d \"d:\\my code\\daily routine\\backend\"& \"d:\\my code\\daily routine\\backend\\venv\\Scripts\\uvicorn.exe\" app.main:app --port 8000",
+			"command": "d:\\my code\\daily routine\\backend\\venv\\Scripts\\python.exe -m pip install -q pydantic[email] & set DATABASE_URL=sqlite+aiosqlite:///./masareefi.db& set SECRET_KEY=abc123& set OPENAI_API_KEY=sk-placeholder& cd /d \"d:\\my code\\daily routine\\backend\"& \"d:\\my code\\daily routine\\backend\\venv\\Scripts\\uvicorn.exe\" app.main:app --host 0.0.0.0 --port 8000",
 			"isBackground": true,
 			"problemMatcher": []
 		}

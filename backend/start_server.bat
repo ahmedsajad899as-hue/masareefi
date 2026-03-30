@@ -30,5 +30,5 @@ echo   كلمة المرور: 123456789
 echo ================================================
 echo.
 
-venv\Scripts\uvicorn.exe app.main:app --port 8000
+venv\Scripts\uvicorn.exe app.main:app --host 0.0.0.0 --port 8000
 pause

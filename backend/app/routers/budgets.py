@@ -12,7 +12,7 @@ from app.models.expense import Expense
 from app.models.goal import Goal
 from app.models.user import User
 from app.schemas.budget import BudgetCreate, BudgetUpdate, BudgetOut, GoalCreate, GoalUpdate, GoalOut
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user, check_plan_limit
 
 router = APIRouter()
 
@@ -64,6 +64,13 @@ async def create_budget(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Plan limit: total budget count for this user
+    count_result = await db.execute(
+        select(func.count()).select_from(Budget).where(Budget.user_id == current_user.id)
+    )
+    budget_count = count_result.scalar_one()
+    check_plan_limit(budget_count, current_user, "budgets")
+
     budget = Budget(**body.model_dump(), user_id=current_user.id)
     db.add(budget)
     try:
@@ -150,6 +157,13 @@ async def create_goal(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Plan limit: total goal count for this user
+    count_result = await db.execute(
+        select(func.count()).select_from(Goal).where(Goal.user_id == current_user.id)
+    )
+    goal_count = count_result.scalar_one()
+    check_plan_limit(goal_count, current_user, "goals")
+
     from datetime import date as date_type
     deadline = date_type.fromisoformat(body.deadline) if body.deadline else None
     goal = Goal(

@@ -1,14 +1,14 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.category import Category
 from app.models.user import User
 from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryOut
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user, check_plan_limit
 
 router = APIRouter()
 
@@ -33,6 +33,16 @@ async def create_category(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Plan limit: custom (non-system) category count
+    count_result = await db.execute(
+        select(func.count()).select_from(Category).where(
+            Category.user_id == current_user.id,
+            Category.is_system == False,  # noqa: E712
+        )
+    )
+    custom_count = count_result.scalar_one()
+    check_plan_limit(custom_count, current_user, "custom_categories")
+
     cat = Category(**body.model_dump(), user_id=current_user.id, is_system=False)
     db.add(cat)
     await db.commit()

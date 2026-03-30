@@ -68,6 +68,10 @@ class UserOut(BaseModel):
     currency: str
     is_active: bool
     is_admin: bool
+    plan: str = "trial"
+    plan_expires_at: datetime | None = None
+    trial_started_at: datetime | None = None
+    voice_uses: int = 0
     created_at: datetime
 
     model_config = {"from_attributes": True}

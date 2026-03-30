@@ -65,9 +65,15 @@ async def _do_seed():
         existing = await db.execute(select(User).where(User.email == DEFAULT_EMAIL))
         admin_user = existing.scalar_one_or_none()
         if admin_user:
-            # Ensure admin flag is set (may be False after migration)
+            # Ensure admin flag and business plan are set (may be missing after migration)
+            changed = False
             if not admin_user.is_admin:
                 admin_user.is_admin = True
+                changed = True
+            if getattr(admin_user, "plan", None) != "business":
+                admin_user.plan = "business"
+                changed = True
+            if changed:
                 await db.commit()
             return
 
@@ -78,6 +84,7 @@ async def _do_seed():
             preferred_language="ar",
             currency="IQD",
             is_admin=True,
+            plan="business",
         )
         db.add(user)
         await db.flush()

@@ -3,10 +3,16 @@ import 'package:flutter/foundation.dart';
 class ApiConstants {
   ApiConstants._();
 
-  // Automatically selects the correct URL based on platform
-  static final baseUrl = kIsWeb
-      ? 'http://localhost:8000/api/v1' // Browser (Flutter Web)
-      : 'http://10.0.2.2:8000/api/v1'; // Android emulator → localhost
+  // ── عنوان السيرفر ──────────────────────────────────────────
+  // لتغيير الوضع: غيّر قيمة _useNetworkIp إلى true لأجهزة الشبكة
+  static const bool _useNetworkIp = false;
+  static const String _networkIp = '192.168.68.120';
+
+  static final baseUrl = _useNetworkIp
+      ? 'http://$_networkIp:8000/api/v1' // جهاز حقيقي على نفس الشبكة
+      : kIsWeb
+          ? 'http://localhost:8000/api/v1' // المتصفح (Flutter Web على 8081)
+          : 'http://10.0.2.2:8000/api/v1'; // محاكي Android → localhost
 
   // Auth
   static const register = '/auth/register';

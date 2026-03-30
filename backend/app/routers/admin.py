@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
@@ -25,6 +26,8 @@ class AdminCreateUser(BaseModel):
     preferred_language: str = "ar"
     currency: str = "IQD"
     is_admin: bool = False
+    plan: str = "trial"
+    plan_expires_at: str | None = None  # ISO date string e.g. "2026-12-31"
 
 
 class AdminUpdateUser(BaseModel):
@@ -35,6 +38,8 @@ class AdminUpdateUser(BaseModel):
     is_active: bool | None = None
     is_admin: bool | None = None
     password: str | None = None
+    plan: str | None = None
+    plan_expires_at: str | None = None  # ISO date string e.g. "2026-12-31"
 
 
 class UserOutAdmin(UserOut):
@@ -70,6 +75,9 @@ async def create_user(
         preferred_language=body.preferred_language,
         currency=body.currency,
         is_admin=body.is_admin,
+        plan=body.plan,
+        plan_expires_at=datetime.fromisoformat(body.plan_expires_at).replace(tzinfo=timezone.utc) if body.plan_expires_at else None,
+        trial_started_at=datetime.now(timezone.utc) if body.plan == "trial" else None,
     )
     db.add(user)
 
@@ -103,6 +111,9 @@ async def update_user(
     update_data = body.model_dump(exclude_none=True)
     if "password" in update_data:
         user.password_hash = hash_password(update_data.pop("password"))
+    if "plan_expires_at" in update_data:
+        raw = update_data.pop("plan_expires_at")
+        user.plan_expires_at = datetime.fromisoformat(raw).replace(tzinfo=timezone.utc) if raw else None
     for field, value in update_data.items():
         setattr(user, field, value)
 

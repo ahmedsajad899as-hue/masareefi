@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -12,7 +12,7 @@ from app.schemas.wallet import (
     WalletCreate, WalletUpdate, WalletOut,
     WalletTransferCreate, WalletTransferOut, WalletIncomeAdd,
 )
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user, check_plan_limit
 
 router = APIRouter()
 
@@ -36,6 +36,13 @@ async def create_wallet(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Plan limit: wallet count
+    count_result = await db.execute(
+        select(func.count()).select_from(Wallet).where(Wallet.user_id == current_user.id)
+    )
+    wallet_count = count_result.scalar_one()
+    check_plan_limit(wallet_count, current_user, "wallets")
+
     wallet = Wallet(**body.model_dump(), user_id=current_user.id)
     wallet.total_income = body.balance  # initial deposit counts as income
     db.add(wallet)

@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=27">
+  <link rel="stylesheet" href="/static/style.css?v=28">
   <script>
     // Early auth check — runs before app.js loads.
     // If no token stored, immediately hide spinner & show login screen.
@@ -316,6 +316,7 @@
       <div>
         <div class="s-name" id="s-name">مستخدم</div>
         <div class="s-email" id="s-email">user@email.com</div>
+        <div id="plan-badge" class="plan-badge" onclick="showUpgradeModal()" style="display:none;cursor:pointer"></div>
       </div>
     </div>
     <nav class="sidebar-nav">
@@ -338,6 +339,13 @@
 
   <!-- Content -->
   <main class="app-main">
+
+    <!-- ── Plan Banner ── -->
+    <div id="plan-banner" class="plan-banner" style="display:none">
+      <span id="plan-banner-text"></span>
+      <button class="btn btn-sm btn-warning ms-3 me-2" onclick="showUpgradeModal()"><i class="fas fa-rocket me-1"></i>ترقية</button>
+      <button class="plan-banner-close" onclick="document.getElementById('plan-banner').style.display='none'">✕</button>
+    </div>
 
     <!-- ── Dashboard ── -->
     <section id="pg-dashboard" class="pg" style="display:none">
@@ -975,6 +983,20 @@
                   <option value="AED">🇦🇪 درهم إماراتي (AED)</option>
                 </select>
               </div>
+              <div class="mb-3">
+                <label class="form-label">الباقة</label>
+                <select id="um-plan" class="form-select">
+                  <option value="trial">🆓 تجربة مجانية (14 يوم)</option>
+                  <option value="free">🔒 مجاني</option>
+                  <option value="pro">⭐ Pro — 2,000 د.ع/شهر</option>
+                  <option value="business">🏢 Business — 5,000 د.ع/شهر</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">تاريخ انتهاء الاشتراك</label>
+                <input type="date" id="um-plan-expires" class="form-control" dir="ltr">
+                <div class="form-text text-muted">اتركه فارغاً للتجربة/المجاني</div>
+              </div>
               <div class="form-check form-switch mb-2">
                 <input class="form-check-input" type="checkbox" id="um-admin">
                 <label class="form-check-label" for="um-admin">صلاحية أدمن</label>
@@ -992,6 +1014,74 @@
         </div>
       </div>
     </section>
+
+    <!-- ── Upgrade Modal ── -->
+    <div class="modal fade" id="upgradeModal" tabindex="-1" aria-hidden="true" dir="rtl">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content bg-dark text-white border-0">
+          <div class="modal-header border-secondary pb-2">
+            <h5 class="modal-title"><i class="fas fa-rocket me-2 text-warning"></i>ترقية الباقة</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div id="upgrade-limit-msg" class="alert alert-warning rounded-3 mb-4" style="display:none"></div>
+            <div class="row g-3 mb-4">
+              <!-- Free -->
+              <div class="col-md-4">
+                <div class="upgrade-plan-card">
+                  <div class="upc-badge">مجاني</div>
+                  <div class="upc-name">🔒 Free</div>
+                  <div class="upc-price">0 د.ع</div>
+                  <ul class="upc-features">
+                    <li>3 مصاريف / يوم</li>
+                    <li>محفظتان فقط</li>
+                    <li>بدون فئات مخصصة</li>
+                    <li>ميزانية واحدة</li>
+                    <li>بدون صوت</li>
+                  </ul>
+                </div>
+              </div>
+              <!-- Pro -->
+              <div class="col-md-4">
+                <div class="upgrade-plan-card upc-active">
+                  <div class="upc-badge upc-badge-pro">الأكثر شعبية</div>
+                  <div class="upc-name">⭐ Pro</div>
+                  <div class="upc-price">2,000 د.ع<span>/شهر</span></div>
+                  <ul class="upc-features">
+                    <li>مصاريف بلا حدود</li>
+                    <li>10 محافظ</li>
+                    <li>20 فئة مخصصة</li>
+                    <li>ميزانيات بلا حدود</li>
+                    <li>30 استخدام صوتي/شهر</li>
+                  </ul>
+                </div>
+              </div>
+              <!-- Business -->
+              <div class="col-md-4">
+                <div class="upgrade-plan-card">
+                  <div class="upc-badge upc-badge-biz">للأعمال</div>
+                  <div class="upc-name">🏢 Business</div>
+                  <div class="upc-price">5,000 د.ع<span>/شهر</span></div>
+                  <ul class="upc-features">
+                    <li>كل شيء بلا حدود</li>
+                    <li>محافظ بلا حدود</li>
+                    <li>فئات بلا حدود</li>
+                    <li>أهداف بلا حدود</li>
+                    <li>صوت بلا حدود</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div class="upgrade-contact rounded-3 p-3 text-center">
+              <p class="mb-2"><i class="fas fa-info-circle me-2 text-info"></i>الدفع عبر <strong>Zain Cash</strong> أو تحويل بنكي — تواصل معنا لتفعيل الباقة:</p>
+              <a id="upgrade-whatsapp-btn" href="#" target="_blank" class="btn btn-success btn-lg px-4">
+                <i class="fab fa-whatsapp me-2"></i>تواصل عبر واتساب
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
   </main>
 
@@ -1107,7 +1197,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=38"></script>
+<script src="/static/app.js?v=39"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══

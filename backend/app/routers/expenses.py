@@ -12,7 +12,7 @@ from app.models.expense import Expense
 from app.models.wallet import Wallet
 from app.models.user import User
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate, ExpenseOut, ExpenseListResponse, BulkExpenseCreate
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user, check_plan_limit
 
 router = APIRouter()
 
@@ -23,6 +23,17 @@ async def create_expense(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Plan limit: daily expense count
+    today = date.today()
+    count_result = await db.execute(
+        select(func.count()).select_from(Expense).where(
+            Expense.user_id == current_user.id,
+            Expense.expense_date == today,
+        )
+    )
+    daily_count = count_result.scalar_one()
+    check_plan_limit(daily_count, current_user, "daily_expenses")
+
     expense = Expense(**body.model_dump(), user_id=current_user.id)
     db.add(expense)
 
@@ -52,6 +63,17 @@ async def create_bulk_expenses(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Plan limit: daily expense count (bulk)
+    today = date.today()
+    count_result = await db.execute(
+        select(func.count()).select_from(Expense).where(
+            Expense.user_id == current_user.id,
+            Expense.expense_date == today,
+        )
+    )
+    daily_count = count_result.scalar_one()
+    check_plan_limit(daily_count, current_user, "daily_expenses", extra=len(body.expenses))
+
     expenses = [Expense(**e.model_dump(), user_id=current_user.id) for e in body.expenses]
     db.add_all(expenses)
 

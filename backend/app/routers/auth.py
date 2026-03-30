@@ -28,6 +28,8 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
         phone_number=body.phone_number,
         preferred_language=body.preferred_language,
         currency=body.currency,
+        plan="trial",
+        trial_started_at=datetime.now(timezone.utc),
     )
     db.add(user)
     await db.flush()  # get user.id before commit

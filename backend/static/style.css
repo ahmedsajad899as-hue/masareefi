@@ -1316,3 +1316,81 @@ body.light-theme {
   0%, 100% { transform: translateY(0); }
   50%       { transform: translateY(6px); }
 }
+
+/* ── Plan Badge (sidebar) ─────────────────────────────────────── */
+.plan-badge {
+  display: inline-block;
+  font-size: .68rem; font-weight: 700;
+  padding: 2px 8px; border-radius: 20px;
+  margin-top: 3px;
+  transition: opacity .2s;
+}
+.plan-badge:hover { opacity: .82; }
+.plan-badge-trial  { background: #0ea5e9; color: #fff; }
+.plan-badge-free   { background: #64748b; color: #fff; }
+.plan-badge-pro    { background: linear-gradient(90deg, #f59e0b, #f97316); color: #fff; }
+
+/* ── Plan Banner (top of main area) ──────────────────────────── */
+.plan-banner {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  background: linear-gradient(90deg, #92400e, #b45309);
+  color: #fef3c7;
+  padding: 8px 16px;
+  font-size: .88rem; font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,.12);
+}
+.plan-banner-close {
+  background: none; border: none; color: inherit;
+  font-size: 1rem; cursor: pointer; margin-right: auto; opacity: .7;
+}
+.plan-banner-close:hover { opacity: 1; }
+
+/* ── Upgrade Plan Cards (inside #upgradeModal) ────────────────── */
+.upgrade-plan-card {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+  padding: 20px 16px;
+  text-align: center;
+  height: 100%;
+  transition: border-color .2s;
+}
+.upgrade-plan-card:hover { border-color: rgba(255,255,255,.3); }
+.upgrade-plan-card.upc-active {
+  border-color: #f59e0b;
+  background: rgba(245,158,11,.08);
+}
+.upc-badge {
+  display: inline-block;
+  font-size: .7rem; font-weight: 700;
+  padding: 2px 10px; border-radius: 20px;
+  background: rgba(255,255,255,.15);
+  color: #cbd5e1;
+  margin-bottom: 10px;
+}
+.upc-badge-pro  { background: #f59e0b; color: #000; }
+.upc-badge-biz  { background: #22c55e; color: #000; }
+.upc-name  { font-size: 1.3rem; font-weight: 800; margin-bottom: 6px; }
+.upc-price {
+  font-size: 1.5rem; font-weight: 900; color: #f59e0b;
+  margin-bottom: 14px;
+}
+.upc-price span { font-size: .8rem; font-weight: 400; color: #94a3b8; }
+.upc-features {
+  list-style: none; padding: 0; margin: 0;
+  text-align: right; display: flex; flex-direction: column; gap: 6px;
+}
+.upc-features li {
+  font-size: .82rem; color: #cbd5e1;
+  padding-right: 20px; position: relative;
+}
+.upc-features li::before {
+  content: "✓";
+  position: absolute; right: 0;
+  color: #22c55e; font-weight: 700;
+}
+.upgrade-contact {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  font-size: .88rem;
+}

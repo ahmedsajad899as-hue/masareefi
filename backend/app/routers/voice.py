@@ -1,16 +1,20 @@
 """
 Voice AI Router — accepts audio file or text, returns parsed expenses for user confirmation.
 """
+from datetime import datetime
+
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
 from app.models.user import User
 from app.schemas.voice import VoiceParseResponse
 from app.services.ai_service import (
     transcribe_audio, parse_expenses_from_text, parse_expenses_local,
 )
 from app.config import settings
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user, check_plan_limit
 
 router = APIRouter()
 
@@ -29,6 +33,7 @@ class TextParseRequest(BaseModel):
 async def parse_expense_from_text_input(
     body: TextParseRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Parse expenses from text (e.g., from browser SpeechRecognition).
@@ -37,6 +42,15 @@ async def parse_expense_from_text_input(
     text = body.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="النص فارغ")
+
+    # Voice usage limit check + counter update
+    cur_month = int(datetime.now().strftime("%Y%m"))
+    if current_user.voice_reset_month != cur_month:
+        current_user.voice_uses = 0
+        current_user.voice_reset_month = cur_month
+    check_plan_limit(current_user.voice_uses, current_user, "voice_monthly")
+    current_user.voice_uses += 1
+    await db.commit()
 
     # Try OpenAI first, fallback to local
     if settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-placeholder"):
@@ -59,6 +73,7 @@ async def parse_expense_from_text_input(
 async def parse_expense_from_voice(
     audio: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Upload an audio file containing the user's spoken expenses.
@@ -71,6 +86,15 @@ async def parse_expense_from_voice(
             status_code=415,
             detail=f"Unsupported audio format: {audio.content_type}. Use mp3, m4a, wav, webm, or flac.",
         )
+
+    # Voice usage limit check + counter update
+    cur_month = int(datetime.now().strftime("%Y%m"))
+    if current_user.voice_reset_month != cur_month:
+        current_user.voice_uses = 0
+        current_user.voice_reset_month = cur_month
+    check_plan_limit(current_user.voice_uses, current_user, "voice_monthly")
+    current_user.voice_uses += 1
+    await db.commit()
 
     audio_bytes = await audio.read()
 

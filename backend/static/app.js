@@ -39,6 +39,7 @@ window.addEventListener('appinstalled', () => {
 });
 
 const API = '/api/v1';
+const SUPPORT_WHATSAPP = '9647800000000'; // replace with real WhatsApp number
 
 // ── State ────────────────────────────────────────────────────
 const S = {
@@ -217,9 +218,19 @@ async function api(method, path, body = null, formData = false) {
     } else { doLogout(); return null; }
   }
 
+  if (res.status === 402) {
+    const err = await res.json().catch(() => ({}));
+    const det = err.detail || {};
+    const msg = typeof det === 'object' ? det.message : String(det);
+    showUpgradeModal(msg || null);
+    throw new Error('plan_limit');
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || 'حدث خطأ في الاتصال');
+    const det = err.detail || {};
+    const msg = typeof det === 'object' ? (det.message || JSON.stringify(det)) : String(det);
+    throw new Error(msg || 'حدث خطأ في الاتصال');
   }
   if (res.status === 204) return null;
   return res.json();
@@ -346,11 +357,88 @@ function updateSidebarUser() {
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = S.user.is_admin ? '' : 'none';
   });
+  updatePlanUI();
 }
 
 function setText(id, val) {
   const el = document.getElementById(id);
   if (el) el.textContent = val;
+}
+
+// ── Plan UI ───────────────────────────────────────────────────
+function showUpgradeModal(limitMsg) {
+  const msgEl = document.getElementById('upgrade-limit-msg');
+  if (msgEl) {
+    if (limitMsg) {
+      msgEl.textContent = limitMsg;
+      msgEl.style.display = '';
+    } else {
+      msgEl.style.display = 'none';
+    }
+  }
+  // Set WhatsApp link
+  const waBtn = document.getElementById('upgrade-whatsapp-btn');
+  if (waBtn) {
+    const text = encodeURIComponent('مرحباً، أريد الاشتراك في تطبيق مصاريفي 🚀');
+    waBtn.href = `https://wa.me/${SUPPORT_WHATSAPP}?text=${text}`;
+  }
+  const modal = document.getElementById('upgradeModal');
+  if (modal) bootstrap.Modal.getOrCreateInstance(modal).show();
+}
+
+function updatePlanUI() {
+  if (!S.user) return;
+  const badge = document.getElementById('plan-badge');
+  const banner = document.getElementById('plan-banner');
+  const bannerText = document.getElementById('plan-banner-text');
+  if (!badge) return;
+
+  const plan = S.user.plan || 'trial';
+  const trialStarted = S.user.trial_started_at ? new Date(S.user.trial_started_at) : null;
+  const now = new Date();
+
+  // Compute effective plan (mirrors backend logic)
+  let effectivePlan = plan;
+  let trialDaysLeft = 0;
+  if (plan === 'trial' && trialStarted) {
+    const elapsed = Math.floor((now - trialStarted) / 86400000);
+    trialDaysLeft = 14 - elapsed;
+    if (trialDaysLeft <= 0) effectivePlan = 'free';
+  }
+  if ((plan === 'pro' || plan === 'business') && S.user.plan_expires_at) {
+    if (new Date(S.user.plan_expires_at) < now) effectivePlan = 'free';
+  }
+  if (S.user.is_admin) effectivePlan = 'business';
+
+  // Badge
+  badge.style.display = '';
+  badge.className = 'plan-badge';
+  if (effectivePlan === 'trial') {
+    badge.classList.add('plan-badge-trial');
+    badge.textContent = trialDaysLeft > 0 ? `تجربة: ${trialDaysLeft} يوم` : 'تجربة منتهية';
+  } else if (effectivePlan === 'free') {
+    badge.classList.add('plan-badge-free');
+    badge.textContent = '🔒 مجاني';
+  } else if (effectivePlan === 'pro') {
+    badge.classList.add('plan-badge-pro');
+    badge.textContent = '⭐ Pro';
+  } else if (effectivePlan === 'business') {
+    badge.classList.add('plan-badge-pro');
+    badge.textContent = '🏢 Business';
+  }
+
+  // Trial warning banner
+  if (banner && bannerText) {
+    if (effectivePlan === 'trial' && trialDaysLeft <= 3 && trialDaysLeft > 0) {
+      bannerText.textContent = `⚠️ تجربتك المجانية تنتهي خلال ${trialDaysLeft} ${trialDaysLeft === 1 ? 'يوم' : 'أيام'}! قم بالترقية للاستمرار.`;
+      banner.style.display = '';
+    } else if (effectivePlan === 'free' && plan === 'trial') {
+      bannerText.textContent = '⚠️ انتهت فترة التجربة المجانية. بعض الميزات محدودة — قم بالترقية.';
+      banner.style.display = '';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
 }
 
 // ── Navigation ───────────────────────────────────────────────
@@ -2045,17 +2133,23 @@ function renderAdminTable() {
           <th>البريد</th>
           <th>الهاتف</th>
           <th>العملة</th>
+          <th>الباقة</th>
           <th>الحالة</th>
           <th>أدمن</th>
           <th>الإجراءات</th>
         </tr></thead>
         <tbody>
-          ${_adminUsers.map(u => `
+          ${_adminUsers.map(u => {
+            const planLabels = { trial: '🆓 تجربة', free: '🔒 مجاني', pro: '⭐ Pro', business: '🏢 Business' };
+            const planBadgeClass = { trial: 'bg-info text-dark', free: 'bg-secondary', pro: 'bg-warning text-dark', business: 'bg-success' };
+            const pl = u.plan || 'trial';
+            return `
             <tr>
               <td>${esc(u.full_name)}</td>
               <td dir="ltr">${esc(u.email)}</td>
               <td dir="ltr">${u.phone_number ? esc(u.phone_number) : '<span class="text-muted">—</span>'}</td>
               <td>${esc(u.currency)}</td>
+              <td><span class="badge ${planBadgeClass[pl] || 'bg-secondary'}">${planLabels[pl] || pl}</span></td>
               <td><span class="badge ${u.is_active ? 'bg-success' : 'bg-secondary'}">${u.is_active ? 'مفعّل' : 'معطّل'}</span></td>
               <td>${u.is_admin ? '<span class="badge bg-warning text-dark">أدمن</span>' : ''}</td>
               <td>
@@ -2063,8 +2157,8 @@ function renderAdminTable() {
                 <button class="btn btn-sm btn-outline-primary me-1" onclick="openEditUserModal('${u.id}')"><i class="fas fa-edit"></i></button>
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteAdminUser('${u.id}', '${esc(u.full_name)}')"><i class="fas fa-trash"></i></button>
               </td>
-            </tr>
-          `).join('')}
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
     </div>`;
@@ -2081,6 +2175,8 @@ function openAddUserModal() {
   document.getElementById('um-pass').placeholder = 'أدخل كلمة المرور (مطلوبة)';
   document.getElementById('um-pass-hint').style.display = 'none';
   document.getElementById('um-currency').value = 'IQD';
+  document.getElementById('um-plan').value = 'trial';
+  document.getElementById('um-plan-expires').value = '';
   document.getElementById('um-admin').checked = false;
   document.getElementById('um-active').checked = true;
   new bootstrap.Modal(document.getElementById('userModal')).show();
@@ -2099,6 +2195,8 @@ function openEditUserModal(userId) {
   document.getElementById('um-pass').placeholder = 'أدخل كلمة مرور جديدة';
   document.getElementById('um-pass-hint').style.display = '';
   document.getElementById('um-currency').value = u.currency || 'IQD';
+  document.getElementById('um-plan').value = u.plan || 'trial';
+  document.getElementById('um-plan-expires').value = u.plan_expires_at ? u.plan_expires_at.split('T')[0] : '';
   document.getElementById('um-admin').checked = u.is_admin;
   document.getElementById('um-active').checked = u.is_active;
   new bootstrap.Modal(document.getElementById('userModal')).show();
@@ -2128,6 +2226,8 @@ async function saveUser() {
   const phone    = document.getElementById('um-phone').value.trim() || null;
   const pass     = document.getElementById('um-pass').value;
   const currency = document.getElementById('um-currency').value;
+  const plan     = document.getElementById('um-plan').value;
+  const planExpires = document.getElementById('um-plan-expires').value || null;
   const isAdmin  = document.getElementById('um-admin').checked;
   const isActive = document.getElementById('um-active').checked;
 
@@ -2139,11 +2239,11 @@ async function saveUser() {
       // Create
       if (!email) { toast('أدخل البريد', 'err'); return; }
       if (!pass)  { toast('أدخل كلمة المرور', 'err'); return; }
-      await api('POST', '/admin/users', { full_name: name, email, phone_number: phone, password: pass, currency, is_admin: isAdmin });
+      await api('POST', '/admin/users', { full_name: name, email, phone_number: phone, password: pass, currency, is_admin: isAdmin, plan, plan_expires_at: planExpires });
       toast('تم إنشاء الحساب ✅');
     } else {
       // Update
-      const body = { full_name: name, phone_number: phone, currency, is_admin: isAdmin, is_active: isActive };
+      const body = { full_name: name, phone_number: phone, currency, is_admin: isAdmin, is_active: isActive, plan, plan_expires_at: planExpires };
       if (pass) body.password = pass;
       await api('PATCH', `/admin/users/${id}`, body);
       toast('تم التحديث ✅');
