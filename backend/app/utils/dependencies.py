@@ -51,7 +51,7 @@ TRIAL_DAYS = 14
 
 PLAN_LIMITS: dict[str, dict[str, int]] = {
     "trial":    {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
-    "free":     {"daily_expenses":   3, "wallets":   2, "custom_categories":   0, "budgets":   1, "goals":   0, "voice_monthly":   0},
+    "free":     {"daily_expenses":   3, "wallets":   1, "custom_categories":   0, "budgets":   1, "goals":   0, "voice_monthly":   0},
     "pro":      {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
     "business": {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
     "custom":   {"daily_expenses":   0, "wallets":   0, "custom_categories":   0, "budgets":   0, "goals":   0, "voice_monthly":   0},

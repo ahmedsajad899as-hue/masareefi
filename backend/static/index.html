@@ -250,7 +250,7 @@
         <div class="mb-4" id="r-ref-wrap" style="display:none">
           <label class="form-label">كود الدعوة <span class="text-muted fw-normal">(اختياري)</span></label>
           <input type="text" id="r-ref-code" class="form-control text-uppercase" placeholder="XXXXXXXX" dir="ltr" maxlength="20">
-          <div class="form-text text-success" id="r-ref-hint" style="display:none"><i class="fas fa-gift me-1"></i>ستحصل أنت وصديقك على أيام إضافية!</div>
+          <div class="form-text text-success" id="r-ref-hint" style="display:none"><i class="fas fa-gift me-1"></i>ستحصل أنت وصديقك على <strong>7 أيام مجانية</strong> بصلاحيات كاملة!</div>
         </div>
         <button class="btn btn-primary w-100 btn-lg" onclick="doRegister()">
           <i class="fas fa-user-plus me-2"></i>إنشاء الحساب
@@ -1040,7 +1040,7 @@
       <div class="glass-card mt-3" id="referral-card">
         <div class="gc-title"><i class="fas fa-user-plus me-2 text-primary"></i>دعوة أصدقاء واربح مكافآت</div>
         <p style="font-size:.83rem;color:var(--muted)" class="mb-3">
-          شارك رابط الدعوة مع أصدقائك — كلما انضم صديق عبر رابطك حصلت على <strong>7 أيام إضافية</strong> من الفترة التجريبية!
+          شارك رابط الدعوة مع أصدقائك — كلما انضم صديق عبر رابطك حصلتَ أنت <strong>وصديقك</strong> على <strong>7 أيام إضافية</strong> مجانية بصلاحيات كاملة!
         </p>
 
         <!-- Referral link box -->
@@ -1215,7 +1215,7 @@
                   <div class="upc-price">0 د.ع</div>
                   <ul class="upc-features">
                     <li>3 مصاريف / يوم</li>
-                    <li>محفظتان فقط</li>
+                    <li>محفظة واحدة فقط</li>
                     <li>بدون فئات مخصصة</li>
                     <li>ميزانية واحدة</li>
                     <li>بدون صوت</li>
@@ -1255,14 +1255,14 @@
             </div>
             <!-- Referral reminder inside upgrade modal -->
             <div class="upgrade-referral-strip rounded-3 p-3 mb-3 text-center">
-              <div class="upgrade-referral-title"><i class="fas fa-user-plus me-2"></i>ادعُ صديقاً واكسب <strong>7 أيام مجانية</strong> لكل دعوة!</div>
-              <div class="text-muted small mb-2">شارك رابط الدعوة الخاص بك وامتّع أصدقاءك بتجربة مصاريفي</div>
+              <div class="upgrade-referral-title"><i class="fas fa-user-plus me-2"></i>ادعُ صديقاً — أنت <strong>وصديقك</strong> تحصلان على <strong>7 أيام مجانية</strong> بصلاحيات كاملة!</div>
+              <div class="text-muted small mb-2">شارك رابط الدعوة الخاص بك وامتّع أصدقاءك بتجربة مصاريفي بكل ميزاتها</div>
               <button class="btn btn-outline-info btn-sm" onclick="bootstrap.Modal.getInstance(document.getElementById('upgradeModal'))?.hide(); setTimeout(()=>{ goTo('settings'); },200);">
                 <i class="fas fa-share-alt me-1"></i>الذهاب إلى صفحة الدعوة
               </button>
             </div>
             <div class="upgrade-contact rounded-3 p-3 text-center">
-              <p class="mb-2"><i class="fas fa-info-circle me-2 text-info"></i>الدفع عبر <strong>Zain Cash</strong> أو تحويل بنكي — تواصل معنا لتفعيل الباقة:</p>
+              <p class="mb-2"><i class="fas fa-info-circle me-2 text-info"></i>الدفع عبر <strong>Zain Cash</strong> أو <strong>Master Card</strong> — تواصل معنا لتفعيل الباقة:</p>
               <a id="upgrade-whatsapp-btn" href="#" target="_blank" class="btn btn-success btn-lg px-4">
                 <i class="fab fa-whatsapp me-2"></i>تواصل عبر واتساب
               </a>

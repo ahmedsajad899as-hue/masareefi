@@ -47,6 +47,7 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
         referrer = ref_result.scalar_one_or_none()
         if referrer and referrer.id != user.id:
             user.referred_by_id = referrer.id
+            user.referral_bonus_days = (user.referral_bonus_days or 0) + 7  # invited friend gets 7 extra free days
             referrer.referral_count = (referrer.referral_count or 0) + 1
             referrer.referral_bonus_days = (referrer.referral_bonus_days or 0) + 7
 
