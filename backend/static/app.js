@@ -2443,7 +2443,12 @@ async function loadActivityLog() {
       wrap.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-clock-rotate-left fa-2x mb-2 d-block opacity-50"></i>لا توجد حركات مسجلة بعد<br><small>ستظهر الحركات بعد أول تسجيل دخول للمستخدمين</small></div>';
       return;
     }
-    const ACTION_ICON = { 'تسجيل دخول': 'fas fa-sign-in-alt text-success', 'تسجيل حساب جديد': 'fas fa-user-plus text-info' };
+    const ACTION_ICON = {
+      'تسجيل دخول':        'fas fa-sign-in-alt text-success',
+      'تسجيل حساب جديد': 'fas fa-user-plus text-info',
+      'أضاف مصروف':       'fas fa-minus-circle text-danger',
+      'أضاف دخل':          'fas fa-plus-circle text-success',
+    };
     wrap.innerHTML = `
       <div class="table-responsive">
         <table class="table table-dark table-hover table-sm align-middle mb-0">

@@ -206,8 +206,10 @@ async def get_activity(
             .limit(limit)
         )
         ACTION_LABELS = {
-            "login":    "تسجيل دخول",
-            "register": "تسجيل حساب جديد",
+            "login":       "تسجيل دخول",
+            "register":    "تسجيل حساب جديد",
+            "add_expense": "أضاف مصروف",
+            "add_income":  "أضاف دخل",
         }
         return [
             {

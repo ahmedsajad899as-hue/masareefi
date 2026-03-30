@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.expense import Expense
 from app.models.wallet import Wallet
-from app.models.user import User
+from app.models.user import User, UserActivity
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate, ExpenseOut, ExpenseListResponse, BulkExpenseCreate
 from app.utils.dependencies import get_current_user, check_plan_limit
 
@@ -53,6 +53,10 @@ async def create_expense(
 
     await db.commit()
     await db.refresh(expense)
+    # Log activity
+    action = "add_income" if body.entry_type == "income" else "add_expense"
+    db.add(UserActivity(user_id=current_user.id, action=action))
+    await db.commit()
     # reload with category and wallet
     result = await db.execute(
         select(Expense)
@@ -105,6 +109,14 @@ async def create_bulk_expenses(
 
     await db.commit()
     ids = [e.id for e in expenses]
+    # Log bulk activity (one record for the whole bulk add)
+    has_income = any(e.entry_type == "income" for e in body.expenses)
+    has_expense = any(e.entry_type != "income" for e in body.expenses)
+    if has_expense:
+        db.add(UserActivity(user_id=current_user.id, action="add_expense"))
+    if has_income:
+        db.add(UserActivity(user_id=current_user.id, action="add_income"))
+    await db.commit()
     result = await db.execute(
         select(Expense)
         .options(selectinload(Expense.category), selectinload(Expense.wallet))
