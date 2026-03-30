@@ -2408,6 +2408,15 @@ async function exitImpersonation() {
 // ── Admin Users ───────────────────────────────────────────────
 let _adminUsers = [];
 
+function switchAdminTab(tab) {
+  const isActivity = tab === 'activity';
+  document.getElementById('admin-panel-users').style.display     = isActivity ? 'none' : '';
+  document.getElementById('admin-panel-activity').style.display  = isActivity ? '' : 'none';
+  document.getElementById('admin-tab-users').className    = isActivity ? 'btn btn-sm btn-outline-secondary' : 'btn btn-sm btn-primary';
+  document.getElementById('admin-tab-activity').className = isActivity ? 'btn btn-sm btn-info' : 'btn btn-sm btn-outline-secondary';
+  if (isActivity) loadActivityLog();
+}
+
 async function loadAdminUsers() {
   const wrap = document.getElementById('admin-users-table');
   if (!wrap) return;
@@ -2415,6 +2424,50 @@ async function loadAdminUsers() {
   try {
     _adminUsers = await api('GET', '/admin/users');
     renderAdminTable();
+  } catch(e) {
+    wrap.innerHTML = `<div class="text-danger p-3">${esc(e.message)}</div>`;
+  }
+}
+
+async function loadActivityLog() {
+  const wrap = document.getElementById('admin-activity-table');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-info"></div></div>';
+  try {
+    const items = await api('GET', '/admin/activity?limit=200');
+    if (!items.length) {
+      wrap.innerHTML = '<p class="text-muted text-center py-3">لا توجد حركات مسجلة</p>';
+      return;
+    }
+    const ACTION_ICON = { 'تسجيل دخول': 'fas fa-sign-in-alt text-success', 'تسجيل حساب جديد': 'fas fa-user-plus text-info' };
+    wrap.innerHTML = `
+      <div class="table-responsive">
+        <table class="table table-dark table-hover table-sm align-middle mb-0">
+          <thead><tr>
+            <th>المستخدم</th>
+            <th>البريد الإلكتروني</th>
+            <th>النشاط</th>
+            <th>التاريخ</th>
+            <th>الوقت</th>
+          </tr></thead>
+          <tbody>
+            ${items.map(a => {
+              const dt = a.created_at ? new Date(a.created_at) : null;
+              const dateStr = dt ? dt.toLocaleDateString('ar-IQ', {year:'numeric', month:'2-digit', day:'2-digit'}) : '—';
+              const timeStr = dt ? dt.toLocaleTimeString('ar-IQ', {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true}) : '—';
+              const iconCls = ACTION_ICON[a.action] || 'fas fa-circle text-secondary';
+              return `
+              <tr>
+                <td class="fw-semibold">${esc(a.user_name)}</td>
+                <td dir="ltr" class="text-muted small">${esc(a.user_email)}</td>
+                <td><i class="${iconCls} me-1"></i>${esc(a.action)}</td>
+                <td class="text-muted small" dir="ltr">${dateStr}</td>
+                <td class="text-muted small" dir="ltr">${timeStr}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
   } catch(e) {
     wrap.innerHTML = `<div class="text-danger p-3">${esc(e.message)}</div>`;
   }

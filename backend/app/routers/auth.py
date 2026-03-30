@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.user import User, RefreshToken
+from app.models.user import User, RefreshToken, UserActivity
 import logging
 
 from app.schemas.user import UserRegister, UserLogin, UserOut, TokenPair, RefreshRequest, UserUpdate, ChangePasswordRequest, ForgotPasswordRequest, ResetPasswordRequest
@@ -57,6 +57,8 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
     # Seed default wallets for new user
     await _seed_default_wallets(db, user.id, user.currency)
 
+    db.add(UserActivity(user_id=user.id, action="register"))
+
     access_token = create_access_token(str(user.id))
     raw_refresh, refresh_hash, expires_at = create_refresh_token()
 
@@ -79,6 +81,8 @@ async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    db.add(UserActivity(user_id=user.id, action="login"))
 
     access_token = create_access_token(str(user.id))
     raw_refresh, refresh_hash, expires_at = create_refresh_token()

@@ -1086,9 +1086,31 @@
         <button class="btn btn-primary btn-sm" onclick="openAddUserModal()"><i class="fas fa-user-plus me-2"></i>مستخدم جديد</button>
       </div>
 
-      <div class="glass-card">
+      <!-- Admin Tabs -->
+      <div class="d-flex gap-2 mb-3">
+        <button id="admin-tab-users" class="btn btn-sm btn-primary" onclick="switchAdminTab('users')">
+          <i class="fas fa-users me-1"></i>المستخدمون
+        </button>
+        <button id="admin-tab-activity" class="btn btn-sm btn-outline-secondary" onclick="switchAdminTab('activity')">
+          <i class="fas fa-clock-rotate-left me-1"></i>آخر الحركات
+        </button>
+      </div>
+
+      <!-- Users Table -->
+      <div id="admin-panel-users" class="glass-card">
         <div id="admin-users-table">
           <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+        </div>
+      </div>
+
+      <!-- Activity Log -->
+      <div id="admin-panel-activity" class="glass-card" style="display:none">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <span class="fw-bold"><i class="fas fa-clock-rotate-left me-2 text-info"></i>سجل نشاط المستخدمين</span>
+          <button class="btn btn-sm btn-outline-info" onclick="loadActivityLog()"><i class="fas fa-rotate-right me-1"></i>تحديث</button>
+        </div>
+        <div id="admin-activity-table">
+          <div class="text-center py-4"><div class="spinner-border text-info"></div></div>
         </div>
       </div>
 

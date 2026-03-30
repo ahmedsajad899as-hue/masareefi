@@ -3,11 +3,11 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, UserActivity
 from app.schemas.user import UserOut
 from app.utils.dependencies import get_current_admin
 from app.utils.hashing import hash_password
@@ -189,3 +189,32 @@ async def impersonate_user(
             "created_at": user.created_at.isoformat() if user.created_at else None,
         },
     }
+
+
+@router.get("/activity")
+async def get_activity(
+    limit: int = 200,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+):
+    """Return the latest user activity entries (logins, registrations)."""
+    result = await db.execute(
+        select(UserActivity, User)
+        .join(User, UserActivity.user_id == User.id)
+        .order_by(desc(UserActivity.created_at))
+        .limit(limit)
+    )
+    ACTION_LABELS = {
+        "login":    "تسجيل دخول",
+        "register": "تسجيل حساب جديد",
+    }
+    return [
+        {
+            "id":         act.id,
+            "user_name":  user.full_name,
+            "user_email": user.email,
+            "action":     ACTION_LABELS.get(act.action, act.action),
+            "created_at": act.created_at.isoformat() if act.created_at else None,
+        }
+        for act, user in result.all()
+    ]

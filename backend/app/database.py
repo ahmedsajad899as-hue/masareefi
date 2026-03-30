@@ -85,6 +85,15 @@ async def create_all_tables() -> None:
             # Password reset
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_hash VARCHAR(255) NULL",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP WITH TIME ZONE NULL",
+            # Activity log table
+            """CREATE TABLE IF NOT EXISTS user_activities (
+                id SERIAL PRIMARY KEY,
+                user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                action VARCHAR(50) NOT NULL DEFAULT 'login',
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_user_activities_user_id ON user_activities(user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_activities_created_at ON user_activities(created_at)",
         ]
         # Each statement in its own transaction — prevents PostgreSQL "tx aborted" cascade
         for stmt in _GUARD_STMTS:

@@ -62,6 +62,17 @@ class User(Base):
     )
 
 
+class UserActivity(Base):
+    __tablename__ = "user_activities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(50), nullable=False, default="login")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+
+
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
