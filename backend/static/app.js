@@ -2468,10 +2468,10 @@ async function loadActivityLog() {
               return `
               <tr>
                 <td class="fw-semibold">${esc(a.user_name)}</td>
-                <td dir="ltr" class="text-muted small">${esc(a.user_email)}</td>
+                <td dir="ltr" class="small">${esc(a.user_email)}</td>
                 <td><i class="${iconCls} me-1"></i>${esc(a.action)}</td>
-                <td class="text-muted small" dir="ltr">${dateStr}</td>
-                <td class="text-muted small" dir="ltr">${timeStr}</td>
+                <td class="small" dir="ltr">${dateStr}</td>
+                <td class="small" dir="ltr">${timeStr}</td>
               </tr>`;
             }).join('')}
           </tbody>
