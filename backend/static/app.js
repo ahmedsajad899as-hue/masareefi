@@ -2318,11 +2318,27 @@ async function loadReferral() {
     if (countEl) countEl.textContent = data.referral_count || 0;
     if (bonusEl) bonusEl.textContent = data.referral_bonus_days || 0;
 
-    const msg = encodeURIComponent(`استخدم تطبيق مصاريفي لتتبع مصاريفك بسهولة! سجّل الآن: ${link}`);
-    if (copyBtn) copyBtn.onclick = () => { navigator.clipboard.writeText(link).then(() => toast('تم نسخ الرابط ✅')); };
-    if (waBtn) waBtn.href = `https://wa.me/?text=${msg}`;
-    if (tgBtn) tgBtn.href = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('استخدم تطبيق مصاريفي!')}`;
-    if (xBtn)  xBtn.href  = `https://x.com/intent/tweet?text=${msg}`;
+    const shareText = `استخدم تطبيق مصاريفي لتتبع مصاريفك بسهولة! سجّل الآن: ${link}`;
+
+    if (copyBtn) {
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(link)
+          .then(() => toast('تم نسخ الرابط ✅'))
+          .catch(() => { /* fallback */ const ta = document.createElement('textarea'); ta.value = link; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('تم نسخ الرابط ✅'); });
+      };
+    }
+    if (waBtn) {
+      waBtn.removeAttribute('href');
+      waBtn.onclick = (e) => { e.preventDefault(); window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank'); };
+    }
+    if (tgBtn) {
+      tgBtn.removeAttribute('href');
+      tgBtn.onclick = (e) => { e.preventDefault(); window.open(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('استخدم تطبيق مصاريفي لتتبع مصاريفك!')}`, '_blank'); };
+    }
+    if (xBtn) {
+      xBtn.removeAttribute('href');
+      xBtn.onclick = (e) => { e.preventDefault(); window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}`, '_blank'); };
+    }
   } catch(e) { console.error('referral load:', e); }
 }
 

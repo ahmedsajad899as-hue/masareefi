@@ -2,7 +2,7 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -167,17 +167,26 @@ async def change_password(
 
 @router.get("/referral-info")
 async def get_referral_info(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return the current user's referral code, link and reward stats."""
-    from app.config import settings as app_settings
-    # Use the configured app URL or a reasonable default
-    app_url = getattr(app_settings, "APP_URL", "https://masareefi-backend.up.railway.app")
-    ref_code = current_user.referral_code or ""
+    """Return the current user's referral code, link and reward stats.
+    Auto-generates a referral code for existing users who don't have one.
+    """
+    # Auto-generate referral code for legacy users who registered before this feature
+    if not current_user.referral_code:
+        current_user.referral_code = secrets.token_urlsafe(6).upper()
+        await db.commit()
+        await db.refresh(current_user)
+
+    ref_code = current_user.referral_code
+    # Build app URL from the actual request origin so it works on any deployment
+    base = str(request.base_url).rstrip("/")
+    referral_link = f"{base}/?ref={ref_code}"
     return {
         "referral_code": ref_code,
-        "referral_link": f"{app_url}/?ref={ref_code}" if ref_code else "",
+        "referral_link": referral_link,
         "referral_count": current_user.referral_count or 0,
         "referral_bonus_days": current_user.referral_bonus_days or 0,
     }
