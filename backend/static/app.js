@@ -476,6 +476,7 @@ const PAGE_TITLES = {
 };
 
 function goTo(page) {
+  closeReferralDropdown();
   document.querySelectorAll('.pg').forEach(el => el.style.display = 'none');
   const pg = document.getElementById(`pg-${page}`);
   if (pg) pg.style.display = '';
@@ -2320,18 +2321,25 @@ async function deleteAdminUser(userId, name) {
 // ── Referral ─────────────────────────────────────────────────
 let _referralLink = '';
 
-async function toggleReferralDropdown() {
+function toggleReferralDropdown() {
   const drop = document.getElementById('sidebar-referral-dropdown');
   const chevron = document.getElementById('ref-chevron');
   if (!drop) return;
 
   const isOpen = drop.style.display !== 'none';
-  drop.style.display = isOpen ? 'none' : '';
-  if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+  if (isOpen) { closeReferralDropdown(); return; }
 
-  if (!isOpen && !_referralLink) {
-    await _fetchReferralLink();
-  }
+  drop.style.display = '';
+  if (chevron) chevron.style.transform = 'rotate(180deg)';
+
+  if (!_referralLink) _fetchReferralLink();
+}
+
+function closeReferralDropdown() {
+  const drop = document.getElementById('sidebar-referral-dropdown');
+  const chevron = document.getElementById('ref-chevron');
+  if (drop) drop.style.display = 'none';
+  if (chevron) chevron.style.transform = '';
 }
 
 async function _fetchReferralLink() {
@@ -2413,6 +2421,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sw = document.getElementById('dark-toggle');
     if (sw) sw.checked = false;
   }
+
+  // Close referral dropdown when clicking outside it
+  document.addEventListener('click', function(e) {
+    const wrap = document.getElementById('sidebar-referral-wrap');
+    if (wrap && !wrap.contains(e.target)) closeReferralDropdown();
+  });
 
   // Swipe to open sidebar (swipe right in RTL = from left edge)
   let touchStartX = 0;
