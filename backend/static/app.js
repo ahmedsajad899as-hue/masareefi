@@ -39,7 +39,7 @@ window.addEventListener('appinstalled', () => {
 });
 
 const API = '/api/v1';
-const SUPPORT_WHATSAPP = '9647800000000'; // replace with real WhatsApp number
+const SUPPORT_WHATSAPP = '9647755669961';
 
 // ── State ────────────────────────────────────────────────────
 const S = {
