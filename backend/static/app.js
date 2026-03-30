@@ -281,6 +281,82 @@ async function doLogin() {
   finally { loading(false); }
 }
 
+// ─── Forgot / Reset Password ───────────────────────────────────────────────
+
+function showForgotPassword() {
+  document.getElementById('fp-step1').style.display = '';
+  document.getElementById('fp-step2').style.display = 'none';
+  document.getElementById('fp-email').value = document.getElementById('l-email').value || '';
+  document.getElementById('fp-code').value = '';
+  document.getElementById('fp-newpass').value = '';
+  document.getElementById('fp-err1').style.display = 'none';
+  document.getElementById('fp-err2').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('forgotModal')).show();
+}
+
+async function requestResetCode() {
+  const email = document.getElementById('fp-email').value.trim();
+  const errEl = document.getElementById('fp-err1');
+  errEl.style.display = 'none';
+  if (!email) { errEl.textContent = 'يرجى إدخال البريد الإلكتروني'; errEl.style.display = ''; return; }
+
+  loading(true);
+  try {
+    const res = await fetch(`${API}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const d = await res.json().catch(() => ({}));
+    // Show step 2 regardless (prevent email enumeration to end users, always proceed)
+    document.getElementById('fp-code-display').textContent = d.reset_code || '';
+    document.getElementById('fp-step1').style.display = 'none';
+    document.getElementById('fp-step2').style.display = '';
+    if (d.reset_code) {
+      document.getElementById('fp-code').value = d.reset_code;
+    }
+  } catch (e) {
+    errEl.textContent = 'حدث خطأ. يرجى المحاولة مجدداً.';
+    errEl.style.display = '';
+  }
+  finally { loading(false); }
+}
+
+async function submitResetPassword() {
+  const email    = document.getElementById('fp-email').value.trim();
+  const code     = document.getElementById('fp-code').value.trim();
+  const newPass  = document.getElementById('fp-newpass').value;
+  const errEl    = document.getElementById('fp-err2');
+  errEl.style.display = 'none';
+
+  if (!code || code.length !== 6) { errEl.textContent = 'يرجى إدخال رمز التحقق المكون من 6 أرقام'; errEl.style.display = ''; return; }
+  if (newPass.length < 8) { errEl.textContent = 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'; errEl.style.display = ''; return; }
+
+  loading(true);
+  try {
+    const res = await fetch(`${API}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, reset_code: code, new_password: newPass }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      errEl.textContent = e.detail || 'رمز التحقق غير صحيح أو منتهي الصلاحية';
+      errEl.style.display = '';
+      return;
+    }
+    bootstrap.Modal.getInstance(document.getElementById('forgotModal'))?.hide();
+    toast('تم تغيير كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.', 'ok');
+    document.getElementById('l-email').value = email;
+    document.getElementById('l-pass').value = '';
+    document.getElementById('l-pass').focus();
+  } catch (e) {
+    errEl.textContent = 'حدث خطأ. يرجى المحاولة مجدداً.';
+    errEl.style.display = '';
+  }
+  finally { loading(false); }
+}
+
 async function doRegister() {
   const name     = document.getElementById('r-name').value.trim();
   const email    = document.getElementById('r-email').value.trim();

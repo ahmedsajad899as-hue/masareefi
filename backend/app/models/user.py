@@ -38,6 +38,9 @@ class User(Base):
     referred_by_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     referral_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     referral_bonus_days: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Password reset
+    reset_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reset_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

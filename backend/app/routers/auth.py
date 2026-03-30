@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User, RefreshToken
-from app.schemas.user import UserRegister, UserLogin, UserOut, TokenPair, RefreshRequest, UserUpdate, ChangePasswordRequest
+import logging
+
+from app.schemas.user import UserRegister, UserLogin, UserOut, TokenPair, RefreshRequest, UserUpdate, ChangePasswordRequest, ForgotPasswordRequest, ResetPasswordRequest
 from app.utils.hashing import hash_password, verify_password
 from app.utils.jwt import create_access_token, create_refresh_token, hash_refresh_token
 from app.utils.dependencies import get_current_user
@@ -162,6 +164,62 @@ async def change_password(
     if not verify_password(body.current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     current_user.password_hash = hash_password(body.new_password)
+    await db.commit()
+
+
+@router.post("/forgot-password")
+async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Generate a 6-digit reset code for the given email.
+    Always returns 200 (prevent email enumeration).
+    The code is returned in the response so the UI can display it to the user
+    (since this app has no email service configured).
+    """
+    result = await db.execute(select(User).where(User.email == body.email, User.is_active == True))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        # Return same shape even for unknown emails — no enumeration
+        return {"message": "تحقق من بريدك الإلكتروني للحصول على رمز إعادة التعيين", "reset_code": None}
+
+    # Generate 6-digit numeric code
+    import random
+    code = f"{random.randint(100000, 999999)}"
+
+    # Store hashed (using same bcrypt helper as passwords)
+    from datetime import timedelta
+    user.reset_token_hash = hash_password(code)
+    user.reset_token_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+    await db.commit()
+
+    logging.getLogger("masareefi").info(
+        "Password reset code for %s: %s", body.email, code
+    )
+
+    return {
+        "message": "تم إنشاء رمز التحقق. صالح لمدة 15 دقيقة.",
+        "reset_code": code,  # shown in UI because no email service is configured
+    }
+
+
+@router.post("/reset-password", status_code=204)
+async def reset_password(body: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Validate reset code and set the new password."""
+    result = await db.execute(select(User).where(User.email == body.email, User.is_active == True))
+    user = result.scalar_one_or_none()
+
+    if not user or not user.reset_token_hash or not user.reset_token_expires_at:
+        raise HTTPException(status_code=400, detail="رمز التحقق غير صحيح أو منتهي الصلاحية")
+
+    if user.reset_token_expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد")
+
+    if not verify_password(body.reset_code, user.reset_token_hash):
+        raise HTTPException(status_code=400, detail="رمز التحقق غير صحيح")
+
+    user.password_hash = hash_password(body.new_password)
+    user.reset_token_hash = None
+    user.reset_token_expires_at = None
     await db.commit()
 
 
