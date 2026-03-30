@@ -11,6 +11,7 @@ from app.models.user import User, RefreshToken
 import logging
 
 from app.schemas.user import UserRegister, UserLogin, UserOut, TokenPair, RefreshRequest, UserUpdate, ChangePasswordRequest, ForgotPasswordRequest, ResetPasswordRequest
+from app.utils.email import send_reset_email
 from app.utils.hashing import hash_password, verify_password
 from app.utils.jwt import create_access_token, create_refresh_token, hash_refresh_token
 from app.utils.dependencies import get_current_user
@@ -171,35 +172,47 @@ async def change_password(
 async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     """
     Generate a 6-digit reset code for the given email.
-    Always returns 200 (prevent email enumeration).
-    The code is returned in the response so the UI can display it to the user
-    (since this app has no email service configured).
+    If SMTP is configured → sends the code by email and does NOT return it in the response.
+    If SMTP is NOT configured → returns the code in the response (shown on screen).
+    Always returns 200 to prevent email enumeration.
     """
+    import random
+    from datetime import timedelta
+
     result = await db.execute(select(User).where(User.email == body.email, User.is_active == True))
     user = result.scalar_one_or_none()
 
     if not user:
-        # Return same shape even for unknown emails — no enumeration
-        return {"message": "تحقق من بريدك الإلكتروني للحصول على رمز إعادة التعيين", "reset_code": None}
+        # Prevent email enumeration — respond as if success
+        return {"message": "إذا كان البريد الإلكتروني مسجلاً، ستصل رسالة التحقق قريباً.", "email_sent": False, "reset_code": None}
 
     # Generate 6-digit numeric code
-    import random
     code = f"{random.randint(100000, 999999)}"
 
-    # Store hashed (using same bcrypt helper as passwords)
-    from datetime import timedelta
+    # Store bcrypt-hashed in DB
     user.reset_token_hash = hash_password(code)
     user.reset_token_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
     await db.commit()
 
-    logging.getLogger("masareefi").info(
-        "Password reset code for %s: %s", body.email, code
-    )
+    # Try sending email
+    email_sent = await send_reset_email(body.email, code)
 
-    return {
-        "message": "تم إنشاء رمز التحقق. صالح لمدة 15 دقيقة.",
-        "reset_code": code,  # shown in UI because no email service is configured
-    }
+    log = logging.getLogger("masareefi")
+    if email_sent:
+        log.info("Reset email sent to %s", body.email)
+        return {
+            "message": "تم إرسال رمز التحقق إلى بريدك الإلكتروني. صالح لمدة 15 دقيقة.",
+            "email_sent": True,
+            "reset_code": None,  # never expose in response when email was sent
+        }
+    else:
+        # No SMTP configured: show code on screen
+        log.warning("SMTP not configured — returning reset code in response for %s", body.email)
+        return {
+            "message": "تم إنشاء رمز التحقق. صالح لمدة 15 دقيقة.",
+            "email_sent": False,
+            "reset_code": code,
+        }
 
 
 @router.post("/reset-password", status_code=204)

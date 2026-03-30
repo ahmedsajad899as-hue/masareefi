@@ -307,16 +307,41 @@ async function requestResetCode() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     });
-    const d = await res.json().catch(() => ({}));
-    // Show step 2 regardless (prevent email enumeration to end users, always proceed)
-    document.getElementById('fp-code-display').textContent = d.reset_code || '';
+
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      errEl.textContent = e.detail || 'حدث خطأ. يرجى المحاولة مجدداً.';
+      errEl.style.display = '';
+      return;
+    }
+
+    const d = await res.json();
+    const codeBox    = document.getElementById('fp-code-box');
+    const codeSpan   = document.getElementById('fp-code-display');
+    const emailNote  = document.getElementById('fp-email-note');
+
+    if (d.email_sent) {
+      // Email was sent — hide the code box, show email instruction
+      codeBox.style.display   = 'none';
+      emailNote.style.display = '';
+      document.getElementById('fp-code').value = '';
+    } else if (d.reset_code) {
+      // No SMTP — show the code prominently on screen
+      codeSpan.textContent    = d.reset_code;
+      codeBox.style.display   = '';
+      emailNote.style.display = 'none';
+      document.getElementById('fp-code').value = d.reset_code;
+    } else {
+      // Email not found — show generic success (anti-enumeration)
+      codeBox.style.display   = 'none';
+      emailNote.style.display = '';
+    }
+
     document.getElementById('fp-step1').style.display = 'none';
     document.getElementById('fp-step2').style.display = '';
-    if (d.reset_code) {
-      document.getElementById('fp-code').value = d.reset_code;
-    }
+
   } catch (e) {
-    errEl.textContent = 'حدث خطأ. يرجى المحاولة مجدداً.';
+    errEl.textContent = 'حدث خطأ في الاتصال. يرجى المحاولة مجدداً.';
     errEl.style.display = '';
   }
   finally { loading(false); }

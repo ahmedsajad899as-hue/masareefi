@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str
 
+    # SMTP — optional. If not set, reset code is returned in API response only.
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USER: str | None = None          # e.g. yourapp@gmail.com
+    SMTP_PASSWORD: str | None = None      # Gmail App Password or SMTP password
+    SMTP_FROM: str | None = None          # "مصاريفي <yourapp@gmail.com>"
+    SMTP_USE_TLS: bool = True             # STARTTLS on port 587 (True) or SSL on 465 (False)
+
     @property
     def origins_list(self) -> list[str]:
         if self.ALLOWED_ORIGINS.strip() == "*":

@@ -284,16 +284,28 @@
         </div>
         <!-- Step 2: enter code + new password -->
         <div id="fp-step2" style="display:none">
-          <div class="alert alert-success small py-2 mb-3">
-            <i class="fas fa-check-circle me-1"></i>
-            تم إنشاء رمز التحقق:
-            <span id="fp-code-display" class="fw-bold fs-5 ms-2 font-monospace"></span>
+          <!-- Case A: Code shown on screen (no SMTP) -->
+          <div id="fp-code-box" class="alert alert-warning border-0 mb-3" style="display:none;background:#fff8e1;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="fas fa-exclamation-triangle text-warning"></i>
+              <span class="fw-semibold">لا يوجد إيميل — رمزك هنا:</span>
+            </div>
+            <div class="text-center">
+              <span id="fp-code-display" class="d-inline-block fw-bold font-monospace px-4 py-2 rounded"
+                    style="font-size:2rem;letter-spacing:8px;background:#fff;border:2px dashed #ffc107;color:#333;"></span>
+            </div>
+            <div class="text-muted text-center mt-1" style="font-size:.8rem;">انسخ هذا الرمز وادخله في الحقل أدناه</div>
+          </div>
+          <!-- Case B: Email was sent -->
+          <div id="fp-email-note" class="alert alert-success border-0 mb-3" style="display:none">
+            <i class="fas fa-envelope me-2"></i>
+            تم إرسال رمز التحقق إلى بريدك الإلكتروني. تحقق من صندوق الوارد أو مجلد Spam.
           </div>
           <p class="text-muted small mb-3">أدخل الرمز وكلمة المرور الجديدة.</p>
           <div class="mb-3">
             <label class="form-label">رمز التحقق</label>
             <input type="text" id="fp-code" class="form-control text-center font-monospace fs-4" maxlength="6"
-                   placeholder="______" dir="ltr" inputmode="numeric">
+                   placeholder="— — — — — —" dir="ltr" inputmode="numeric">
           </div>
           <div class="mb-3">
             <label class="form-label">كلمة المرور الجديدة</label>
