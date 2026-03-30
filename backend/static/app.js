@@ -297,7 +297,8 @@ async function doRegister() {
 
   loading(true);
   try {
-    const d = await api('POST', '/auth/register', { full_name: name, email, phone_number: phone, password: pass, currency, preferred_language: 'ar' });
+    const refCode = document.getElementById('r-ref-code')?.value.trim().toUpperCase() || null;
+    const d = await api('POST', '/auth/register', { full_name: name, email, phone_number: phone, password: pass, currency, preferred_language: 'ar', referral_code: refCode });
     await saveSession(d);
     toast('تم إنشاء الحساب بنجاح 🎉');
     initApp(true);
@@ -402,7 +403,8 @@ function updatePlanUI() {
   let trialDaysLeft = 0;
   if (plan === 'trial' && trialStarted) {
     const elapsed = Math.floor((now - trialStarted) / 86400000);
-    trialDaysLeft = 14 - elapsed;
+    const bonusDays = S.user.referral_bonus_days || 0;
+    trialDaysLeft = (14 + bonusDays) - elapsed;
     if (trialDaysLeft <= 0) effectivePlan = 'free';
   }
   if ((plan === 'pro' || plan === 'business') && S.user.plan_expires_at) {
@@ -425,6 +427,9 @@ function updatePlanUI() {
   } else if (effectivePlan === 'business') {
     badge.classList.add('plan-badge-pro');
     badge.textContent = '🏢 Business';
+  } else if (effectivePlan === 'custom') {
+    badge.classList.add('plan-badge-custom');
+    badge.textContent = '🛠️ مخصصة';
   }
 
   // Trial warning banner
@@ -1943,6 +1948,7 @@ function loadSettings() {
   setVal('set-currency', S.user.currency  || 'IQD');
   const sw = document.getElementById('dark-toggle');
   if (sw) sw.checked = !document.body.classList.contains('light-theme');
+  loadReferral();
 }
 
 function showInstallTab(tab) {
@@ -2179,6 +2185,10 @@ function openAddUserModal() {
   document.getElementById('um-plan-expires').value = '';
   document.getElementById('um-admin').checked = false;
   document.getElementById('um-active').checked = true;
+  ['um-c-daily','um-c-wallets','um-c-cats','um-c-budgets','um-c-goals','um-c-voice'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  toggleCustomPlanFields();
   new bootstrap.Modal(document.getElementById('userModal')).show();
 }
 
@@ -2199,6 +2209,15 @@ function openEditUserModal(userId) {
   document.getElementById('um-plan-expires').value = u.plan_expires_at ? u.plan_expires_at.split('T')[0] : '';
   document.getElementById('um-admin').checked = u.is_admin;
   document.getElementById('um-active').checked = u.is_active;
+  // Populate custom plan limit fields
+  const setNum = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+  setNum('um-c-daily',   u.custom_daily_expenses);
+  setNum('um-c-wallets', u.custom_wallets);
+  setNum('um-c-cats',    u.custom_categories);
+  setNum('um-c-budgets', u.custom_budgets);
+  setNum('um-c-goals',   u.custom_goals);
+  setNum('um-c-voice',   u.custom_voice_monthly);
+  toggleCustomPlanFields();
   new bootstrap.Modal(document.getElementById('userModal')).show();
 }
 
@@ -2219,6 +2238,12 @@ function toggleAdminPass(btn) {
   togglePass('um-pass', btn);
 }
 
+function toggleCustomPlanFields() {
+  const plan = document.getElementById('um-plan')?.value;
+  const wrap = document.getElementById('um-custom-limits');
+  if (wrap) wrap.style.display = plan === 'custom' ? '' : 'none';
+}
+
 async function saveUser() {
   const id       = document.getElementById('um-id').value;
   const name     = document.getElementById('um-name').value.trim();
@@ -2233,17 +2258,28 @@ async function saveUser() {
 
   if (!name) { toast('أدخل الاسم', 'err'); return; }
 
+  // Collect custom plan limits (null means "not set")
+  const getNum = id => { const v = document.getElementById(id)?.value; return v !== '' && v != null ? parseInt(v, 10) : null; };
+  const customLimits = {
+    custom_daily_expenses: getNum('um-c-daily'),
+    custom_wallets:        getNum('um-c-wallets'),
+    custom_categories:     getNum('um-c-cats'),
+    custom_budgets:        getNum('um-c-budgets'),
+    custom_goals:          getNum('um-c-goals'),
+    custom_voice_monthly:  getNum('um-c-voice'),
+  };
+
   loading(true);
   try {
     if (!id) {
       // Create
       if (!email) { toast('أدخل البريد', 'err'); return; }
       if (!pass)  { toast('أدخل كلمة المرور', 'err'); return; }
-      await api('POST', '/admin/users', { full_name: name, email, phone_number: phone, password: pass, currency, is_admin: isAdmin, plan, plan_expires_at: planExpires });
+      await api('POST', '/admin/users', { full_name: name, email, phone_number: phone, password: pass, currency, is_admin: isAdmin, plan, plan_expires_at: planExpires, ...customLimits });
       toast('تم إنشاء الحساب ✅');
     } else {
       // Update
-      const body = { full_name: name, phone_number: phone, currency, is_admin: isAdmin, is_active: isActive, plan, plan_expires_at: planExpires };
+      const body = { full_name: name, phone_number: phone, currency, is_admin: isAdmin, is_active: isActive, plan, plan_expires_at: planExpires, ...customLimits };
       if (pass) body.password = pass;
       await api('PATCH', `/admin/users/${id}`, body);
       toast('تم التحديث ✅');
@@ -2263,6 +2299,31 @@ async function deleteAdminUser(userId, name) {
     await loadAdminUsers();
   } catch(e) { toast(e.message, 'err'); }
   finally { loading(false); }
+}
+
+// ── Referral ─────────────────────────────────────────────────
+async function loadReferral() {
+  try {
+    const data = await api('GET', '/auth/referral-info');
+    const linkEl   = document.getElementById('ref-link-text');
+    const countEl  = document.getElementById('ref-count');
+    const bonusEl  = document.getElementById('ref-bonus-days');
+    const copyBtn  = document.getElementById('ref-copy-btn');
+    const waBtn    = document.getElementById('ref-share-wa');
+    const tgBtn    = document.getElementById('ref-share-tg');
+    const xBtn     = document.getElementById('ref-share-x');
+
+    const link = data.referral_link || '';
+    if (linkEl) linkEl.textContent = link;
+    if (countEl) countEl.textContent = data.referral_count || 0;
+    if (bonusEl) bonusEl.textContent = data.referral_bonus_days || 0;
+
+    const msg = encodeURIComponent(`استخدم تطبيق مصاريفي لتتبع مصاريفك بسهولة! سجّل الآن: ${link}`);
+    if (copyBtn) copyBtn.onclick = () => { navigator.clipboard.writeText(link).then(() => toast('تم نسخ الرابط ✅')); };
+    if (waBtn) waBtn.href = `https://wa.me/?text=${msg}`;
+    if (tgBtn) tgBtn.href = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('استخدم تطبيق مصاريفي!')}`;
+    if (xBtn)  xBtn.href  = `https://x.com/intent/tweet?text=${msg}`;
+  } catch(e) { console.error('referral load:', e); }
 }
 
 // ── FAB Voice Assistant code is in inline script in index.html ──
@@ -2349,7 +2410,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   } else {
     document.getElementById('auth-screen').style.display = '';
-    showAuthTab('login');
+    // Auto-detect ?ref=CODE in URL → show register tab with pre-filled referral code
+    const urlRef = new URLSearchParams(window.location.search).get('ref');
+    if (urlRef) {
+      showAuthTab('register');
+      const inp = document.getElementById('r-ref-code');
+      const wrap = document.getElementById('r-ref-wrap');
+      const hint = document.getElementById('r-ref-hint');
+      if (inp) inp.value = urlRef.toUpperCase();
+      if (wrap) wrap.style.display = '';
+      if (hint) hint.style.display = '';
+    } else {
+      showAuthTab('login');
+    }
     loading(false);
     clearTimeout(_bootTimeout);
   }

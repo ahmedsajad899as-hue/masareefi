@@ -26,6 +26,18 @@ class User(Base):
     trial_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     voice_uses: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     voice_reset_month: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Custom flexible plan limits (nullable = no override)
+    custom_daily_expenses: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    custom_wallets: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    custom_categories: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    custom_budgets: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    custom_goals: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    custom_voice_monthly: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Referral
+    referral_code: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True, index=True)
+    referred_by_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    referral_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    referral_bonus_days: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

@@ -27,7 +27,13 @@ class AdminCreateUser(BaseModel):
     currency: str = "IQD"
     is_admin: bool = False
     plan: str = "trial"
-    plan_expires_at: str | None = None  # ISO date string e.g. "2026-12-31"
+    plan_expires_at: str | None = None
+    custom_daily_expenses: int | None = None
+    custom_wallets: int | None = None
+    custom_categories: int | None = None
+    custom_budgets: int | None = None
+    custom_goals: int | None = None
+    custom_voice_monthly: int | None = None
 
 
 class AdminUpdateUser(BaseModel):
@@ -39,7 +45,13 @@ class AdminUpdateUser(BaseModel):
     is_admin: bool | None = None
     password: str | None = None
     plan: str | None = None
-    plan_expires_at: str | None = None  # ISO date string e.g. "2026-12-31"
+    plan_expires_at: str | None = None
+    custom_daily_expenses: int | None = None
+    custom_wallets: int | None = None
+    custom_categories: int | None = None
+    custom_budgets: int | None = None
+    custom_goals: int | None = None
+    custom_voice_monthly: int | None = None
 
 
 class UserOutAdmin(UserOut):
@@ -78,6 +90,12 @@ async def create_user(
         plan=body.plan,
         plan_expires_at=datetime.fromisoformat(body.plan_expires_at).replace(tzinfo=timezone.utc) if body.plan_expires_at else None,
         trial_started_at=datetime.now(timezone.utc) if body.plan == "trial" else None,
+        custom_daily_expenses=body.custom_daily_expenses,
+        custom_wallets=body.custom_wallets,
+        custom_categories=body.custom_categories,
+        custom_budgets=body.custom_budgets,
+        custom_goals=body.custom_goals,
+        custom_voice_monthly=body.custom_voice_monthly,
     )
     db.add(user)
 

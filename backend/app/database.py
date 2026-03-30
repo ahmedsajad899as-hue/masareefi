@@ -68,6 +68,18 @@ async def create_all_tables() -> None:
                 "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sector VARCHAR(50) NULL",
                 "ALTER TABLE wallets ADD COLUMN IF NOT EXISTS total_income NUMERIC(14,2) NOT NULL DEFAULT 0",
                 "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS wallet_id UUID NULL REFERENCES wallets(id) ON DELETE SET NULL",
+                # Custom flexible plan limits
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_daily_expenses INTEGER NULL",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_wallets INTEGER NULL",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_categories INTEGER NULL",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_budgets INTEGER NULL",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_goals INTEGER NULL",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_voice_monthly INTEGER NULL",
+                # Referral system
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(20) NULL",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_id UUID NULL",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_count INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_bonus_days INTEGER NOT NULL DEFAULT 0",
             ]:
                 try:
                     await conn.execute(text(stmt))

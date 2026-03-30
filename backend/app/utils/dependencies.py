@@ -54,6 +54,17 @@ PLAN_LIMITS: dict[str, dict[str, int]] = {
     "free":     {"daily_expenses":   3, "wallets":   2, "custom_categories":   0, "budgets":   1, "goals":   0, "voice_monthly":   0},
     "pro":      {"daily_expenses": 999, "wallets":  10, "custom_categories":  20, "budgets": 999, "goals": 999, "voice_monthly":  30},
     "business": {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
+    "custom":   {"daily_expenses":   0, "wallets":   0, "custom_categories":   0, "budgets":   0, "goals":   0, "voice_monthly":   0},
+}
+
+# Maps resource key → User model attribute for the "custom" plan
+_CUSTOM_FIELD: dict[str, str] = {
+    "daily_expenses":    "custom_daily_expenses",
+    "wallets":           "custom_wallets",
+    "custom_categories": "custom_categories",
+    "budgets":           "custom_budgets",
+    "goals":             "custom_goals",
+    "voice_monthly":     "custom_voice_monthly",
 }
 
 _UPGRADE_MESSAGES: dict[str, str] = {
@@ -79,8 +90,9 @@ def get_effective_plan(user: User) -> str:
         started = getattr(user, "trial_started_at", None)
         if not started:
             return "free"
+        bonus = getattr(user, "referral_bonus_days", 0) or 0
         elapsed = (datetime.now(timezone.utc) - _utc_aware(started)).days
-        return "trial" if elapsed < TRIAL_DAYS else "free"
+        return "trial" if elapsed < (TRIAL_DAYS + bonus) else "free"
     if plan in ("pro", "business"):
         expires = getattr(user, "plan_expires_at", None)
         if expires and datetime.now(timezone.utc) > _utc_aware(expires):
@@ -91,7 +103,12 @@ def get_effective_plan(user: User) -> str:
 def check_plan_limit(current: int, user: User, resource: str, extra: int = 1) -> None:
     """Raise HTTP 402 if adding `extra` more items would exceed the resource limit."""
     plan = get_effective_plan(user)
-    limit = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"]).get(resource, 0)
+    if plan == "custom":
+        field = _CUSTOM_FIELD.get(resource)
+        limit = getattr(user, field, None) if field else None
+        limit = 0 if limit is None else limit
+    else:
+        limit = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"]).get(resource, 0)
     if limit >= 999:
         return  # effectively unlimited
     if current + extra > limit:

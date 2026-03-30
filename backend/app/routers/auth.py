@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -30,9 +31,21 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
         currency=body.currency,
         plan="trial",
         trial_started_at=datetime.now(timezone.utc),
+        referral_code=secrets.token_urlsafe(6).upper(),
     )
     db.add(user)
     await db.flush()  # get user.id before commit
+
+    # Handle incoming referral code — reward the referrer
+    if body.referral_code:
+        ref_result = await db.execute(
+            select(User).where(User.referral_code == body.referral_code.strip().upper())
+        )
+        referrer = ref_result.scalar_one_or_none()
+        if referrer and referrer.id != user.id:
+            user.referred_by_id = referrer.id
+            referrer.referral_count = (referrer.referral_count or 0) + 1
+            referrer.referral_bonus_days = (referrer.referral_bonus_days or 0) + 7
 
     # Seed system categories for new user
     await _seed_system_categories(db, user.id)
@@ -150,6 +163,24 @@ async def change_password(
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     current_user.password_hash = hash_password(body.new_password)
     await db.commit()
+
+
+@router.get("/referral-info")
+async def get_referral_info(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the current user's referral code, link and reward stats."""
+    from app.config import settings as app_settings
+    # Use the configured app URL or a reasonable default
+    app_url = getattr(app_settings, "APP_URL", "https://masareefi-backend.up.railway.app")
+    ref_code = current_user.referral_code or ""
+    return {
+        "referral_code": ref_code,
+        "referral_link": f"{app_url}/?ref={ref_code}" if ref_code else "",
+        "referral_count": current_user.referral_count or 0,
+        "referral_bonus_days": current_user.referral_bonus_days or 0,
+    }
 
 
 # ─── Helper ───────────────────────────────────────────────────────────────────

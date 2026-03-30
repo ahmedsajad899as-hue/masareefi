@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=28">
+  <link rel="stylesheet" href="/static/style.css?v=29">
   <script>
     // Early auth check — runs before app.js loads.
     // If no token stored, immediately hide spinner & show login screen.
@@ -243,6 +243,11 @@
             <option value="KWD">🇰🇼 دينار كويتي (KWD)</option>
             <option value="USD">🇺🇸 دولار أمريكي (USD)</option>
           </select>
+        </div>
+        <div class="mb-4" id="r-ref-wrap" style="display:none">
+          <label class="form-label">كود الدعوة <span class="text-muted fw-normal">(اختياري)</span></label>
+          <input type="text" id="r-ref-code" class="form-control text-uppercase" placeholder="XXXXXXXX" dir="ltr" maxlength="20">
+          <div class="form-text text-success" id="r-ref-hint" style="display:none"><i class="fas fa-gift me-1"></i>ستحصل أنت وصديقك على أيام إضافية!</div>
         </div>
         <button class="btn btn-primary w-100 btn-lg" onclick="doRegister()">
           <i class="fas fa-user-plus me-2"></i>إنشاء الحساب
@@ -927,6 +932,47 @@
         </div><!-- /ios -->
       </div><!-- /install-guide card -->
 
+      <!-- ── دعوة أصدقاء ── -->
+      <div class="glass-card mt-3" id="referral-card">
+        <div class="gc-title"><i class="fas fa-user-plus me-2 text-primary"></i>دعوة أصدقاء واربح مكافآت</div>
+        <p style="font-size:.83rem;color:var(--muted)" class="mb-3">
+          شارك رابط الدعوة مع أصدقائك — كلما انضم صديق عبر رابطك حصلت على <strong>7 أيام إضافية</strong> من الفترة التجريبية!
+        </p>
+
+        <!-- Referral link box -->
+        <div class="referral-link-box mb-3">
+          <span id="ref-link-text" class="ref-link-text">جاري التحميل...</span>
+          <button id="ref-copy-btn" class="btn btn-sm btn-outline-primary ms-2" title="نسخ الرابط">
+            <i class="fas fa-copy"></i>
+          </button>
+        </div>
+
+        <!-- Share buttons -->
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <a id="ref-share-wa" href="#" target="_blank" rel="noopener" class="btn btn-sm ref-share-btn ref-share-wa">
+            <i class="fab fa-whatsapp me-1"></i>واتساب
+          </a>
+          <a id="ref-share-tg" href="#" target="_blank" rel="noopener" class="btn btn-sm ref-share-btn ref-share-tg">
+            <i class="fab fa-telegram me-1"></i>تيليغرام
+          </a>
+          <a id="ref-share-x" href="#" target="_blank" rel="noopener" class="btn btn-sm ref-share-btn ref-share-x">
+            <i class="fab fa-x-twitter me-1"></i>X
+          </a>
+        </div>
+
+        <!-- Stats -->
+        <div class="d-flex gap-3">
+          <div class="referral-stat">
+            <div class="referral-stat-val" id="ref-count">0</div>
+            <div class="referral-stat-lbl">أصدقاء انضموا</div>
+          </div>
+          <div class="referral-stat">
+            <div class="referral-stat-val" id="ref-bonus-days">0</div>
+            <div class="referral-stat-lbl">أيام مكافأة</div>
+          </div>
+        </div>
+      </div>
+
     </section>
 
     <!-- ── Admin Users ── -->
@@ -985,17 +1031,48 @@
               </div>
               <div class="mb-3">
                 <label class="form-label">الباقة</label>
-                <select id="um-plan" class="form-select">
+                <select id="um-plan" class="form-select" onchange="toggleCustomPlanFields()">
                   <option value="trial">🆓 تجربة مجانية (14 يوم)</option>
                   <option value="free">🔒 مجاني</option>
                   <option value="pro">⭐ Pro — 2,000 د.ع/شهر</option>
                   <option value="business">🏢 Business — 5,000 د.ع/شهر</option>
+                  <option value="custom">🛠️ مخصصة (يحددها الأدمن)</option>
                 </select>
               </div>
               <div class="mb-3">
                 <label class="form-label">تاريخ انتهاء الاشتراك</label>
                 <input type="date" id="um-plan-expires" class="form-control" dir="ltr">
                 <div class="form-text text-muted">اتركه فارغاً للتجربة/المجاني</div>
+              </div>
+              <!-- Custom Plan Limits (shown only when plan=custom) -->
+              <div id="um-custom-limits" class="glass-card p-3 mb-2" style="display:none;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.3)">
+                <div class="fw-bold mb-2" style="font-size:.85rem"><i class="fas fa-sliders-h me-1 text-warning"></i>حدود الباقة المخصصة <span class="text-muted fw-normal">(999 = بلا حدود)</span></div>
+                <div class="row g-2">
+                  <div class="col-6">
+                    <label class="form-label form-label-sm mb-1">مصاريف / يوم</label>
+                    <input type="number" id="um-c-daily" class="form-control form-control-sm" min="0" max="999" placeholder="999">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label form-label-sm mb-1">عدد المحافظ</label>
+                    <input type="number" id="um-c-wallets" class="form-control form-control-sm" min="0" max="999" placeholder="999">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label form-label-sm mb-1">فئات مخصصة</label>
+                    <input type="number" id="um-c-cats" class="form-control form-control-sm" min="0" max="999" placeholder="20">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label form-label-sm mb-1">ميزانيات</label>
+                    <input type="number" id="um-c-budgets" class="form-control form-control-sm" min="0" max="999" placeholder="999">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label form-label-sm mb-1">أهداف الادخار</label>
+                    <input type="number" id="um-c-goals" class="form-control form-control-sm" min="0" max="999" placeholder="999">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label form-label-sm mb-1">صوت / شهر</label>
+                    <input type="number" id="um-c-voice" class="form-control form-control-sm" min="0" max="999" placeholder="30">
+                  </div>
+                </div>
               </div>
               <div class="form-check form-switch mb-2">
                 <input class="form-check-input" type="checkbox" id="um-admin">
@@ -1197,7 +1274,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=39"></script>
+<script src="/static/app.js?v=40"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══

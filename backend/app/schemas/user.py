@@ -12,6 +12,7 @@ class UserRegister(BaseModel):
     phone_number: str
     preferred_language: str = "ar"
     currency: str = "IQD"
+    referral_code: str | None = None  # referral code from the inviter
 
     @field_validator("email")
     @classmethod
@@ -72,6 +73,17 @@ class UserOut(BaseModel):
     plan_expires_at: datetime | None = None
     trial_started_at: datetime | None = None
     voice_uses: int = 0
+    # Custom plan limits
+    custom_daily_expenses: int | None = None
+    custom_wallets: int | None = None
+    custom_categories: int | None = None
+    custom_budgets: int | None = None
+    custom_goals: int | None = None
+    custom_voice_monthly: int | None = None
+    # Referral
+    referral_code: str | None = None
+    referral_count: int = 0
+    referral_bonus_days: int = 0
     created_at: datetime
 
     model_config = {"from_attributes": True}
