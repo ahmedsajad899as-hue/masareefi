@@ -2482,6 +2482,23 @@ async function loadActivityLog() {
   }
 }
 
+function calcUserRemainingDays(u) {
+  const now = new Date();
+  const plan = u.plan || 'trial';
+  if (plan === 'trial') {
+    if (!u.trial_started_at) return null;
+    const started = new Date(u.trial_started_at);
+    const bonusDays = u.referral_bonus_days || 0;
+    const elapsed = Math.floor((now - started) / 86400000);
+    return (14 + bonusDays) - elapsed;
+  }
+  if (plan === 'pro' || plan === 'business') {
+    if (!u.plan_expires_at) return null;
+    return Math.ceil((new Date(u.plan_expires_at) - now) / 86400000);
+  }
+  return null;
+}
+
 function renderAdminTable() {
   const wrap = document.getElementById('admin-users-table');
   if (!wrap) return;
@@ -2498,6 +2515,7 @@ function renderAdminTable() {
           <th>الهاتف</th>
           <th>العملة</th>
           <th>الباقة</th>
+          <th>المتبقي</th>
           <th>الحالة</th>
           <th>أدمن</th>
           <th>الإجراءات</th>
@@ -2507,6 +2525,19 @@ function renderAdminTable() {
             const planLabels = { trial: '🆓 تجربة', free: '🔒 مجاني', pro: '⭐ Pro', business: '🏢 Business' };
             const planBadgeClass = { trial: 'bg-info text-dark', free: 'bg-secondary', pro: 'bg-warning text-dark', business: 'bg-success' };
             const pl = u.plan || 'trial';
+            const rem = calcUserRemainingDays(u);
+            let remHtml;
+            if (pl === 'free') {
+              remHtml = '<span class="text-muted">—</span>';
+            } else if (rem === null) {
+              remHtml = '<span class="text-muted">—</span>';
+            } else if (rem <= 0) {
+              remHtml = '<span class="badge bg-danger">منتهية</span>';
+            } else if (rem <= 3) {
+              remHtml = `<span class="badge bg-warning text-dark">${rem} يوم</span>`;
+            } else {
+              remHtml = `<span class="badge bg-success">${rem} يوم</span>`;
+            }
             return `
             <tr>
               <td>${esc(u.full_name)}</td>
@@ -2514,6 +2545,7 @@ function renderAdminTable() {
               <td dir="ltr">${u.phone_number ? esc(u.phone_number) : '<span class="text-muted">—</span>'}</td>
               <td>${esc(u.currency)}</td>
               <td><span class="badge ${planBadgeClass[pl] || 'bg-secondary'}">${planLabels[pl] || pl}</span></td>
+              <td>${remHtml}</td>
               <td><span class="badge ${u.is_active ? 'bg-success' : 'bg-secondary'}">${u.is_active ? 'مفعّل' : 'معطّل'}</span></td>
               <td>${u.is_admin ? '<span class="badge bg-warning text-dark">أدمن</span>' : ''}</td>
               <td>
