@@ -1166,8 +1166,9 @@
                 <select id="um-plan" class="form-select" onchange="toggleCustomPlanFields()">
                   <option value="trial">🆓 تجربة مجانية (14 يوم)</option>
                   <option value="free">🔒 مجاني</option>
-                  <option value="pro">⭐ شهري — 3,000 د.ع/شهر</option>
-                  <option value="business">🗓️ 3 أشهر — 7,500 د.ع</option>
+                  <option value="pro">⭐ شهري — 2,500 د.ع/شهر</option>
+                  <option value="business">🗓️ شهرين — 4,000 د.ع</option>
+                  <option value="quarterly">🏆 3 أشهر — 5,500 د.ع</option>
                   <option value="custom">🛠️ مخصصة (يحددها الأدمن)</option>
                 </select>
               </div>
@@ -1236,7 +1237,7 @@
             <div id="upgrade-limit-msg" class="alert alert-warning rounded-3 mb-4" style="display:none"></div>
             <div class="row g-3 mb-4">
               <!-- Free -->
-              <div class="col-md-4">
+              <div class="col-md-3">
                 <div class="upgrade-plan-card">
                   <div class="upc-badge">مجاني</div>
                   <div class="upc-name">🔒 Free</div>
@@ -1251,11 +1252,11 @@
                 </div>
               </div>
               <!-- Monthly (pro) -->
-              <div class="col-md-4">
+              <div class="col-md-3">
                 <div class="upgrade-plan-card upc-active">
                   <div class="upc-badge upc-badge-pro">الأكثر شعبية</div>
                   <div class="upc-name">⭐ شهري</div>
-                  <div class="upc-price">3,000 د.ع<span>/شهر</span></div>
+                  <div class="upc-price">2,500 د.ع<span>/شهر</span></div>
                   <ul class="upc-features">
                     <li>مصاريف بلا حدود</li>
                     <li>محافظ بلا حدود</li>
@@ -1265,12 +1266,27 @@
                   </ul>
                 </div>
               </div>
-              <!-- Quarterly (business) -->
-              <div class="col-md-4">
+              <!-- 2 months (business) -->
+              <div class="col-md-3">
                 <div class="upgrade-plan-card">
-                  <div class="upc-badge upc-badge-biz">وفّر 1,500 د.ع</div>
-                  <div class="upc-name">🗓️ 3 أشهر</div>
-                  <div class="upc-price">7,500 د.ع<span>/ 3 أشهر</span></div>
+                  <div class="upc-badge upc-badge-biz">وفّر 500 د.ع</div>
+                  <div class="upc-name">🗓️ شهرين</div>
+                  <div class="upc-price">4,000 د.ع<span>/ شهرين</span></div>
+                  <ul class="upc-features">
+                    <li>مصاريف بلا حدود</li>
+                    <li>محافظ بلا حدود</li>
+                    <li>فئات مخصصة بلا حدود</li>
+                    <li>ميزانيات وأهداف بلا حدود</li>
+                    <li>صوت بلا حدود</li>
+                  </ul>
+                </div>
+              </div>
+              <!-- Quarterly -->
+              <div class="col-md-3">
+                <div class="upgrade-plan-card">
+                  <div class="upc-badge upc-badge-biz">وفّر 2,000 د.ع</div>
+                  <div class="upc-name">🏆 3 أشهر</div>
+                  <div class="upc-price">5,500 د.ع<span>/ 3 أشهر</span></div>
                   <ul class="upc-features">
                     <li>مصاريف بلا حدود</li>
                     <li>محافظ بلا حدود</li>
@@ -1465,7 +1481,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=53"></script>
+<script src="/static/app.js?v=54"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══

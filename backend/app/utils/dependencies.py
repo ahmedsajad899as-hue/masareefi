@@ -50,11 +50,12 @@ async def get_current_admin(
 TRIAL_DAYS = 14
 
 PLAN_LIMITS: dict[str, dict[str, int]] = {
-    "trial":    {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
-    "free":     {"daily_expenses":   3, "wallets":   1, "custom_categories":   0, "budgets":   1, "goals":   0, "voice_monthly":   0},
-    "pro":      {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
-    "business": {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
-    "custom":   {"daily_expenses":   0, "wallets":   0, "custom_categories":   0, "budgets":   0, "goals":   0, "voice_monthly":   0},
+    "trial":     {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
+    "free":      {"daily_expenses":   3, "wallets":   1, "custom_categories":   0, "budgets":   1, "goals":   0, "voice_monthly":   0},
+    "pro":       {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
+    "business":  {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
+    "quarterly": {"daily_expenses": 999, "wallets": 999, "custom_categories": 999, "budgets": 999, "goals": 999, "voice_monthly": 999},
+    "custom":    {"daily_expenses":   0, "wallets":   0, "custom_categories":   0, "budgets":   0, "goals":   0, "voice_monthly":   0},
 }
 
 # Maps resource key → User model attribute for the "custom" plan
@@ -93,7 +94,7 @@ def get_effective_plan(user: User) -> str:
         bonus = getattr(user, "referral_bonus_days", 0) or 0
         elapsed = (datetime.now(timezone.utc) - _utc_aware(started)).days
         return "trial" if elapsed < (TRIAL_DAYS + bonus) else "free"
-    if plan in ("pro", "business"):
+    if plan in ("pro", "business", "quarterly"):
         expires = getattr(user, "plan_expires_at", None)
         if expires and datetime.now(timezone.utc) > _utc_aware(expires):
             return "free"

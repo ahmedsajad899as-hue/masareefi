@@ -519,10 +519,10 @@ function updatePlanUI() {
       trialDaysLeft = 14;
     }
   }
-  if ((plan === 'pro' || plan === 'business') && S.user.plan_expires_at) {
+  if ((plan === 'pro' || plan === 'business' || plan === 'quarterly') && S.user.plan_expires_at) {
     if (new Date(S.user.plan_expires_at) < now) effectivePlan = 'free';
   }
-  if (S.user.is_admin) effectivePlan = 'business';
+  if (S.user.is_admin) effectivePlan = 'quarterly';
 
   // Badge
   badge.style.display = '';
@@ -538,7 +538,10 @@ function updatePlanUI() {
     badge.textContent = '⭐ شهري';
   } else if (effectivePlan === 'business') {
     badge.classList.add('plan-badge-pro');
-    badge.textContent = '🗓️ 3 أشهر';
+    badge.textContent = '🗓️ شهرين';
+  } else if (effectivePlan === 'quarterly') {
+    badge.classList.add('plan-badge-pro');
+    badge.textContent = '🏆 3 أشهر';
   } else if (effectivePlan === 'custom') {
     badge.classList.add('plan-badge-custom');
     badge.textContent = '🛠️ مخصصة';
@@ -552,8 +555,9 @@ function updatePlanUI() {
     } else if (effectivePlan === 'free' && plan === 'trial') {
       bannerText.innerHTML = '⚠️ انتهت فترة التجربة المجانية. &nbsp;<span style="opacity:.8;font-size:.85em">ادعُ صديقاً لتمديدها أو اشترك الآن</span>';
       banner.style.display = '';
-    } else if (effectivePlan === 'free' && (plan === 'pro' || plan === 'business')) {
-      bannerText.innerHTML = `⚠️ انتهى اشتراك <strong>${plan === 'pro' ? 'الشهري' : '3 الأشهر'}</strong>. &nbsp;<span style="opacity:.8;font-size:.85em">جدّد اشتراكك عبر واتساب أو ادعُ صديقاً</span>`;
+    } else if (effectivePlan === 'free' && (plan === 'pro' || plan === 'business' || plan === 'quarterly')) {
+      const planLabel = plan === 'pro' ? 'الشهري' : plan === 'business' ? 'الشهرين' : '3 الأشهر';
+      bannerText.innerHTML = `⚠️ انتهى اشتراك <strong>${planLabel}</strong>. &nbsp;<span style="opacity:.8;font-size:.85em">جدّد اشتراكك عبر واتساب أو ادعُ صديقاً</span>`;
       banner.style.display = '';
     } else {
       banner.style.display = 'none';
@@ -2259,7 +2263,7 @@ function renderSubscriptionCard() {
 
   const plan = S.user.plan || 'trial';
   const now  = new Date();
-  const planNames = { trial: 'تجربة مجانية', free: 'مجاني', pro: 'Pro ⭐', business: 'Business 🏢', custom: 'مخصصة 🛠️' };
+  const planNames = { trial: 'تجربة مجانية', free: 'مجاني', pro: 'شهري ⭐', business: 'شهرين 🗓️', quarterly: '3 أشهر 🏆', custom: 'مخصصة 🛠️' };
   const planName = planNames[plan] || plan;
 
   let daysLeft = null;
@@ -2282,7 +2286,7 @@ function renderSubscriptionCard() {
     expireDate = S.user.trial_started_at
       ? new Date(new Date(S.user.trial_started_at).getTime() + totalDays * 86400000)
       : null;
-  } else if (plan === 'pro' || plan === 'business') {
+  } else if (plan === 'pro' || plan === 'business' || plan === 'quarterly') {
     if (S.user.plan_expires_at) {
       const exp = new Date(S.user.plan_expires_at);
       expireDate = exp;
@@ -2590,7 +2594,7 @@ function calcUserRemainingDays(u) {
     const elapsed = Math.floor((now - started) / 86400000);
     return (14 + bonusDays) - elapsed;
   }
-  if (plan === 'pro' || plan === 'business') {
+  if (plan === 'pro' || plan === 'business' || plan === 'quarterly') {
     if (!u.plan_expires_at) return null;
     return Math.ceil((new Date(u.plan_expires_at) - now) / 86400000);
   }
@@ -2620,8 +2624,8 @@ function renderAdminTable() {
         </tr></thead>
         <tbody>
           ${_adminUsers.map(u => {
-            const planLabels = { trial: '🆓 تجربة', free: '🔒 مجاني', pro: '⭐ Pro', business: '🏢 Business' };
-            const planBadgeClass = { trial: 'bg-info text-dark', free: 'bg-secondary', pro: 'bg-warning text-dark', business: 'bg-success' };
+            const planLabels = { trial: '🆓 تجربة', free: '🔒 مجاني', pro: '⭐ شهري', business: '🗓️ شهرين', quarterly: '🏆 3 أشهر' };
+            const planBadgeClass = { trial: 'bg-info text-dark', free: 'bg-secondary', pro: 'bg-warning text-dark', business: 'bg-success', quarterly: 'bg-primary' };
             const pl = u.plan || 'trial';
             const rem = calcUserRemainingDays(u);
             let remHtml;
