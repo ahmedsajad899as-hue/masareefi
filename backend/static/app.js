@@ -2249,7 +2249,100 @@ function loadSettings() {
   setVal('set-currency', S.user.currency  || 'IQD');
   const sw = document.getElementById('dark-toggle');
   if (sw) sw.checked = !document.body.classList.contains('light-theme');
+  renderSubscriptionCard();
   loadReferral();
+}
+
+function renderSubscriptionCard() {
+  const el = document.getElementById('subscription-info');
+  if (!el || !S.user) return;
+
+  const plan = S.user.plan || 'trial';
+  const now  = new Date();
+  const planNames = { trial: 'تجربة مجانية', free: 'مجاني', pro: 'Pro ⭐', business: 'Business 🏢', custom: 'مخصصة 🛠️' };
+  const planName = planNames[plan] || plan;
+
+  let daysLeft = null;
+  let totalDays = null;
+  let expireDate = null;
+  let statusColor = 'var(--green)';
+  let statusText = '';
+  let isExpired = false;
+
+  if (plan === 'trial') {
+    totalDays = 14 + (S.user.referral_bonus_days || 0);
+    if (S.user.trial_started_at) {
+      const started = new Date(S.user.trial_started_at);
+      const elapsed = Math.floor((now - started) / 86400000);
+      daysLeft = totalDays - elapsed;
+    } else {
+      daysLeft = totalDays;
+    }
+    if (daysLeft <= 0) { isExpired = true; daysLeft = 0; }
+    expireDate = S.user.trial_started_at
+      ? new Date(new Date(S.user.trial_started_at).getTime() + totalDays * 86400000)
+      : null;
+  } else if (plan === 'pro' || plan === 'business') {
+    if (S.user.plan_expires_at) {
+      const exp = new Date(S.user.plan_expires_at);
+      expireDate = exp;
+      daysLeft = Math.ceil((exp - now) / 86400000);
+      totalDays = null;
+      if (daysLeft <= 0) { isExpired = true; daysLeft = 0; }
+    }
+  }
+
+  if (isExpired) {
+    statusColor = '#ef4444';
+    statusText  = 'منتهي';
+  } else if (daysLeft !== null && daysLeft <= 3) {
+    statusColor = '#f59e0b';
+    statusText  = `${daysLeft} ${daysLeft === 1 ? 'يوم' : 'أيام'} متبقية`;
+  } else if (daysLeft !== null) {
+    statusColor = 'var(--green)';
+    statusText  = `${daysLeft} يوم متبقي`;
+  } else if (plan === 'free') {
+    statusColor = '#6b7280';
+    statusText  = 'مجاني';
+  } else {
+    statusText = 'نشط';
+  }
+
+  // Progress bar (for trial)
+  let progressHtml = '';
+  if (plan === 'trial' && totalDays) {
+    const pct = Math.max(0, Math.min(100, Math.round((daysLeft / totalDays) * 100)));
+    const barColor = isExpired ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : '#22c55e';
+    progressHtml = `
+      <div class="mt-2 mb-1" style="font-size:.8rem;color:var(--muted)">الأيام المستخدمة</div>
+      <div style="background:rgba(255,255,255,.1);border-radius:8px;height:10px;overflow:hidden">
+        <div style="width:${100-pct}%;height:100%;background:${barColor};border-radius:8px;transition:width .4s"></div>
+      </div>
+      <div class="d-flex justify-content-between mt-1" style="font-size:.75rem;color:var(--muted)">
+        <span>0</span><span>${totalDays} يوم</span>
+      </div>`;
+  }
+
+  const expireLine = expireDate
+    ? `<div style="font-size:.82rem;color:var(--muted);margin-top:6px"><i class="fas fa-calendar-alt me-1"></i>تنتهي في: <strong>${expireDate.toLocaleDateString('ar-IQ', {year:'numeric',month:'long',day:'numeric'})}</strong></div>`
+    : '';
+
+  const upgradeLine = (isExpired || plan === 'free' || (plan === 'trial' && daysLeft <= 5))
+    ? `<button class="btn btn-warning btn-sm mt-3 w-100" onclick="showUpgradeModal()"><i class="fas fa-rocket me-2"></i>ترقية الاشتراك</button>`
+    : '';
+
+  el.innerHTML = `
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div>
+        <div style="font-size:1.1rem;font-weight:700">${planName}</div>
+        <div style="font-size:1.4rem;font-weight:900;color:${statusColor}">${statusText}</div>
+      </div>
+      <div style="font-size:2.5rem">${isExpired ? '🔴' : plan === 'free' ? '🔒' : plan === 'trial' ? '🕐' : '✅'}</div>
+    </div>
+    ${progressHtml}
+    ${expireLine}
+    ${upgradeLine}
+  `;
 }
 
 function showInstallTab(tab) {
