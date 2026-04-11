@@ -82,6 +82,10 @@ async def login(body: UserLogin, db: AsyncSession = Depends(get_db)):
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
+    # Auto-fix: users created before trial_started_at was added
+    if user.plan == "trial" and user.trial_started_at is None:
+        user.trial_started_at = datetime.now(timezone.utc)
+
     db.add(UserActivity(user_id=user.id, action="login"))
 
     access_token = create_access_token(str(user.id))

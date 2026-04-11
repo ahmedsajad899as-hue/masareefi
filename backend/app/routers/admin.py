@@ -132,6 +132,9 @@ async def update_user(
     if "plan_expires_at" in update_data:
         raw = update_data.pop("plan_expires_at")
         user.plan_expires_at = datetime.fromisoformat(raw).replace(tzinfo=timezone.utc) if raw else None
+    # When changing plan to trial, set trial_started_at if not already set
+    if update_data.get("plan") == "trial" and user.trial_started_at is None:
+        user.trial_started_at = datetime.now(timezone.utc)
     for field, value in update_data.items():
         setattr(user, field, value)
 

@@ -508,11 +508,16 @@ function updatePlanUI() {
   // Compute effective plan (mirrors backend logic)
   let effectivePlan = plan;
   let trialDaysLeft = 0;
-  if (plan === 'trial' && trialStarted) {
-    const elapsed = Math.floor((now - trialStarted) / 86400000);
-    const bonusDays = S.user.referral_bonus_days || 0;
-    trialDaysLeft = (14 + bonusDays) - elapsed;
-    if (trialDaysLeft <= 0) effectivePlan = 'free';
+  if (plan === 'trial') {
+    if (trialStarted) {
+      const bonusDays = S.user.referral_bonus_days || 0;
+      const elapsed = Math.floor((now - trialStarted) / 86400000);
+      trialDaysLeft = (14 + bonusDays) - elapsed;
+      if (trialDaysLeft <= 0) effectivePlan = 'free';
+    } else {
+      // trial_started_at not set yet — treat as full trial
+      trialDaysLeft = 14;
+    }
   }
   if ((plan === 'pro' || plan === 'business') && S.user.plan_expires_at) {
     if (new Date(S.user.plan_expires_at) < now) effectivePlan = 'free';
@@ -2486,7 +2491,7 @@ function calcUserRemainingDays(u) {
   const now = new Date();
   const plan = u.plan || 'trial';
   if (plan === 'trial') {
-    if (!u.trial_started_at) return null;
+    if (!u.trial_started_at) return 14; // not set yet → full trial
     const started = new Date(u.trial_started_at);
     const bonusDays = u.referral_bonus_days || 0;
     const elapsed = Math.floor((now - started) / 86400000);
