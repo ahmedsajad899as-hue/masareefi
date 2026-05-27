@@ -2677,6 +2677,9 @@ function openAddUserModal() {
   document.getElementById('um-plan-expires').value = '';
   document.getElementById('um-admin').checked = false;
   document.getElementById('um-active').checked = true;
+  document.getElementById('um-role').value = 'user';
+  document.getElementById('um-store-name').value = '';
+  document.getElementById('um-store-wrap').style.display = 'none';
   ['um-c-daily','um-c-wallets','um-c-cats','um-c-budgets','um-c-goals','um-c-voice'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
@@ -2701,6 +2704,10 @@ function openEditUserModal(userId) {
   document.getElementById('um-plan-expires').value = u.plan_expires_at ? u.plan_expires_at.split('T')[0] : '';
   document.getElementById('um-admin').checked = u.is_admin;
   document.getElementById('um-active').checked = u.is_active;
+  const role = u.role || 'user';
+  document.getElementById('um-role').value = role;
+  document.getElementById('um-store-name').value = u.store_name || '';
+  document.getElementById('um-store-wrap').style.display = role === 'market_owner' ? '' : 'none';
   // Populate custom plan limit fields
   const setNum = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
   setNum('um-c-daily',   u.custom_daily_expenses);
@@ -2736,6 +2743,12 @@ function toggleCustomPlanFields() {
   if (wrap) wrap.style.display = plan === 'custom' ? '' : 'none';
 }
 
+function toggleMarketOwnerField() {
+  const role = document.getElementById('um-role')?.value;
+  const wrap = document.getElementById('um-store-wrap');
+  if (wrap) wrap.style.display = role === 'market_owner' ? '' : 'none';
+}
+
 async function saveUser() {
   const id       = document.getElementById('um-id').value;
   const name     = document.getElementById('um-name').value.trim();
@@ -2747,8 +2760,11 @@ async function saveUser() {
   const planExpires = document.getElementById('um-plan-expires').value || null;
   const isAdmin  = document.getElementById('um-admin').checked;
   const isActive = document.getElementById('um-active').checked;
+  const role     = document.getElementById('um-role').value;
+  const storeName = document.getElementById('um-store-name').value.trim() || null;
 
   if (!name) { toast('أدخل الاسم', 'err'); return; }
+  if (role === 'market_owner' && !storeName) { toast('أدخل اسم المحل', 'err'); return; }
 
   // Collect custom plan limits (null means "not set")
   const getNum = id => { const v = document.getElementById(id)?.value; return v !== '' && v != null ? parseInt(v, 10) : null; };
@@ -2767,11 +2783,11 @@ async function saveUser() {
       // Create
       if (!email) { toast('أدخل البريد', 'err'); return; }
       if (!pass)  { toast('أدخل كلمة المرور', 'err'); return; }
-      await api('POST', '/admin/users', { full_name: name, email, phone_number: phone, password: pass, currency, is_admin: isAdmin, plan, plan_expires_at: planExpires, ...customLimits });
+      await api('POST', '/admin/users', { full_name: name, email, phone_number: phone, password: pass, currency, is_admin: isAdmin, plan, plan_expires_at: planExpires, role, ...(role === 'market_owner' ? { store_name: storeName } : {}), ...customLimits });
       toast('تم إنشاء الحساب ✅');
     } else {
       // Update
-      const body = { full_name: name, phone_number: phone, currency, is_admin: isAdmin, is_active: isActive, plan, plan_expires_at: planExpires, ...customLimits };
+      const body = { full_name: name, phone_number: phone, currency, is_admin: isAdmin, is_active: isActive, plan, plan_expires_at: planExpires, role, store_name: storeName, ...customLimits };
       if (pass) body.password = pass;
       await api('PATCH', `/admin/users/${id}`, body);
       toast('تم التحديث ✅');

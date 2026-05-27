@@ -1215,6 +1215,18 @@
                 <input class="form-check-input" type="checkbox" id="um-active" checked>
                 <label class="form-check-label" for="um-active">حساب مفعّل</label>
               </div>
+              <hr style="border-color:#444;margin:12px 0">
+              <div class="mb-3">
+                <label class="form-label"><i class="fas fa-user-tag me-1 text-warning"></i>نوع الحساب</label>
+                <select id="um-role" class="form-select" onchange="toggleMarketOwnerField()">
+                  <option value="user">👤 مستخدم عادي</option>
+                  <option value="market_owner">🏪 صاحب ماركت</option>
+                </select>
+              </div>
+              <div class="mb-3" id="um-store-wrap" style="display:none">
+                <label class="form-label">اسم المحل <span class="text-danger">*</span></label>
+                <input type="text" id="um-store-name" class="form-control" placeholder="مثال: ماركت الأمين">
+              </div>
             </div>
             <div class="modal-footer border-secondary">
               <button class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
