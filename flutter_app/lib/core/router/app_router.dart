@@ -13,6 +13,7 @@ import '../../screens/expenses/add_expense_screen.dart';
 import '../../screens/statistics/statistics_screen.dart';
 import '../../screens/budgets/budgets_screen.dart';
 import '../../screens/settings/settings_screen.dart';
+import '../../screens/admin/admin_users_screen.dart';
 import '../../screens/market/market_shell.dart';
 import '../../screens/market/market_home_screen.dart';
 import '../../screens/market/market_settings_screen.dart';
@@ -116,6 +117,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/my-debts',
         builder: (_, __) => const MyMarketDebtsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/users',
+        builder: (_, __) => const AdminUsersScreen(),
       ),
     ],
   );

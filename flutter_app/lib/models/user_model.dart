@@ -9,6 +9,7 @@ class UserModel {
   final String role;         // 'user' or 'market_owner'
   final String? storeName;  // only for market_owner role
   final int marketOverdueDays;
+  final bool isAdmin;
 
   const UserModel({
     required this.id,
@@ -21,6 +22,7 @@ class UserModel {
     this.role = 'user',
     this.storeName,
     this.marketOverdueDays = 30,
+    this.isAdmin = false,
   });
 
   bool get isMarketOwner => role == 'market_owner';
@@ -36,6 +38,7 @@ class UserModel {
         role: json['role'] as String? ?? 'user',
         storeName: json['store_name'] as String?,
         marketOverdueDays: json['market_overdue_days'] as int? ?? 30,
+        isAdmin: json['is_admin'] as bool? ?? false,
       );
 
   Map<String, dynamic> toJson() => {
@@ -70,6 +73,7 @@ class UserModel {
         role: role ?? this.role,
         storeName: storeName ?? this.storeName,
         marketOverdueDays: marketOverdueDays ?? this.marketOverdueDays,
+        isAdmin: isAdmin,
       );
 }
 

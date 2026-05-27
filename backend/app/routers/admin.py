@@ -28,6 +28,8 @@ class AdminCreateUser(BaseModel):
     is_admin: bool = False
     plan: str = "trial"
     plan_expires_at: str | None = None
+    role: str = "user"  # 'user' or 'market_owner'
+    store_name: str | None = None
     custom_daily_expenses: int | None = None
     custom_wallets: int | None = None
     custom_categories: int | None = None
@@ -46,6 +48,8 @@ class AdminUpdateUser(BaseModel):
     password: str | None = None
     plan: str | None = None
     plan_expires_at: str | None = None
+    role: str | None = None  # 'user' or 'market_owner'
+    store_name: str | None = None
     custom_daily_expenses: int | None = None
     custom_wallets: int | None = None
     custom_categories: int | None = None
@@ -79,6 +83,11 @@ async def create_user(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    if body.role not in ("user", "market_owner"):
+        raise HTTPException(status_code=400, detail="Invalid role. Must be 'user' or 'market_owner'")
+    if body.role == "market_owner" and not (body.store_name and body.store_name.strip()):
+        raise HTTPException(status_code=400, detail="اسم المحل مطلوب لحساب صاحب الماركت")
+
     user = User(
         email=body.email,
         password_hash=hash_password(body.password),
@@ -90,6 +99,8 @@ async def create_user(
         plan=body.plan,
         plan_expires_at=datetime.fromisoformat(body.plan_expires_at).replace(tzinfo=timezone.utc) if body.plan_expires_at else None,
         trial_started_at=datetime.now(timezone.utc) if body.plan == "trial" else None,
+        role=body.role,
+        store_name=body.store_name.strip() if body.store_name else None,
         custom_daily_expenses=body.custom_daily_expenses,
         custom_wallets=body.custom_wallets,
         custom_categories=body.custom_categories,
@@ -159,6 +170,34 @@ async def delete_user(
 
     await db.delete(user)
     await db.commit()
+
+
+@router.patch("/users/{user_id}/set-role", response_model=UserOutAdmin)
+async def set_user_role(
+    user_id: uuid.UUID,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+):
+    """Upgrade or downgrade a user's role (user ↔ market_owner)."""
+    role = body.get("role")
+    store_name = body.get("store_name")
+
+    if role not in ("user", "market_owner"):
+        raise HTTPException(status_code=400, detail="role must be 'user' or 'market_owner'")
+    if role == "market_owner" and not (store_name and str(store_name).strip()):
+        raise HTTPException(status_code=400, detail="اسم المحل مطلوب لتحويل المستخدم إلى صاحب ماركت")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.role = role
+    user.store_name = str(store_name).strip() if store_name else None
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 @router.post("/users/{user_id}/impersonate")

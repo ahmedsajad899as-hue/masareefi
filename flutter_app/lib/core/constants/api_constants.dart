@@ -60,4 +60,7 @@ class ApiConstants {
 
   // Regular User — My Market Debts
   static const myMarketDebts = '/my-debts';
+
+  // Admin
+  static const adminUsers = '/admin/users';
 }

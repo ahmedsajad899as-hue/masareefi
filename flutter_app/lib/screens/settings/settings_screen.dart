@@ -152,6 +152,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             subtitle: const Text('v1.0.0'),
           ),
 
+          // ─── Admin Panel (visible to admins only) ────────────────────
+          if (auth.user?.isAdmin == true) ...[
+            const SizedBox(height: 20),
+            _SectionHeader(title: l.isArabic ? 'لوحة الإدارة' : 'Admin Panel'),
+            ListTile(
+              leading: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.warning),
+              title: Text(l.isArabic ? 'إدارة المستخدمين' : 'Manage Users'),
+              subtitle: Text(l.isArabic ? 'إنشاء وتعديل الحسابات والرولات' : 'Create and manage user accounts'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => context.push('/admin/users'),
+            ),
+          ],
+
           const SizedBox(height: 20),
 
           // ─── Logout ──────────────────────────────────────────────────
