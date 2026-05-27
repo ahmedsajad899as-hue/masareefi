@@ -6,6 +6,9 @@ class UserModel {
   final String currency;
   final bool isActive;
   final DateTime createdAt;
+  final String role;         // 'user' or 'market_owner'
+  final String? storeName;  // only for market_owner role
+  final int marketOverdueDays;
 
   const UserModel({
     required this.id,
@@ -15,7 +18,12 @@ class UserModel {
     required this.currency,
     required this.isActive,
     required this.createdAt,
+    this.role = 'user',
+    this.storeName,
+    this.marketOverdueDays = 30,
   });
+
+  bool get isMarketOwner => role == 'market_owner';
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
         id: json['id'] as String,
@@ -25,6 +33,9 @@ class UserModel {
         currency: json['currency'] as String? ?? 'IQD',
         isActive: json['is_active'] as bool? ?? true,
         createdAt: DateTime.parse(json['created_at'] as String),
+        role: json['role'] as String? ?? 'user',
+        storeName: json['store_name'] as String?,
+        marketOverdueDays: json['market_overdue_days'] as int? ?? 30,
       );
 
   Map<String, dynamic> toJson() => {
@@ -35,12 +46,18 @@ class UserModel {
         'currency': currency,
         'is_active': isActive,
         'created_at': createdAt.toIso8601String(),
+        'role': role,
+        'store_name': storeName,
+        'market_overdue_days': marketOverdueDays,
       };
 
   UserModel copyWith({
     String? fullName,
     String? preferredLanguage,
     String? currency,
+    String? role,
+    String? storeName,
+    int? marketOverdueDays,
   }) =>
       UserModel(
         id: id,
@@ -50,6 +67,9 @@ class UserModel {
         currency: currency ?? this.currency,
         isActive: isActive,
         createdAt: createdAt,
+        role: role ?? this.role,
+        storeName: storeName ?? this.storeName,
+        marketOverdueDays: marketOverdueDays ?? this.marketOverdueDays,
       );
 }
 

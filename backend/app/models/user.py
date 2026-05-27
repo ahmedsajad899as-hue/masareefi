@@ -38,6 +38,11 @@ class User(Base):
     referred_by_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     referral_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     referral_bonus_days: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Role: 'user' or 'market_owner'
+    role: Mapped[str] = mapped_column(String(20), default="user", server_default="user", nullable=False)
+    # Market owner fields
+    store_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    market_overdue_days: Mapped[int] = mapped_column(Integer, default=30, server_default="30")
     # Password reset
     reset_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reset_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

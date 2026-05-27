@@ -13,6 +13,8 @@ class UserRegister(BaseModel):
     preferred_language: str = "ar"
     currency: str = "IQD"
     referral_code: str | None = None  # referral code from the inviter
+    role: str = "user"  # 'user' or 'market_owner'
+    store_name: str | None = None  # required when role == 'market_owner'
 
     @field_validator("email")
     @classmethod
@@ -84,6 +86,10 @@ class UserOut(BaseModel):
     referral_code: str | None = None
     referral_count: int = 0
     referral_bonus_days: int = 0
+    # Role / Market
+    role: str = "user"
+    store_name: str | None = None
+    market_overdue_days: int = 30
     created_at: datetime
 
     model_config = {"from_attributes": True}

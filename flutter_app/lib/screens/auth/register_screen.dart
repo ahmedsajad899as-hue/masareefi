@@ -21,9 +21,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _phoneCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
+  final _storeCtrl = TextEditingController();
   bool _obscure = true;
   String _selectedLang = 'ar';
   String _selectedCurrency = 'IQD';
+  String _selectedRole = 'user';
 
   @override
   void dispose() {
@@ -32,6 +34,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _phoneCtrl.dispose();
     _passCtrl.dispose();
     _confirmCtrl.dispose();
+    _storeCtrl.dispose();
     super.dispose();
   }
 
@@ -44,6 +47,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           phoneNumber: _phoneCtrl.text.trim(),
           language: _selectedLang,
           currency: _selectedCurrency,
+          role: _selectedRole,
+          storeName: _selectedRole == 'market_owner' ? _storeCtrl.text.trim() : null,
         );
     final error = ref.read(authProvider).error;
     if (error != null && mounted) {
@@ -198,7 +203,55 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
                 const SizedBox(height: 32),
 
-                AnimatedSwitcher(
+                // ── Role selector ──────────────────────────────────
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    'نوع الحساب',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _RoleCard(
+                      icon: Icons.person_rounded,
+                      label: 'مستخدم عادي',
+                      sublabel: 'تتبع مصاريفك الشخصية',
+                      selected: _selectedRole == 'user',
+                      onTap: () => setState(() => _selectedRole = 'user'),
+                    ),
+                    const SizedBox(width: 12),
+                    _RoleCard(
+                      icon: Icons.storefront_rounded,
+                      label: 'صاحب ماركت',
+                      sublabel: 'إدارة ديون الزبائن',
+                      selected: _selectedRole == 'market_owner',
+                      onTap: () => setState(() => _selectedRole = 'market_owner'),
+                    ),
+                  ],
+                ).animate().fadeIn(delay: 310.ms),
+
+                // ── Store name (only for market_owner) ─────────────
+                if (_selectedRole == 'market_owner') ...[   
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _storeCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'اسم المحل / الماركت',
+                      prefixIcon: Icon(Icons.store_rounded),
+                    ),
+                    validator: (v) {
+                      if (_selectedRole == 'market_owner' &&
+                          (v == null || v.trim().isEmpty)) {
+                        return 'اسم المحل مطلوب';
+                      }
+                      return null;
+                    },
+                  ).animate().fadeIn(duration: 200.ms).slideY(begin: -0.1),
+                ],
+
+                const SizedBox(height: 32),
                   duration: const Duration(milliseconds: 300),
                   child: isLoading
                       ? const CircularProgressIndicator(color: AppColors.primary)
@@ -223,6 +276,60 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 const SizedBox(height: 24),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Role Card Widget ────────────────────────────────────────────────────────
+class _RoleCard extends StatelessWidget {
+  const _RoleCard({
+    required this.icon,
+    required this.label,
+    required this.sublabel,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String sublabel;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.primary : Colors.grey.shade300;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primary.withValues(alpha: 0.08)
+                : Colors.transparent,
+            border: Border.all(color: color, width: selected ? 2 : 1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 28),
+              const SizedBox(height: 6),
+              Text(label,
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: selected ? AppColors.primary : null)),
+              const SizedBox(height: 2),
+              Text(sublabel,
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade600),
+                  textAlign: TextAlign.center),
+            ],
           ),
         ),
       ),

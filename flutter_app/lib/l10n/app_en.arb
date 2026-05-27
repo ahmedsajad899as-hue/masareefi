@@ -128,5 +128,37 @@
     "placeholders": {
       "count": {"type": "int"}
     }
-  }
+  },
+
+  "marketDashboard": "Market Dashboard",
+  "marketCustomers": "Customers",
+  "marketSuppliers": "Suppliers",
+  "personalExpenses": "My Expenses",
+  "marketSettings": "Market Settings",
+  "storeName": "Store Name",
+  "marketOwner": "Market Owner",
+  "regularUser": "Regular User",
+  "totalReceivables": "Total Receivables",
+  "totalPayable": "Total Payable",
+  "overdueCustomers": "Overdue Customers",
+  "noOverdueCustomers": "No overdue customers",
+  "addCustomer": "Add Customer",
+  "customerName": "Customer Name",
+  "customerPhone": "Phone Number",
+  "customerNotes": "Notes",
+  "linkedToApp": "Linked to App",
+  "totalDebt": "Total Debt",
+  "unpaidSales": "Unpaid Invoices",
+  "recordDebt": "Record New Debt",
+  "markAsPaid": "Mark as Paid",
+  "saleDate": "Sale Date",
+  "supplierInvoices": "Supplier Invoices",
+  "newInvoice": "New Invoice",
+  "supplierName": "Supplier Name",
+  "invoiceDate": "Invoice Date",
+  "dueDate": "Due Date",
+  "myMarketDebts": "My Market Debts",
+  "overdueDaysThreshold": "Overdue Alert Threshold",
+  "noDebts": "No outstanding debts",
+  "totalUnpaid": "Total Unpaid"
 }

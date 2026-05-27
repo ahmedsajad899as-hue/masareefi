@@ -44,4 +44,20 @@ class ApiConstants {
 
   // Voice
   static const voiceParse = '/voice/parse-expense';
+
+  // Market Owner — Customers
+  static const marketCustomers = '/market/customers';
+  static const marketCustomersOverdue = '/market/customers/overdue';
+
+  // Market Owner — Sales
+  static const marketSales = '/market/sales';
+
+  // Market Owner — Supplier Invoices
+  static const marketSuppliers = '/market/suppliers';
+
+  // Market Owner — Settings
+  static const marketSettings = '/market/settings';
+
+  // Regular User — My Market Debts
+  static const myMarketDebts = '/my-debts';
 }

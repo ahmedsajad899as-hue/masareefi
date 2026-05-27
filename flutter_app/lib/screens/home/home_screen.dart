@@ -9,6 +9,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/expense_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/expenses_provider.dart';
+import '../../providers/my_market_debts_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/stats_provider.dart';
 
@@ -26,6 +27,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Future.microtask(() {
       ref.read(statsProvider.notifier).loadDashboard();
       ref.read(expensesProvider.notifier).load();
+      ref.read(myMarketDebtsProvider.notifier).load();
     });
   }
 
@@ -36,6 +38,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final stats = ref.watch(statsProvider);
     final expenses = ref.watch(expensesProvider);
     final settings = ref.watch(settingsProvider);
+    final myDebts = ref.watch(myMarketDebtsProvider);
     final lang = settings.language;
     final currency = settings.currency;
     final now = DateTime.now();
@@ -147,6 +150,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1),
               ),
             ),
+
+            // ─── My Market Debts Card ─────────────────────────────────────
+            if (myDebts.totalUnpaid > 0)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: InkWell(
+                    onTap: () => context.push('/my-debts'),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                            color: AppColors.error.withValues(alpha: 0.35)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.storefront_rounded,
+                              color: AppColors.error, size: 28),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('ديوني من المحلات',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.error)),
+                                Text(
+                                    'إجمالي: ${NumberFormat('#,###', 'ar').format(myDebts.totalUnpaid)} د.ع',
+                                    style: const TextStyle(
+                                        color: AppColors.error, fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios_rounded,
+                              size: 14, color: AppColors.error),
+                        ],
+                      ),
+                    ),
+                  ).animate().fadeIn(duration: 400.ms),
+                ),
+              ),
 
             // ─── Recent Expenses ──────────────────────────────────────────
             SliverToBoxAdapter(

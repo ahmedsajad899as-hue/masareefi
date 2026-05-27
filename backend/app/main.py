@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import create_all_tables, _is_sqlite
 from app.routers import auth, expenses, categories, statistics, budgets, voice, wallets, admin
+from app.routers import market_customers, market_sales, supplier_invoices, market_settings, my_market_debts
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 
@@ -138,6 +139,13 @@ app.include_router(budgets.router, prefix="/api/v1/budgets", tags=["Budgets"])
 app.include_router(voice.router, prefix="/api/v1/voice", tags=["Voice AI"])
 app.include_router(wallets.router, prefix="/api/v1/wallets", tags=["Wallets"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+# Market owner routes
+app.include_router(market_customers.router, prefix="/api/v1/market/customers", tags=["Market - Customers"])
+app.include_router(market_sales.router, prefix="/api/v1/market/sales", tags=["Market - Sales"])
+app.include_router(supplier_invoices.router, prefix="/api/v1/market/suppliers", tags=["Market - Suppliers"])
+app.include_router(market_settings.router, prefix="/api/v1/market/settings", tags=["Market - Settings"])
+# Regular user: view own debts from markets
+app.include_router(my_market_debts.router, prefix="/api/v1/my-debts", tags=["My Market Debts"])
 
 
 @app.get("/health", tags=["Health"])

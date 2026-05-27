@@ -25,6 +25,14 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    # Validate role
+    if body.role not in ("user", "market_owner"):
+        raise HTTPException(status_code=400, detail="Invalid role. Must be 'user' or 'market_owner'")
+
+    # Market owners must provide a store name
+    if body.role == "market_owner" and not (body.store_name and body.store_name.strip()):
+        raise HTTPException(status_code=400, detail="اسم المحل مطلوب لحساب صاحب الماركت")
+
     user = User(
         email=body.email,
         password_hash=hash_password(body.password),
@@ -35,6 +43,8 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
         plan="trial",
         trial_started_at=datetime.now(timezone.utc),
         referral_code=secrets.token_urlsafe(6).upper(),
+        role=body.role,
+        store_name=body.store_name.strip() if body.store_name else None,
     )
     db.add(user)
     await db.flush()  # get user.id before commit
@@ -56,6 +66,19 @@ async def register(body: UserRegister, db: AsyncSession = Depends(get_db)):
 
     # Seed default wallets for new user
     await _seed_default_wallets(db, user.id, user.currency)
+
+    # Auto-link: if this new user has a phone number, link any existing MarketCustomer records
+    if body.phone_number:
+        from app.models.market import MarketCustomer
+        phone_clean = body.phone_number.strip()
+        cust_result = await db.execute(
+            select(MarketCustomer).where(
+                MarketCustomer.phone == phone_clean,
+                MarketCustomer.linked_user_id.is_(None)
+            )
+        )
+        for customer in cust_result.scalars().all():
+            customer.linked_user_id = user.id
 
     db.add(UserActivity(user_id=user.id, action="register"))
 

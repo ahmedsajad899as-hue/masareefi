@@ -45,6 +45,14 @@ async def get_current_admin(
     return current_user
 
 
+async def get_current_market_owner(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if current_user.role != "market_owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Market owner access required")
+    return current_user
+
+
 # ── Plan Limits ────────────────────────────────────────────────────────────────
 
 TRIAL_DAYS = 14

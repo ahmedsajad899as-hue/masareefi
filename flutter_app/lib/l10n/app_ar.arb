@@ -128,5 +128,37 @@
     "placeholders": {
       "count": {"type": "int"}
     }
-  }
+  },
+
+  "marketDashboard": "لوحة المحل",
+  "marketCustomers": "الزبائن",
+  "marketSuppliers": "الموردون",
+  "personalExpenses": "مصاريفي",
+  "marketSettings": "إعدادات المحل",
+  "storeName": "اسم المحل",
+  "marketOwner": "صاحب ماركت",
+  "regularUser": "مستخدم عادي",
+  "totalReceivables": "إجمالي المستحق",
+  "totalPayable": "إجمالي المستحق للموردين",
+  "overdueCustomers": "زبائن متأخرون",
+  "noOverdueCustomers": "لا يوجد زبائن متأخرون",
+  "addCustomer": "إضافة زبون",
+  "customerName": "اسم الزبون",
+  "customerPhone": "رقم الهاتف",
+  "customerNotes": "ملاحظات",
+  "linkedToApp": "مرتبط بالتطبيق",
+  "totalDebt": "إجمالي الدين",
+  "unpaidSales": "فواتير غير مسددة",
+  "recordDebt": "تسجيل دين جديد",
+  "markAsPaid": "تسديد",
+  "saleDate": "تاريخ الشراء",
+  "supplierInvoices": "فواتير الموردين",
+  "newInvoice": "فاتورة جديدة",
+  "supplierName": "اسم المورد",
+  "invoiceDate": "تاريخ الفاتورة",
+  "dueDate": "تاريخ الاستحقاق",
+  "myMarketDebts": "ديوني من المحلات",
+  "overdueDaysThreshold": "عتبة التنبيه بالديون المتأخرة",
+  "noDebts": "لا توجد ديون مستحقة",
+  "totalUnpaid": "الإجمالي غير المسدد"
 }

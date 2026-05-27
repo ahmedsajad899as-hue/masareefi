@@ -79,20 +79,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String phoneNumber,
     String language = 'ar',
     String currency = 'IQD',
+    String role = 'user',
+    String? storeName,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final data = await _api.post(
-        ApiConstants.register,
-        data: {
-          'email': email,
-          'password': password,
-          'full_name': fullName,
-          'phone_number': phoneNumber,
-          'preferred_language': language,
-          'currency': currency,
-        },
-      );
+      final body = {
+        'email': email,
+        'password': password,
+        'full_name': fullName,
+        'phone_number': phoneNumber,
+        'preferred_language': language,
+        'currency': currency,
+        'role': role,
+        if (storeName != null && storeName.isNotEmpty) 'store_name': storeName,
+      };
+      final data = await _api.post(ApiConstants.register, data: body);
       final tokens = AuthTokens.fromJson(data as Map<String, dynamic>);
       await _api.saveTokens(tokens.accessToken, tokens.refreshToken);
       state = AuthState(user: tokens.user, isAuthenticated: true);
