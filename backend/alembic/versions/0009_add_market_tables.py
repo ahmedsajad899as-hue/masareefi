@@ -6,6 +6,7 @@ Create Date: 2026-05-28
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import text
 
 revision = '0009_add_market_tables'
 down_revision = '0008_add_role_and_market_fields'
@@ -14,61 +15,77 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        'market_customers',
-        sa.Column('id', sa.Uuid(), primary_key=True),
-        sa.Column('market_owner_id', sa.Uuid(), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True),
-        sa.Column('name', sa.String(200), nullable=False),
-        sa.Column('phone', sa.String(30), nullable=True, index=True),
-        sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('linked_user_id', sa.Uuid(), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP')),
-    )
+    # Use IF NOT EXISTS so migrations are safe even if guard statements already
+    # created these tables on a previous Railway deployment.
+    conn = op.get_bind()
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS market_customers (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            market_owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name VARCHAR(200) NOT NULL,
+            phone VARCHAR(30) NULL,
+            notes TEXT NULL,
+            linked_user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_market_customers_market_owner_id ON market_customers(market_owner_id)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_market_customers_phone ON market_customers(phone)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_market_customers_linked_user_id ON market_customers(linked_user_id)"))
 
-    op.create_table(
-        'market_sales',
-        sa.Column('id', sa.Uuid(), primary_key=True),
-        sa.Column('market_owner_id', sa.Uuid(), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True),
-        sa.Column('customer_id', sa.Uuid(), sa.ForeignKey('market_customers.id', ondelete='CASCADE'), nullable=False, index=True),
-        sa.Column('sale_date', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('total_amount', sa.Numeric(12, 2), nullable=False, server_default='0'),
-        sa.Column('is_paid', sa.Boolean(), nullable=False, server_default='false'),
-        sa.Column('paid_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP')),
-    )
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS market_sales (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            market_owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            customer_id UUID NOT NULL REFERENCES market_customers(id) ON DELETE CASCADE,
+            sale_date TIMESTAMP WITH TIME ZONE NOT NULL,
+            notes TEXT NULL,
+            total_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+            is_paid BOOLEAN NOT NULL DEFAULT false,
+            paid_at TIMESTAMP WITH TIME ZONE NULL,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_market_sales_market_owner_id ON market_sales(market_owner_id)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_market_sales_customer_id ON market_sales(customer_id)"))
 
-    op.create_table(
-        'market_sale_items',
-        sa.Column('id', sa.Uuid(), primary_key=True),
-        sa.Column('sale_id', sa.Uuid(), sa.ForeignKey('market_sales.id', ondelete='CASCADE'), nullable=False, index=True),
-        sa.Column('product_name', sa.String(300), nullable=False),
-        sa.Column('quantity', sa.Numeric(10, 3), nullable=False, server_default='1'),
-        sa.Column('unit_price', sa.Numeric(12, 2), nullable=False, server_default='0'),
-    )
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS market_sale_items (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            sale_id UUID NOT NULL REFERENCES market_sales(id) ON DELETE CASCADE,
+            product_name VARCHAR(300) NOT NULL,
+            quantity NUMERIC(10,3) NOT NULL DEFAULT 1,
+            unit_price NUMERIC(12,2) NOT NULL DEFAULT 0
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_market_sale_items_sale_id ON market_sale_items(sale_id)"))
 
-    op.create_table(
-        'supplier_invoices',
-        sa.Column('id', sa.Uuid(), primary_key=True),
-        sa.Column('market_owner_id', sa.Uuid(), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True),
-        sa.Column('supplier_name', sa.String(300), nullable=False),
-        sa.Column('invoice_date', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('due_date', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('total_amount', sa.Numeric(12, 2), nullable=False, server_default='0'),
-        sa.Column('is_paid', sa.Boolean(), nullable=False, server_default='false'),
-        sa.Column('paid_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP')),
-    )
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS supplier_invoices (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            market_owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            supplier_name VARCHAR(300) NOT NULL,
+            invoice_date TIMESTAMP WITH TIME ZONE NOT NULL,
+            due_date TIMESTAMP WITH TIME ZONE NULL,
+            total_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+            is_paid BOOLEAN NOT NULL DEFAULT false,
+            paid_at TIMESTAMP WITH TIME ZONE NULL,
+            notes TEXT NULL,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_supplier_invoices_market_owner_id ON supplier_invoices(market_owner_id)"))
 
-    op.create_table(
-        'supplier_invoice_items',
-        sa.Column('id', sa.Uuid(), primary_key=True),
-        sa.Column('invoice_id', sa.Uuid(), sa.ForeignKey('supplier_invoices.id', ondelete='CASCADE'), nullable=False, index=True),
-        sa.Column('product_name', sa.String(300), nullable=False),
-        sa.Column('quantity', sa.Numeric(10, 3), nullable=False, server_default='1'),
-        sa.Column('unit_price', sa.Numeric(12, 2), nullable=False, server_default='0'),
-    )
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS supplier_invoice_items (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            invoice_id UUID NOT NULL REFERENCES supplier_invoices(id) ON DELETE CASCADE,
+            product_name VARCHAR(300) NOT NULL,
+            quantity NUMERIC(10,3) NOT NULL DEFAULT 1,
+            unit_price NUMERIC(12,2) NOT NULL DEFAULT 0
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_supplier_invoice_items_invoice_id ON supplier_invoice_items(invoice_id)"))
 
 
 def downgrade() -> None:

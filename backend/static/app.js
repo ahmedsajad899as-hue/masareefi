@@ -2632,6 +2632,7 @@ function renderAdminTable() {
           <th>العملة</th>
           <th>الباقة</th>
           <th>المتبقي</th>
+          <th>النوع</th>
           <th>الحالة</th>
           <th>أدمن</th>
           <th>الإجراءات</th>
@@ -2662,6 +2663,7 @@ function renderAdminTable() {
               <td>${esc(u.currency)}</td>
               <td><span class="badge ${planBadgeClass[pl] || 'bg-secondary'}">${planLabels[pl] || pl}</span></td>
               <td>${remHtml}</td>
+              <td>${u.role === 'market_owner' ? '<span class="badge bg-warning text-dark">🏪 ماركت</span>' : '<span class="badge bg-secondary">👤 عادي</span>'}</td>
               <td><span class="badge ${u.is_active ? 'bg-success' : 'bg-secondary'}">${u.is_active ? 'مفعّل' : 'معطّل'}</span></td>
               <td>${u.is_admin ? '<span class="badge bg-warning text-dark">أدمن</span>' : ''}</td>
               <td>

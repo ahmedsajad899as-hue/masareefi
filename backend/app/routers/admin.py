@@ -218,18 +218,10 @@ async def impersonate_user(
         raise HTTPException(status_code=400, detail="User account is disabled")
 
     access_token = create_access_token(str(user.id))
+    from app.schemas.user import UserOut
     return {
         "access_token": access_token,
-        "user": {
-            "id": str(user.id),
-            "email": user.email,
-            "full_name": user.full_name,
-            "currency": user.currency,
-            "preferred_language": user.preferred_language,
-            "is_admin": False,
-            "is_active": user.is_active,
-            "created_at": user.created_at.isoformat() if user.created_at else None,
-        },
+        "user": UserOut.model_validate(user).model_dump(mode="json"),
     }
 
 
