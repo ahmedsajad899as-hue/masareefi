@@ -153,6 +153,23 @@ async def health():
     return {"status": "healthy"}
 
 
+# Global exception handler — log and surface unhandled errors so they don't appear as
+# blank "Internal Server Error" responses to the client.
+import traceback
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(Exception)
+async def _global_exception_handler(request: Request, exc: Exception):
+    tb = traceback.format_exc()
+    print(f"\n[UNHANDLED ERROR] {request.method} {request.url.path}\n{tb}", flush=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"{type(exc).__name__}: {str(exc)[:500]}"},
+    )
+
+
 # Serve static assets (style.css, app.js, …)
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
