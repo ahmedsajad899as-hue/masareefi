@@ -2836,7 +2836,7 @@ let _suppliersFilter = 'all';
 async function loadMarketCustomers() {
   loading(true);
   try {
-    _marketCustomers = await api('GET', '/market/customers') || [];
+    _marketCustomers = await api('GET', '/market/customers/') || [];
     renderCustomerList(_marketCustomers);
     updateCustomerSummary();
   } catch(e) { toast(e.message, 'err'); }
@@ -2857,7 +2857,7 @@ function filterCustomers() {
   const filtered = q
     ? _marketCustomers.filter(c =>
         c.name.toLowerCase().includes(q) ||
-        (c.phone_number || '').includes(q))
+        (c.phone || '').includes(q))
     : _marketCustomers;
   renderCustomerList(filtered);
 }
@@ -2876,7 +2876,7 @@ function renderCustomerList(list) {
       </div>
       <div class="flex-grow-1">
         <div class="fw-bold">${c.name} ${c.is_overdue ? '<span class="badge bg-danger ms-1" style="font-size:.65rem">متأخر</span>' : ''}</div>
-        <div class="small text-muted">${c.phone_number || 'بلا هاتف'}</div>
+        <div class="small text-muted">${c.phone || 'بلا هاتف'}</div>
       </div>
       <div class="text-end">
         <div class="fw-bold ${c.total_debt > 0 ? 'text-danger' : 'text-success'}">${fmt(c.total_debt || 0)}</div>
@@ -2946,13 +2946,15 @@ async function saveSale() {
   if (!amount || amount <= 0) { toast('أدخل المبلغ', 'err'); return; }
   loading(true);
   try {
-    await api('POST', '/market/sales', {
+    const sale = await api('POST', '/market/sales/', {
       customer_id: customerId,
-      total_amount: amount,
-      description: desc,
-      is_paid: isPaid,
-      items: [],
+      sale_date: new Date().toISOString(),
+      notes: desc,
+      items: [{ product_name: desc || 'بيع', quantity: 1, unit_price: amount }],
     });
+    if (isPaid && sale && sale.id) {
+      await api('PATCH', `/market/sales/${sale.id}/pay`);
+    }
     bootstrap.Modal.getInstance(document.getElementById('addSaleModal'))?.hide();
     toast('تم تسجيل البيع ✅');
     await openCustomerDetail(customerId);
@@ -2990,9 +2992,9 @@ async function saveCustomer() {
   loading(true);
   try {
     if (id) {
-      await api('PUT', `/market/customers/${id}`, { name, phone_number: phone, notes });
+      await api('PATCH', `/market/customers/${id}`, { name, phone, notes });
     } else {
-      await api('POST', '/market/customers', { name, phone_number: phone, notes });
+      await api('POST', '/market/customers/', { name, phone, notes });
     }
     bootstrap.Modal.getInstance(document.getElementById('addCustomerModal'))?.hide();
     toast('تم الحفظ ✅');
@@ -3031,7 +3033,7 @@ async function loadOverdueCustomers() {
         </div>
         <div class="flex-grow-1">
           <div class="fw-bold">${c.name}</div>
-          <div class="small text-muted">${c.phone_number || 'بلا هاتف'}</div>
+          <div class="small text-muted">${c.phone || 'بلا هاتف'}</div>
         </div>
         <div class="fw-bold text-danger">${fmt(c.total_debt || 0)}</div>
       </div>
@@ -3044,7 +3046,7 @@ async function loadOverdueCustomers() {
 async function loadMarketSuppliers() {
   loading(true);
   try {
-    _marketSuppliers = await api('GET', '/market/suppliers') || [];
+    _marketSuppliers = await api('GET', '/market/suppliers/') || [];
     renderSupplierList();
   } catch(e) { toast(e.message, 'err'); }
   finally { loading(false); }
@@ -3102,9 +3104,12 @@ async function saveSupplierInvoice() {
   if (!amount || amount <= 0) { toast('أدخل المبلغ', 'err'); return; }
   loading(true);
   try {
-    await api('POST', '/market/suppliers', {
-      supplier_name: supplier, total_amount: amount,
-      due_date: due, notes, items: [],
+    await api('POST', '/market/suppliers/', {
+      supplier_name: supplier,
+      invoice_date: new Date().toISOString(),
+      due_date: due ? new Date(due).toISOString() : null,
+      notes,
+      items: [{ product_name: notes || 'فاتورة', quantity: 1, unit_price: amount }],
     });
     bootstrap.Modal.getInstance(document.getElementById('addSupplierModal'))?.hide();
     toast('تم حفظ الفاتورة ✅');
@@ -3127,7 +3132,7 @@ async function markSupplierPaid(invoiceId) {
 async function loadMarketSettings() {
   loading(true);
   try {
-    const data = await api('GET', '/market/settings');
+    const data = await api('GET', '/market/settings/');
     document.getElementById('mset-store-name').value = data.store_name || '';
     document.getElementById('mset-overdue-days').value = data.market_overdue_days ?? 30;
   } catch(e) {
@@ -3144,7 +3149,7 @@ async function saveMarketSettings() {
   if (!storeName) { toast('أدخل اسم المحل', 'err'); return; }
   loading(true);
   try {
-    await api('PATCH', '/market/settings', { store_name: storeName, market_overdue_days: overdueDays });
+    await api('PATCH', '/market/settings/', { store_name: storeName, market_overdue_days: overdueDays });
     toast('تم حفظ الإعدادات ✅');
   } catch(e) { toast(e.message, 'err'); }
   finally { loading(false); }
