@@ -227,10 +227,22 @@ async function api(method, path, body = null, formData = false) {
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const det = err.detail || {};
-    const msg = typeof det === 'object' ? (det.message || JSON.stringify(det)) : String(det);
-    throw new Error(msg || 'حدث خطأ في الاتصال');
+    let err = {};
+    let rawText = '';
+    try { rawText = await res.text(); err = rawText ? JSON.parse(rawText) : {}; }
+    catch { err = { detail: rawText }; }
+    const det = err.detail;
+    let msg;
+    if (Array.isArray(det)) {
+      msg = det.map(d => d.msg || JSON.stringify(d)).join(' • ');
+    } else if (det && typeof det === 'object') {
+      msg = det.message || JSON.stringify(det);
+    } else if (det) {
+      msg = String(det);
+    } else {
+      msg = rawText || `HTTP ${res.status}`;
+    }
+    throw new Error(`[${res.status}] ${msg}`);
   }
   if (res.status === 204) return null;
   return res.json();
