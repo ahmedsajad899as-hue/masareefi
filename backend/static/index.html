@@ -408,6 +408,14 @@
       <a class="s-link" data-page="voice-assistant" onclick="goTo('voice-assistant')"><i class="fas fa-robot"></i> المساعد الصوتي</a>
       <a class="s-link" data-page="statistics" onclick="goTo('statistics')"><i class="fas fa-chart-pie"></i> الإحصائيات</a>
       <a class="s-link admin-only" data-page="admin-users" onclick="goTo('admin-users')" style="display:none"><i class="fas fa-users-cog"></i> إدارة المستخدمين</a>
+      <!-- Market Owner Links (hidden for regular users) -->
+      <div class="market-only" style="display:none">
+        <div style="font-size:0.7rem;color:#aaa;padding:10px 16px 4px;text-transform:uppercase;letter-spacing:.5px">🏪 إدارة المحل</div>
+        <a class="s-link" data-page="market-customers" onclick="goTo('market-customers')"><i class="fas fa-users"></i> الزبائن والديون</a>
+        <a class="s-link" data-page="market-overdue" onclick="goTo('market-overdue')"><i class="fas fa-exclamation-triangle"></i> الديون المتأخرة</a>
+        <a class="s-link" data-page="market-suppliers" onclick="goTo('market-suppliers')"><i class="fas fa-truck"></i> فواتير الموردين</a>
+        <a class="s-link" data-page="market-settings" onclick="goTo('market-settings')"><i class="fas fa-store"></i> إعدادات المحل</a>
+      </div>
     </nav>
     <div class="sidebar-footer">
       <!-- Referral invite button + dropdown -->
@@ -1236,6 +1244,176 @@
         </div>
       </div>
     </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- ── Market Owner Pages ────────────────────────────────── -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+
+    <!-- ── Market Customers ── -->
+    <section id="pg-market-customers" class="pg" style="display:none">
+      <div class="pg-head">
+        <h2><i class="fas fa-users me-2 text-warning"></i>الزبائن والديون</h2>
+        <button class="btn btn-warning btn-sm text-dark" onclick="openAddCustomerModal()"><i class="fas fa-user-plus me-1"></i>زبون جديد</button>
+      </div>
+      <div class="mb-3">
+        <input type="search" id="mc-search" class="form-control" placeholder="بحث باسم أو هاتف..." oninput="filterCustomers()">
+      </div>
+      <div id="mc-summary" class="row g-2 mb-3">
+        <div class="col-4"><div class="glass-card p-2 text-center"><div class="fw-bold" id="mc-total-count">0</div><div class="small text-muted">زبون</div></div></div>
+        <div class="col-4"><div class="glass-card p-2 text-center"><div class="fw-bold text-danger" id="mc-total-debt">0</div><div class="small text-muted">إجمالي الديون</div></div></div>
+        <div class="col-4"><div class="glass-card p-2 text-center"><div class="fw-bold text-warning" id="mc-overdue-count">0</div><div class="small text-muted">متأخر</div></div></div>
+      </div>
+      <div id="mc-list"></div>
+    </section>
+
+    <!-- ── Market Overdue ── -->
+    <section id="pg-market-overdue" class="pg" style="display:none">
+      <div class="pg-head">
+        <h2><i class="fas fa-exclamation-triangle me-2 text-danger"></i>الديون المتأخرة</h2>
+        <button class="btn btn-outline-secondary btn-sm" onclick="loadOverdueCustomers()"><i class="fas fa-sync me-1"></i>تحديث</button>
+      </div>
+      <div id="mo-list"></div>
+    </section>
+
+    <!-- ── Market Suppliers ── -->
+    <section id="pg-market-suppliers" class="pg" style="display:none">
+      <div class="pg-head">
+        <h2><i class="fas fa-truck me-2 text-info"></i>فواتير الموردين</h2>
+        <button class="btn btn-info btn-sm text-dark" onclick="openAddSupplierModal()"><i class="fas fa-plus me-1"></i>فاتورة جديدة</button>
+      </div>
+      <ul class="nav nav-tabs mb-3" id="supplier-tabs">
+        <li class="nav-item"><a class="nav-link active" onclick="filterSuppliers('all')" href="#">الكل</a></li>
+        <li class="nav-item"><a class="nav-link" onclick="filterSuppliers('unpaid')" href="#">غير مدفوعة</a></li>
+        <li class="nav-item"><a class="nav-link" onclick="filterSuppliers('paid')" href="#">مدفوعة</a></li>
+      </ul>
+      <div id="ms-list"></div>
+    </section>
+
+    <!-- ── Market Settings ── -->
+    <section id="pg-market-settings" class="pg" style="display:none">
+      <div class="pg-head"><h2><i class="fas fa-store me-2 text-success"></i>إعدادات المحل</h2></div>
+      <div class="glass-card p-4" style="max-width:480px">
+        <div class="mb-3">
+          <label class="form-label fw-bold">اسم المحل</label>
+          <input type="text" id="mset-store-name" class="form-control" placeholder="اسم المحل">
+        </div>
+        <div class="mb-4">
+          <label class="form-label fw-bold">أيام السماح قبل التأخير</label>
+          <input type="number" id="mset-overdue-days" class="form-control" min="1" max="365" placeholder="30">
+          <div class="form-text text-muted">بعد هذا العدد من الأيام تُعتبر الديون متأخرة</div>
+        </div>
+        <button class="btn btn-success w-100" onclick="saveMarketSettings()"><i class="fas fa-save me-2"></i>حفظ الإعدادات</button>
+      </div>
+    </section>
+
+    <!-- ── Add Customer Modal ── -->
+    <div class="modal fade" id="addCustomerModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content" style="background:#1e1e2e;color:#fff;border:1px solid #333">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title" id="acm-title">زبون جديد</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="acm-id">
+            <div class="mb-3">
+              <label class="form-label">الاسم <span class="text-danger">*</span></label>
+              <input type="text" id="acm-name" class="form-control">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">رقم الهاتف <span class="text-muted">(اختياري)</span></label>
+              <input type="tel" id="acm-phone" class="form-control" dir="ltr" placeholder="07xxxxxxxxx">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">ملاحظات</label>
+              <textarea id="acm-notes" class="form-control" rows="2"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer border-secondary">
+            <button class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+            <button class="btn btn-warning text-dark" onclick="saveCustomer()">حفظ</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Customer Detail Modal ── -->
+    <div class="modal fade" id="customerDetailModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background:#1e1e2e;color:#fff;border:1px solid #333">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title" id="cdm-title">تفاصيل الزبون</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="cdm-body">جاري التحميل...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Add Supplier Modal ── -->
+    <div class="modal fade" id="addSupplierModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content" style="background:#1e1e2e;color:#fff;border:1px solid #333">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title">فاتورة مورد جديدة</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">اسم المورد <span class="text-danger">*</span></label>
+              <input type="text" id="asm-supplier" class="form-control" placeholder="اسم المورد أو الشركة">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">المبلغ الإجمالي (IQD) <span class="text-danger">*</span></label>
+              <input type="number" id="asm-amount" class="form-control" min="0" step="250">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">تاريخ الاستحقاق <span class="text-muted">(اختياري)</span></label>
+              <input type="date" id="asm-due" class="form-control" dir="ltr">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">ملاحظات</label>
+              <textarea id="asm-notes" class="form-control" rows="2"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer border-secondary">
+            <button class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+            <button class="btn btn-info text-dark" onclick="saveSupplierInvoice()">حفظ</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Add Sale Modal ── -->
+    <div class="modal fade" id="addSaleModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content" style="background:#1e1e2e;color:#fff;border:1px solid #333">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title">بيع جديد</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="sale-customer-id">
+            <div class="mb-3">
+              <label class="form-label">المبلغ (IQD) <span class="text-danger">*</span></label>
+              <input type="number" id="sale-amount" class="form-control" min="0" step="250">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">الوصف <span class="text-muted">(اختياري)</span></label>
+              <input type="text" id="sale-desc" class="form-control" placeholder="مثال: بضاعة متنوعة">
+            </div>
+            <div class="mb-3 form-check">
+              <input class="form-check-input" type="checkbox" id="sale-paid">
+              <label class="form-check-label" for="sale-paid">مدفوع الآن</label>
+            </div>
+          </div>
+          <div class="modal-footer border-secondary">
+            <button class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+            <button class="btn btn-warning text-dark" onclick="saveSale()">حفظ</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- ── Upgrade Modal ── -->
     <div class="modal fade" id="upgradeModal" tabindex="-1" aria-hidden="true" dir="rtl">

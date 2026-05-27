@@ -444,7 +444,9 @@ async function initApp(freshLogin = false) {
     if (!S.token) return;
     await loadWalletsData();
     if (!S.token) return;
-    const savedPage = freshLogin ? 'dashboard' : (localStorage.getItem('last_page') || location.hash.replace('#', '') || 'dashboard');
+    const savedPage = freshLogin
+      ? (S.user?.role === 'market_owner' ? 'market-customers' : 'dashboard')
+      : (localStorage.getItem('last_page') || location.hash.replace('#', '') || 'dashboard');
     const validPages = Object.keys(PAGE_TITLES);
     goTo(validPages.includes(savedPage) ? savedPage : 'dashboard');
   } catch(e) {
@@ -464,6 +466,10 @@ function updateSidebarUser() {
   // Show admin link only for admins
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = S.user.is_admin ? '' : 'none';
+  });
+  // Show market owner links only for market owners
+  document.querySelectorAll('.market-only').forEach(el => {
+    el.style.display = S.user.role === 'market_owner' ? '' : 'none';
   });
   updatePlanUI();
 }
@@ -580,15 +586,19 @@ function updatePlanUI() {
 
 // ── Navigation ───────────────────────────────────────────────
 const PAGE_TITLES = {
-  'dashboard':       'لوحة التحكم',
-  'expenses':        'المصاريف',
-  'add-expense':     'إضافة مصروف',
-  'categories':      'الفئات والميزانيات',
-  'wallets':         'المحافظ',
-  'voice-assistant': 'المساعد الصوتي',
-  'statistics':      'الإحصائيات',
-  'settings':        'الإعدادات',
-  'admin-users':     'إدارة المستخدمين',
+  'dashboard':        'لوحة التحكم',
+  'expenses':         'المصاريف',
+  'add-expense':      'إضافة مصروف',
+  'categories':       'الفئات والميزانيات',
+  'wallets':          'المحافظ',
+  'voice-assistant':  'المساعد الصوتي',
+  'statistics':       'الإحصائيات',
+  'settings':         'الإعدادات',
+  'admin-users':      'إدارة المستخدمين',
+  'market-customers': '🏪 الزبائن والديون',
+  'market-overdue':   '⚠️ الديون المتأخرة',
+  'market-suppliers': '🚚 فواتير الموردين',
+  'market-settings':  '⚙️ إعدادات المحل',
 };
 
 function goTo(page) {
@@ -617,6 +627,10 @@ function goTo(page) {
     case 'statistics':       initStats();     break;
     case 'settings':         loadSettings();  break;
     case 'admin-users':      loadAdminUsers(); break;
+    case 'market-customers': loadMarketCustomers(); break;
+    case 'market-overdue':   loadOverdueCustomers(); break;
+    case 'market-suppliers': loadMarketSuppliers(); break;
+    case 'market-settings':  loadMarketSettings(); break;
   }
 }
 
@@ -2805,6 +2819,331 @@ async function deleteAdminUser(userId, name) {
     await api('DELETE', `/admin/users/${userId}`);
     toast('تم حذف الحساب');
     await loadAdminUsers();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ── Market Owner Features ───────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+let _marketCustomers = [];
+let _marketSuppliers = [];
+let _suppliersFilter = 'all';
+
+// ── Customers ──────────────────────────────────────────────────
+async function loadMarketCustomers() {
+  loading(true);
+  try {
+    _marketCustomers = await api('GET', '/market/customers') || [];
+    renderCustomerList(_marketCustomers);
+    updateCustomerSummary();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+function updateCustomerSummary() {
+  const c = _marketCustomers;
+  document.getElementById('mc-total-count').textContent = c.length;
+  const totalDebt = c.reduce((s, x) => s + (x.total_debt || 0), 0);
+  document.getElementById('mc-total-debt').textContent = fmt(totalDebt);
+  const overdue = c.filter(x => x.is_overdue).length;
+  document.getElementById('mc-overdue-count').textContent = overdue;
+}
+
+function filterCustomers() {
+  const q = document.getElementById('mc-search').value.trim().toLowerCase();
+  const filtered = q
+    ? _marketCustomers.filter(c =>
+        c.name.toLowerCase().includes(q) ||
+        (c.phone_number || '').includes(q))
+    : _marketCustomers;
+  renderCustomerList(filtered);
+}
+
+function renderCustomerList(list) {
+  const el = document.getElementById('mc-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-users fa-2x mb-2"></i><p>لا يوجد زبائن</p></div>';
+    return;
+  }
+  el.innerHTML = list.map(c => `
+    <div class="glass-card p-3 mb-2 d-flex align-items-center gap-3" style="cursor:pointer" onclick="openCustomerDetail('${c.id}')">
+      <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
+           style="width:42px;height:42px;min-width:42px;background:${c.total_debt > 0 ? 'rgba(220,53,69,.2)' : 'rgba(108,99,255,.2)'};color:${c.total_debt > 0 ? '#dc3545' : '#6c63ff'}">
+        ${c.name.charAt(0)}
+      </div>
+      <div class="flex-grow-1">
+        <div class="fw-bold">${c.name} ${c.is_overdue ? '<span class="badge bg-danger ms-1" style="font-size:.65rem">متأخر</span>' : ''}</div>
+        <div class="small text-muted">${c.phone_number || 'بلا هاتف'}</div>
+      </div>
+      <div class="text-end">
+        <div class="fw-bold ${c.total_debt > 0 ? 'text-danger' : 'text-success'}">${fmt(c.total_debt || 0)}</div>
+        <div class="small text-muted">دين</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function openCustomerDetail(customerId) {
+  const modal = new bootstrap.Modal(document.getElementById('customerDetailModal'));
+  const body = document.getElementById('cdm-body');
+  const c = _marketCustomers.find(x => x.id === customerId);
+  if (c) document.getElementById('cdm-title').textContent = c.name;
+  body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-warning"></div></div>';
+  modal.show();
+  try {
+    const sales = await api('GET', `/market/sales?customer_id=${customerId}`);
+    const unpaid = (sales || []).filter(s => !s.is_paid);
+    const paid = (sales || []).filter(s => s.is_paid);
+    const totalUnpaid = unpaid.reduce((s, x) => s + (x.total_amount || 0), 0);
+    body.innerHTML = `
+      <div class="d-flex gap-2 mb-3 flex-wrap">
+        <button class="btn btn-warning btn-sm text-dark" onclick="openAddSaleModal('${customerId}')"><i class="fas fa-plus me-1"></i>بيع جديد</button>
+        <button class="btn btn-outline-danger btn-sm" onclick="deleteCustomer('${customerId}')"><i class="fas fa-trash me-1"></i>حذف الزبون</button>
+      </div>
+      <div class="alert alert-${totalUnpaid > 0 ? 'danger' : 'success'} py-2">
+        إجمالي الدين: <strong>${fmt(totalUnpaid)}</strong>
+      </div>
+      <h6 class="mt-3">المشتريات غير المدفوعة (${unpaid.length})</h6>
+      ${unpaid.length ? unpaid.map(s => `
+        <div class="glass-card p-2 mb-2 d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-bold text-danger">${fmt(s.total_amount)}</div>
+            <div class="small text-muted">${s.description || '—'} · ${s.sale_date ? new Date(s.sale_date).toLocaleDateString('ar-IQ') : ''}</div>
+          </div>
+          <button class="btn btn-success btn-sm" onclick="markSalePaid('${s.id}')"><i class="fas fa-check me-1"></i>دفع</button>
+        </div>
+      `).join('') : '<p class="text-muted small">لا توجد مشتريات معلقة</p>'}
+      <h6 class="mt-3 text-muted">المدفوع (${paid.length})</h6>
+      ${paid.length ? paid.map(s => `
+        <div class="glass-card p-2 mb-2 d-flex justify-content-between align-items-center opacity-50">
+          <div>
+            <div class="fw-bold text-success">${fmt(s.total_amount)}</div>
+            <div class="small text-muted">${s.description || '—'} · ${s.sale_date ? new Date(s.sale_date).toLocaleDateString('ar-IQ') : ''}</div>
+          </div>
+          <span class="badge bg-success">مدفوع</span>
+        </div>
+      `).join('') : '<p class="text-muted small">لا يوجد</p>'}
+    `;
+  } catch(e) { body.innerHTML = `<p class="text-danger">${e.message}</p>`; }
+}
+
+function openAddSaleModal(customerId) {
+  document.getElementById('sale-customer-id').value = customerId;
+  document.getElementById('sale-amount').value = '';
+  document.getElementById('sale-desc').value = '';
+  document.getElementById('sale-paid').checked = false;
+  new bootstrap.Modal(document.getElementById('addSaleModal')).show();
+}
+
+async function saveSale() {
+  const customerId = document.getElementById('sale-customer-id').value;
+  const amount = parseFloat(document.getElementById('sale-amount').value);
+  const desc = document.getElementById('sale-desc').value.trim() || null;
+  const isPaid = document.getElementById('sale-paid').checked;
+  if (!amount || amount <= 0) { toast('أدخل المبلغ', 'err'); return; }
+  loading(true);
+  try {
+    await api('POST', '/market/sales', {
+      customer_id: customerId,
+      total_amount: amount,
+      description: desc,
+      is_paid: isPaid,
+      items: [],
+    });
+    bootstrap.Modal.getInstance(document.getElementById('addSaleModal'))?.hide();
+    toast('تم تسجيل البيع ✅');
+    await openCustomerDetail(customerId);
+    await loadMarketCustomers();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+async function markSalePaid(saleId) {
+  loading(true);
+  try {
+    await api('PATCH', `/market/sales/${saleId}/pay`);
+    toast('تم تسجيل الدفع ✅');
+    bootstrap.Modal.getInstance(document.getElementById('customerDetailModal'))?.hide();
+    await loadMarketCustomers();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+function openAddCustomerModal() {
+  document.getElementById('acm-id').value = '';
+  document.getElementById('acm-title').textContent = 'زبون جديد';
+  document.getElementById('acm-name').value = '';
+  document.getElementById('acm-phone').value = '';
+  document.getElementById('acm-notes').value = '';
+  new bootstrap.Modal(document.getElementById('addCustomerModal')).show();
+}
+
+async function saveCustomer() {
+  const id = document.getElementById('acm-id').value;
+  const name = document.getElementById('acm-name').value.trim();
+  const phone = document.getElementById('acm-phone').value.trim() || null;
+  const notes = document.getElementById('acm-notes').value.trim() || null;
+  if (!name) { toast('أدخل اسم الزبون', 'err'); return; }
+  loading(true);
+  try {
+    if (id) {
+      await api('PUT', `/market/customers/${id}`, { name, phone_number: phone, notes });
+    } else {
+      await api('POST', '/market/customers', { name, phone_number: phone, notes });
+    }
+    bootstrap.Modal.getInstance(document.getElementById('addCustomerModal'))?.hide();
+    toast('تم الحفظ ✅');
+    await loadMarketCustomers();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+async function deleteCustomer(customerId) {
+  if (!confirm('هل تريد حذف هذا الزبون وجميع مبيعاته؟')) return;
+  loading(true);
+  try {
+    await api('DELETE', `/market/customers/${customerId}`);
+    bootstrap.Modal.getInstance(document.getElementById('customerDetailModal'))?.hide();
+    toast('تم الحذف');
+    await loadMarketCustomers();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+// ── Overdue ─────────────────────────────────────────────────────
+async function loadOverdueCustomers() {
+  loading(true);
+  try {
+    const list = await api('GET', '/market/customers/overdue') || [];
+    const el = document.getElementById('mo-list');
+    if (!list.length) {
+      el.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-check-circle fa-3x text-success mb-3"></i><p>لا توجد ديون متأخرة 🎉</p></div>';
+      return;
+    }
+    el.innerHTML = list.map(c => `
+      <div class="glass-card p-3 mb-2 d-flex align-items-center gap-3">
+        <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
+             style="width:42px;height:42px;min-width:42px;background:rgba(220,53,69,.2);color:#dc3545">
+          ${c.name.charAt(0)}
+        </div>
+        <div class="flex-grow-1">
+          <div class="fw-bold">${c.name}</div>
+          <div class="small text-muted">${c.phone_number || 'بلا هاتف'}</div>
+        </div>
+        <div class="fw-bold text-danger">${fmt(c.total_debt || 0)}</div>
+      </div>
+    `).join('');
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+// ── Suppliers ───────────────────────────────────────────────────
+async function loadMarketSuppliers() {
+  loading(true);
+  try {
+    _marketSuppliers = await api('GET', '/market/suppliers') || [];
+    renderSupplierList();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+function filterSuppliers(filter) {
+  _suppliersFilter = filter;
+  document.querySelectorAll('#supplier-tabs .nav-link').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('onclick')?.includes(`'${filter}'`));
+  });
+  renderSupplierList();
+}
+
+function renderSupplierList() {
+  const list = _suppliersFilter === 'all' ? _marketSuppliers
+    : _suppliersFilter === 'unpaid' ? _marketSuppliers.filter(s => !s.is_paid)
+    : _marketSuppliers.filter(s => s.is_paid);
+  const el = document.getElementById('ms-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="text-center text-muted py-5">لا توجد فواتير</div>';
+    return;
+  }
+  el.innerHTML = list.map(s => `
+    <div class="glass-card p-3 mb-2">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="fw-bold">${s.supplier_name}</div>
+          <div class="small text-muted">${s.notes || ''}</div>
+          ${s.due_date ? `<div class="small text-warning">الاستحقاق: ${new Date(s.due_date).toLocaleDateString('ar-IQ')}</div>` : ''}
+        </div>
+        <div class="text-end">
+          <div class="fw-bold ${s.is_paid ? 'text-success' : 'text-danger'}">${fmt(s.total_amount)}</div>
+          <span class="badge ${s.is_paid ? 'bg-success' : 'bg-danger'}">${s.is_paid ? 'مدفوعة' : 'غير مدفوعة'}</span>
+        </div>
+      </div>
+      ${!s.is_paid ? `<button class="btn btn-success btn-sm mt-2" onclick="markSupplierPaid('${s.id}')"><i class="fas fa-check me-1"></i>تسجيل الدفع</button>` : ''}
+    </div>
+  `).join('');
+}
+
+function openAddSupplierModal() {
+  document.getElementById('asm-supplier').value = '';
+  document.getElementById('asm-amount').value = '';
+  document.getElementById('asm-due').value = '';
+  document.getElementById('asm-notes').value = '';
+  new bootstrap.Modal(document.getElementById('addSupplierModal')).show();
+}
+
+async function saveSupplierInvoice() {
+  const supplier = document.getElementById('asm-supplier').value.trim();
+  const amount = parseFloat(document.getElementById('asm-amount').value);
+  const due = document.getElementById('asm-due').value || null;
+  const notes = document.getElementById('asm-notes').value.trim() || null;
+  if (!supplier) { toast('أدخل اسم المورد', 'err'); return; }
+  if (!amount || amount <= 0) { toast('أدخل المبلغ', 'err'); return; }
+  loading(true);
+  try {
+    await api('POST', '/market/suppliers', {
+      supplier_name: supplier, total_amount: amount,
+      due_date: due, notes, items: [],
+    });
+    bootstrap.Modal.getInstance(document.getElementById('addSupplierModal'))?.hide();
+    toast('تم حفظ الفاتورة ✅');
+    await loadMarketSuppliers();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+async function markSupplierPaid(invoiceId) {
+  loading(true);
+  try {
+    await api('PATCH', `/market/suppliers/${invoiceId}/pay`);
+    toast('تم تسجيل الدفع ✅');
+    await loadMarketSuppliers();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+// ── Market Settings ──────────────────────────────────────────────
+async function loadMarketSettings() {
+  loading(true);
+  try {
+    const data = await api('GET', '/market/settings');
+    document.getElementById('mset-store-name').value = data.store_name || '';
+    document.getElementById('mset-overdue-days').value = data.market_overdue_days ?? 30;
+  } catch(e) {
+    // Fallback to user data
+    document.getElementById('mset-store-name').value = S.user?.store_name || '';
+    document.getElementById('mset-overdue-days').value = S.user?.market_overdue_days ?? 30;
+  }
+  finally { loading(false); }
+}
+
+async function saveMarketSettings() {
+  const storeName = document.getElementById('mset-store-name').value.trim();
+  const overdueDays = parseInt(document.getElementById('mset-overdue-days').value, 10) || 30;
+  if (!storeName) { toast('أدخل اسم المحل', 'err'); return; }
+  loading(true);
+  try {
+    await api('PATCH', '/market/settings', { store_name: storeName, market_overdue_days: overdueDays });
+    toast('تم حفظ الإعدادات ✅');
   } catch(e) { toast(e.message, 'err'); }
   finally { loading(false); }
 }
