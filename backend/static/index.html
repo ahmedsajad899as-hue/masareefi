@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=35">
+  <link rel="stylesheet" href="/static/style.css?v=36">
   <script>
     // Early auth check — runs before app.js loads.
     // If no token stored, immediately hide spinner & show login screen.
@@ -407,6 +407,7 @@
       <a class="s-link personal-feature-link" data-page="wallets" onclick="goTo('wallets')"><i class="fas fa-wallet"></i> المحافظ</a>
       <a class="s-link personal-feature-link" data-page="voice-assistant" onclick="goTo('voice-assistant')"><i class="fas fa-robot"></i> المساعد الصوتي</a>
       <a class="s-link personal-feature-link" data-page="statistics" onclick="goTo('statistics')"><i class="fas fa-chart-pie"></i> الإحصائيات</a>
+      <a class="s-link personal-feature-link user-only" id="link-my-purchases" data-page="my-purchases" onclick="goTo('my-purchases')" style="display:none"><i class="fas fa-store"></i> مشترياتي من المحلات</a>
       <a class="s-link admin-only" data-page="admin-users" onclick="goTo('admin-users')" style="display:none"><i class="fas fa-users-cog"></i> إدارة المستخدمين</a>
       <!-- Market Owner Links (hidden for regular users) -->
       <div class="market-only" style="display:none">
@@ -826,6 +827,12 @@
       </div>
     </section>
 
+    <!-- ── My Purchases (regular user, read-only) ── -->
+    <section id="pg-my-purchases" class="pg" style="display:none">
+      <div class="pg-head"><h2>🛒 مشترياتي من المحلات</h2></div>
+      <div id="my-purchases-body"></div>
+    </section>
+
     <!-- ── Settings ── -->
     <section id="pg-settings" class="pg" style="display:none">
       <div class="pg-head"><h2>الإعدادات</h2></div>
@@ -845,6 +852,10 @@
         <div class="mb-3">
           <label class="form-label">البريد الإلكتروني</label>
           <input type="email" id="set-email" class="form-control" dir="ltr" disabled>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">رقم الهاتف <span class="text-muted small">(لربط حسابك بالمحلات)</span></label>
+          <input type="tel" id="set-phone" class="form-control" dir="ltr" placeholder="مثال: 07701234567">
         </div>
         <div class="mb-3">
           <label class="form-label">العملة</label>
@@ -1781,7 +1792,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=75"></script>
+<script src="/static/app.js?v=76"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══

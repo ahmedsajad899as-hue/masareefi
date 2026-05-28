@@ -188,3 +188,26 @@ class MyMarketDebtOut(BaseModel):
     market_owner_name: str
     total_unpaid: float
     sales: list[MyDebtSaleOut] = []
+
+
+class MyPurchaseSaleOut(BaseModel):
+    """One sale (paid or unpaid) visible to the linked regular user."""
+    sale_id: uuid.UUID
+    sale_date: datetime
+    total_amount: float
+    notes: str | None
+    is_paid: bool
+    paid_at: datetime | None
+    items: list[MyDebtSaleItemOut] = []
+
+    model_config = {"from_attributes": True}
+
+
+class MyPurchaseGroupOut(BaseModel):
+    """All sales from one market visible to the linked regular user."""
+    market_owner_id: uuid.UUID
+    store_name: str
+    market_owner_name: str
+    total_unpaid: float
+    total_paid: float
+    sales: list[MyPurchaseSaleOut] = []

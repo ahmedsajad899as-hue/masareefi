@@ -494,7 +494,16 @@ function updateSidebarUser() {
   document.querySelectorAll('.personal-feature-link').forEach(el => {
     el.style.display = hidePersonal ? 'none' : '';
   });
+  _updateMyPurchasesLink();
   updatePlanUI();
+}
+
+function _updateMyPurchasesLink() {
+  // "My Purchases" tab is visible only to regular users (not market owners).
+  const link = document.getElementById('link-my-purchases');
+  if (!link || !S.user) return;
+  const isRegularUser = S.user.role !== 'market_owner';
+  link.style.display = isRegularUser ? '' : 'none';
 }
 
 function setText(id, val) {
@@ -622,6 +631,7 @@ const PAGE_TITLES = {
   'market-overdue':   '⚠️ الديون المتأخرة',
   'market-suppliers': '🚚 فواتير الموردين',
   'market-settings':  '⚙️ إعدادات المحل',
+  'my-purchases':     '🛒 مشترياتي من المحلات',
 };
 
 function goTo(page) {
@@ -670,6 +680,7 @@ function goTo(page) {
     case 'market-overdue':   loadOverdueCustomers(); break;
     case 'market-suppliers': loadMarketSuppliers(); break;
     case 'market-settings':  loadMarketSettings(); break;
+    case 'my-purchases':     loadMyPurchases(); break;
   }
 }
 
@@ -2304,6 +2315,7 @@ function loadSettings() {
   setVal('set-name',     S.user.full_name || '');
   setVal('set-email',    S.user.email     || '');
   setVal('set-currency', S.user.currency  || 'IQD');
+  setVal('set-phone',    S.user.phone_number || '');
   const sw = document.getElementById('dark-toggle');
   if (sw) sw.checked = !document.body.classList.contains('light-theme');
   renderSubscriptionCard();
@@ -2467,13 +2479,15 @@ function openInChrome() {
 async function saveProfile() {
   const name     = document.getElementById('set-name').value.trim();
   const currency = document.getElementById('set-currency').value;
+  const phone    = (document.getElementById('set-phone')?.value || '').trim() || null;
   if (!name) { toast('أدخل الاسم', 'err'); return; }
   loading(true);
   try {
-    const updated = await api('PATCH', '/auth/me', { full_name: name, currency });
+    const updated = await api('PATCH', '/auth/me', { full_name: name, currency, ...(phone !== undefined ? { phone_number: phone } : {}) });
     S.user = updated;
     localStorage.setItem('user', JSON.stringify(updated));
     updateSidebarUser();
+    _updateMyPurchasesLink();
     toast('تم الحفظ ✅');
   } catch (e) { toast(e.message, 'err'); }
   finally { loading(false); }
@@ -3740,6 +3754,96 @@ async function markSupplierPaid(invoiceId) {
     await loadMarketSuppliers();
   } catch(e) { toast(e.message, 'err'); }
   finally { loading(false); }
+}
+
+// ── My Purchases (regular user, read-only) ──────────────────────
+async function loadMyPurchases() {
+  const wrap = document.getElementById('my-purchases-body');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="text-center py-5 text-muted"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+
+  try {
+    const groups = await api('GET', '/my-debts/all');
+
+    if (!groups || groups.length === 0) {
+      const hasPhone = S.user?.phone_number;
+      wrap.innerHTML = hasPhone
+        ? `<div class="glass-card text-center py-5 text-muted">
+             <div style="font-size:2.5rem">🛒</div>
+             <div class="mt-2">لا توجد مشتريات مسجلة بعد</div>
+             <div class="small mt-1">عندما يسجل محل مشترياتك ستظهر هنا تلقائياً</div>
+           </div>`
+        : `<div class="glass-card text-center py-5">
+             <div style="font-size:2.5rem">📱</div>
+             <div class="mt-2 fw-bold">أضف رقم هاتفك أولاً</div>
+             <div class="small text-muted mt-1">رقم الهاتف يربط حسابك بالمحلات التي تتعامل معها</div>
+             <button class="btn btn-primary mt-3" onclick="goTo('settings')">
+               <i class="fas fa-cog me-2"></i>الإعدادات
+             </button>
+           </div>`;
+      return;
+    }
+
+    let html = '';
+    for (const g of groups) {
+      const fmtAmt = n => Number(n).toLocaleString('ar-IQ', { minimumFractionDigits: 0 }) + ' IQD';
+      const hasDebt = g.total_unpaid > 0;
+
+      html += `<div class="glass-card mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <div style="font-size:1.1rem;font-weight:700">${esc(g.store_name)}</div>
+            <div class="text-muted small">${esc(g.market_owner_name)}</div>
+          </div>
+          <div class="text-end">
+            ${hasDebt ? `<div style="color:#ef4444;font-weight:700;font-size:.95rem">${fmtAmt(g.total_unpaid)}</div><div class="text-muted small">دين متبقي</div>` : ''}
+            ${g.total_paid > 0 ? `<div style="color:#22c55e;font-size:.85rem">${fmtAmt(g.total_paid)} مسدد</div>` : ''}
+          </div>
+        </div>`;
+
+      for (const sale of g.sales) {
+        const dateStr = new Date(sale.sale_date).toLocaleDateString('ar-IQ', { year: 'numeric', month: 'short', day: 'numeric' });
+        const isPaid = sale.is_paid;
+        const badge = isPaid
+          ? `<span class="badge bg-success">مسدد ✓</span>`
+          : `<span class="badge bg-danger">دين</span>`;
+        const paidLine = isPaid && sale.paid_at
+          ? `<div class="text-muted small mt-1"><i class="fas fa-check-circle text-success me-1"></i>سُدد في ${new Date(sale.paid_at).toLocaleDateString('ar-IQ', { year:'numeric', month:'short', day:'numeric' })}</div>`
+          : '';
+
+        html += `<div class="my-purchase-sale ${isPaid ? 'mp-paid' : 'mp-unpaid'}">
+          <div class="d-flex justify-content-between align-items-start mb-1">
+            <div>
+              <span class="small text-muted">${dateStr}</span>
+              ${sale.notes ? `<div class="small text-muted">${esc(sale.notes)}</div>` : ''}
+            </div>
+            <div class="text-end">
+              ${badge}
+              <div class="fw-bold mt-1">${fmtAmt(sale.total_amount)}</div>
+            </div>
+          </div>`;
+
+        if (sale.items && sale.items.length) {
+          html += `<div class="mp-items-list">`;
+          for (const item of sale.items) {
+            html += `<div class="mp-item-row">
+              <span class="mp-item-name">${esc(item.product_name)}</span>
+              <span class="mp-item-qty text-muted">×${Number(item.quantity)}</span>
+              <span class="mp-item-price">${fmtAmt(item.unit_price)}</span>
+            </div>`;
+          }
+          html += `</div>`;
+        }
+
+        html += paidLine + `</div>`;
+      }
+
+      html += `</div>`;
+    }
+    wrap.innerHTML = html;
+  } catch (e) {
+    wrap.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`;
+  }
 }
 
 // ── Market Settings ──────────────────────────────────────────────
