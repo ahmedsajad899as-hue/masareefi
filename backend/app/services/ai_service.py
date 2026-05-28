@@ -363,21 +363,29 @@ sale records from the spoken text and return them as a JSON array.
 Each object must have:
 - "customer_name": string — the customer's name as the owner pronounced it (clean it: no titles like "السيد", no extra connectors). If the owner says only a nickname (e.g., "أبو علي", "أم محمد") keep it as said.
 - "amount": number — the sale total in IQD (Iraqi Dinar). Always positive.
-- "notes": string or null — short description of what was sold OR any extra context the owner mentioned (e.g., "خبز وحليب", "بضاعة", "جيرانه"). Use null if nothing was said.
+- "notes": string or null — VERY IMPORTANT: this is where ALL purchased products / items / goods go.
+  Put EVERY product the customer bought in this field, joined by " و " (e.g., "زيت و تمن و ماي", "بيبسي و عصير و زين", "خبز و حليب و بيض").
+  Also include any extra context the owner mentioned (e.g., "بضاعة", "جيرانه", "نسيئة لأسبوع"). Use null ONLY if nothing besides the name and amount was said.
 - "confidence": float between 0 and 1.
 
 Rules:
 - The owner may dictate MULTIPLE customers in one recording. Return one object per customer.
-- Iraqi colloquial wording examples you MUST understand:
+- The product list can appear BEFORE or AFTER the amount — capture it either way and put it in "notes":
+  • "محمد اشترى زيت و تمن و ماي ب 20 الف"           → name=محمد, amount=20000, notes="زيت و تمن و ماي"
+  • "محمد اشترى ب 15 الف زين و ببسي و عصير"         → name=محمد, amount=15000, notes="زين و ببسي و عصير"
+  • "احمد اخذ خبز و حليب ب 8 الاف"                  → name=احمد, amount=8000, notes="خبز و حليب"
+  • "اكتبلي على علي 10 الاف سكر و شاي و رز"          → name=علي, amount=10000, notes="سكر و شاي و رز"
+- Other Iraqi colloquial wording examples you MUST understand:
   • "اكتبلي على محمد عشرين الف خبز وحليب"
   • "احمد ابو علي اخذ بضاعة ب 25000"
   • "أم زينب جيرانه ديهنها 10 الاف"
   • "كتبلي على ابو سيف خمسين الف"
   • "محمد جابر علي 30 الف ومحمود علي 15 الف"
-- Treat "الف" / "الاف" / "آلاف" as thousands. "خمسين الف" = 50000. "عشر آلاف" = 10000.
+- Treat "الف" / "الاف" / "آلاف" / "elf" as thousands. "خمسين الف" = 50000. "عشر آلاف" = 10000. "ب 20 الف" = 20000.
 - Treat "مية" / "ميه" / "مئة" as 100. "ميتين" = 200.
-- "ديهنه" / "ديهنها" / "عليه" / "على" / "اخذ" / "كتبلي" / "حاسبلي" all indicate the customer owes the shop.
-- If only ONE name is mentioned and one amount, return one object.
+- "ديهنه" / "ديهنها" / "عليه" / "على" / "اخذ" / "اشترى" / "اشتره" / "كتبلي" / "حاسبلي" all indicate the customer owes the shop.
+- The connector "ب" / "بـ" before a number means "for" (price). Treat as a separator, not part of a name.
+- DO NOT put products into customer_name. Products are NEVER part of the customer name — they go in notes.
 - If the owner says a customer paid (e.g., "دفع", "سدد", "ما عليه شي") — DO NOT return that as a sale. Skip it.
 - Always return a valid JSON array, even if empty: []
 - Do NOT include markdown or explanation outside the JSON array.
@@ -422,48 +430,135 @@ def _match_existing_customer(name: str, customers: list) -> "tuple[uuid.UUID | N
 
 def _parse_market_local(text: str, customers: list) -> list:
     """
-    Fallback regex parser for market sales. Handles simple patterns like
-    "محمد 25000" or "احمد خمسين الف".
+    Fallback regex parser for market sales. Extracts:
+      - customer name (words before the purchase verb or amount)
+      - amount (digits or Arabic number words, with "الف" multiplier)
+      - notes (the remaining product list — what the customer bought)
+    Handles patterns like:
+      "محمد اشترى زيت و تمن و ماي ب 20 الف"
+      "احمد اخذ خبز و حليب ب 8 الاف"
+      "علي 10 الاف سكر و شاي"
     """
     from app.schemas.market_voice import ParsedMarketSale
     items: list[ParsedMarketSale] = []
 
-    # Pattern: name (1-3 Arabic words) + optional connector + amount
-    # We split on common separators and look for amount nearby a name
-    chunks = re.split(r'(?:\s+و\s+|\s+ثم\s+|،|\.)', text)
+    # Split into customer chunks. We split on " و " ONLY when it likely separates
+    # customers (heuristic: when the next chunk starts with a known purchase verb
+    # or a single capitalised-looking word followed by a verb). To stay safe we
+    # split on stronger separators only — products inside one chunk stay together.
+    chunks = re.split(r'(?:\s+ثم\s+|،|\.|\bو\s+(?=[ا-ي]{2,}\s+(?:اشترى|اشتره|اخذ|أخذ|كتبلي|حاسبلي|ديهنه|ديهنها|عليه))|\bو\s+(?=[ا-ي]{2,}\s+\d))', text)
+
+    # Words to strip when isolating notes/name
+    STOP_WORDS = {
+        "الف", "ألف", "آلاف", "الاف", "elf",
+        "دينار", "دنانير", "دن", "دين", "iqd", "usd",
+        "ديهنه", "ديهنها", "ديهنهم", "عليه", "عليها", "على",
+        "اخذ", "أخذ", "اخذت", "اشترى", "اشتره", "اشترت", "اشترا",
+        "كتبلي", "كتب", "حاسبلي", "حاسب", "اكتبلي", "اكتب",
+        "ب", "بـ", "ل", "لـ", "من", "في", "الى", "إلى",
+        "هذا", "هذه", "هاي", "هاد", "ذاك", "اليوم",
+    }
+    PURCHASE_VERBS = {
+        "اشترى", "اشتره", "اشترت", "اشترا", "اخذ", "أخذ", "اخذت",
+        "كتبلي", "حاسبلي", "ديهنه", "ديهنها", "اكتبلي",
+    }
+
     for chunk in chunks:
         chunk = chunk.strip()
         if not chunk:
             continue
-        # Find amount (digits or Arabic words)
+
+        # Skip "paid" chunks
+        if re.search(r'\b(دفع|سدد|سددها|ما\s+عليه|خلص)\b', chunk):
+            continue
+
+        # ─ Extract amount ─
         amount = None
-        amount_match = re.search(r'([\d,٫٬.]+)\s*(?:الف|ألف|آلاف|الاف)?', chunk)
-        if amount_match:
+        # Try digits followed by optional "الف"
+        amt_match = re.search(r'([\d,٫٬.]+)\s*(الف|ألف|آلاف|الاف)?', chunk)
+        if amt_match:
             try:
-                amount = float(amount_match.group(1).replace(",", ""))
-                if "الف" in amount_match.group(0) or "ألف" in amount_match.group(0) or "آلاف" in amount_match.group(0) or "الاف" in amount_match.group(0):
+                amount = float(amt_match.group(1).replace(",", "").replace("٫", "").replace("٬", ""))
+                if amt_match.group(2):
                     amount *= 1000
             except ValueError:
                 amount = None
         if not amount:
-            amount = _parse_arabic_number(chunk)
+            # Try Arabic word numbers ("خمسة الاف", "عشرين الف")
+            for word, val in sorted(_AR_NUMS.items(), key=lambda x: -len(x[0])):
+                pat = r'(?:^|\s)' + re.escape(word) + r'(?:\s+(الف|ألف|آلاف|الاف))?'
+                m = re.search(pat, chunk)
+                if m:
+                    amount = float(val) * (1000 if m.group(1) else 1)
+                    break
         if not amount or amount <= 0:
             continue
-        # Strip the amount/keywords; what remains may be the name
-        leftover = re.sub(r'[\d,٫٬.]+', ' ', chunk)
-        leftover = re.sub(r'(?:الف|ألف|آلاف|الاف|دينار|دنانير|ديهنه|ديهنها|عليه|على|اخذ|أخذ|كتبلي|كتب|حاسبلي|حاسب|ل|من|في)', ' ', leftover)
-        name_words = [w for w in leftover.split() if len(w) > 1][:3]
-        name = " ".join(name_words).strip()
+
+        # ─ Tokenize and remove amount + stop words ─
+        # Remove digits/punct first
+        rest = re.sub(r'[\d,٫٬.]+', ' ', chunk)
+        # Remove "الف" forms
+        rest = re.sub(r'\b(?:الف|ألف|آلاف|الاف|elf)\b', ' ', rest, flags=re.IGNORECASE)
+        # Remove "ب" or "بـ" when standalone or attached
+        rest = re.sub(r'(?:^|\s)ب(?:ـ)?(?=\s|$)', ' ', rest)
+        # Also try to remove the Arabic word number we matched
+        for word in sorted(_AR_NUMS.keys(), key=lambda x: -len(x)):
+            rest = re.sub(r'(?:^|\s)' + re.escape(word) + r'(?:\s|$)', ' ', rest)
+
+        tokens = [t for t in re.split(r'\s+', rest) if t and len(t) > 1]
+
+        # ─ Find first purchase verb position to split name vs notes ─
+        verb_idx = -1
+        for i, t in enumerate(tokens):
+            tn = _normalize_arabic(t)
+            if tn in {_normalize_arabic(v) for v in PURCHASE_VERBS}:
+                verb_idx = i
+                break
+
+        if verb_idx >= 0:
+            name_tokens = tokens[:verb_idx]
+            note_tokens = tokens[verb_idx + 1:]
+        else:
+            # No verb — name = first 1-2 tokens, rest = notes
+            name_tokens = tokens[:1] if tokens else []
+            note_tokens = tokens[1:]
+
+        # Clean stop words from both
+        name_tokens = [t for t in name_tokens if _normalize_arabic(t) not in {_normalize_arabic(s) for s in STOP_WORDS}]
+        note_tokens = [t for t in note_tokens if _normalize_arabic(t) not in {_normalize_arabic(s) for s in STOP_WORDS}]
+
+        # Keep up to 3 name words (handles "ابو علي" / "أم زينب" / "محمد علي")
+        if name_tokens and name_tokens[0] in {"ابو", "أبو", "ام", "أم"} and len(name_tokens) >= 2:
+            name = " ".join(name_tokens[:2])
+            note_tokens = name_tokens[2:] + note_tokens
+        else:
+            name = " ".join(name_tokens[:2]) if name_tokens else ""
+
         if not name:
             continue
+
+        # Notes = remaining products, joined with " و "
+        # Filter out single-letter junk and dedupe
+        seen = set()
+        clean_notes: list[str] = []
+        for t in note_tokens:
+            if len(t) < 2:
+                continue
+            key = _normalize_arabic(t)
+            if key in seen or key == "و":
+                continue
+            seen.add(key)
+            clean_notes.append(t)
+        notes = " و ".join(clean_notes) if clean_notes else None
+
         cust_id, is_new = _match_existing_customer(name, customers)
         items.append(ParsedMarketSale(
             customer_name=name,
             customer_id=cust_id,
             is_new_customer=is_new,
             amount=amount,
-            notes=None,
-            confidence=0.55,
+            notes=notes,
+            confidence=0.6,
         ))
     return items
 
