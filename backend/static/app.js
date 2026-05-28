@@ -2908,19 +2908,28 @@ function renderCustomerList(list) {
     return;
   }
   el.innerHTML = list.map(c => `
-    <div class="glass-card p-3 mb-2 d-flex align-items-center gap-3" style="cursor:pointer" onclick="openCustomerDetail('${c.id}')">
-      <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
-           style="width:42px;height:42px;min-width:42px;background:${c.total_debt > 0 ? 'rgba(220,53,69,.2)' : 'rgba(108,99,255,.2)'};color:${c.total_debt > 0 ? '#dc3545' : '#6c63ff'}">
-        ${c.name.charAt(0)}
+    <div class="glass-card p-3 mb-2" data-cid="${c.id}">
+      <div class="d-flex align-items-center gap-3" style="cursor:pointer" onclick="openCustomerDetail('${c.id}')">
+        <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
+             style="width:42px;height:42px;min-width:42px;background:${c.total_debt > 0 ? 'rgba(220,53,69,.2)' : 'rgba(108,99,255,.2)'};color:${c.total_debt > 0 ? '#dc3545' : '#6c63ff'}">
+          ${c.name.charAt(0)}
+        </div>
+        <div class="flex-grow-1">
+          <div class="fw-bold">${c.name} ${c.is_overdue ? '<span class="badge bg-danger ms-1" style="font-size:.65rem">متأخر</span>' : ''}</div>
+          <div class="small text-muted">${c.phone || 'بلا هاتف'}</div>
+        </div>
+        <div class="text-end">
+          <div class="fw-bold ${c.total_debt > 0 ? 'text-danger' : 'text-success'}">${fmt(c.total_debt || 0)}</div>
+          <div class="small text-muted">دين</div>
+        </div>
       </div>
-      <div class="flex-grow-1">
-        <div class="fw-bold">${c.name} ${c.is_overdue ? '<span class="badge bg-danger ms-1" style="font-size:.65rem">متأخر</span>' : ''}</div>
-        <div class="small text-muted">${c.phone || 'بلا هاتف'}</div>
+      <div class="d-flex gap-2 mt-2 justify-content-end">
+        <button class="btn btn-sm btn-outline-primary" title="تعديل الزبون" onclick="event.stopPropagation(); openEditCustomerModalById('${c.id}')"><i class="fas fa-edit"></i></button>
+        <button class="btn btn-sm btn-outline-info" title="سجل التعديلات" onclick="event.stopPropagation(); toggleCustomerHistory('${c.id}', this)">
+          <i class="fas fa-history me-1"></i>السجل <i class="fas fa-chevron-down ms-1"></i>
+        </button>
       </div>
-      <div class="text-end">
-        <div class="fw-bold ${c.total_debt > 0 ? 'text-danger' : 'text-success'}">${fmt(c.total_debt || 0)}</div>
-        <div class="small text-muted">دين</div>
-      </div>
+      <div class="customer-history-panel mt-2" id="ch-${c.id}" style="display:none"></div>
     </div>
   `).join('');
 }
@@ -2940,31 +2949,18 @@ async function openCustomerDetail(customerId) {
     body.innerHTML = `
       <div class="d-flex gap-2 mb-3 flex-wrap">
         <button class="btn btn-warning btn-sm text-dark" onclick="openAddSaleModal('${customerId}')"><i class="fas fa-plus me-1"></i>بيع جديد</button>
+        <button class="btn btn-outline-primary btn-sm" onclick="openEditCustomerModalById('${customerId}')"><i class="fas fa-user-edit me-1"></i>تعديل الزبون</button>
+        <button class="btn btn-outline-info btn-sm" onclick="toggleCustomerHistory('${customerId}', this, 'cdm-history')"><i class="fas fa-history me-1"></i>سجل التعديلات</button>
         <button class="btn btn-outline-danger btn-sm" onclick="deleteCustomer('${customerId}')"><i class="fas fa-trash me-1"></i>حذف الزبون</button>
       </div>
+      <div id="cdm-history" style="display:none" class="mb-3"></div>
       <div class="alert alert-${totalUnpaid > 0 ? 'danger' : 'success'} py-2">
         إجمالي الدين: <strong>${fmt(totalUnpaid)}</strong>
       </div>
       <h6 class="mt-3">المشتريات غير المدفوعة (${unpaid.length})</h6>
-      ${unpaid.length ? unpaid.map(s => `
-        <div class="glass-card p-2 mb-2 d-flex justify-content-between align-items-center">
-          <div>
-            <div class="fw-bold text-danger">${fmt(s.total_amount)}</div>
-            <div class="small text-muted">${s.notes || '—'} · ${s.sale_date ? new Date(s.sale_date).toLocaleDateString('ar-IQ') : ''}</div>
-          </div>
-          <button class="btn btn-success btn-sm" onclick="markSalePaid('${s.id}')"><i class="fas fa-check me-1"></i>دفع</button>
-        </div>
-      `).join('') : '<p class="text-muted small">لا توجد مشتريات معلقة</p>'}
+      ${unpaid.length ? unpaid.map(s => _renderSaleRow(s, false)).join('') : '<p class="text-muted small">لا توجد مشتريات معلقة</p>'}
       <h6 class="mt-3 text-muted">المدفوع (${paid.length})</h6>
-      ${paid.length ? paid.map(s => `
-        <div class="glass-card p-2 mb-2 d-flex justify-content-between align-items-center opacity-50">
-          <div>
-            <div class="fw-bold text-success">${fmt(s.total_amount)}</div>
-            <div class="small text-muted">${s.notes || '—'} · ${s.sale_date ? new Date(s.sale_date).toLocaleDateString('ar-IQ') : ''}</div>
-          </div>
-          <span class="badge bg-success">مدفوع</span>
-        </div>
-      `).join('') : '<p class="text-muted small">لا يوجد</p>'}
+      ${paid.length ? paid.map(s => _renderSaleRow(s, true)).join('') : '<p class="text-muted small">لا يوجد</p>'}
     `;
   } catch(e) { body.innerHTML = `<p class="text-danger">${e.message}</p>`; }
 }
@@ -3049,6 +3045,222 @@ async function deleteCustomer(customerId) {
     await api('DELETE', `/market/customers/${customerId}`);
     bootstrap.Modal.getInstance(document.getElementById('customerDetailModal'))?.hide();
     toast('تم الحذف');
+    await loadMarketCustomers();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+// ── Customer editing from list ─────────────────────────────────
+function openEditCustomerModalById(customerId) {
+  const c = _marketCustomers.find(x => x.id === customerId);
+  if (!c) { toast('الزبون غير موجود', 'err'); return; }
+  document.getElementById('acm-id').value = c.id;
+  document.getElementById('acm-title').textContent = 'تعديل الزبون';
+  document.getElementById('acm-name').value = c.name || '';
+  document.getElementById('acm-phone').value = c.phone || '';
+  document.getElementById('acm-notes').value = c.notes || '';
+  new bootstrap.Modal(document.getElementById('addCustomerModal')).show();
+}
+
+// ── Audit history rendering ────────────────────────────────────
+const _FIELD_LABELS_AR = {
+  name: 'الاسم',
+  phone: 'رقم الهاتف',
+  notes: 'الملاحظات',
+  sale_date: 'تاريخ البيع',
+  is_paid: 'حالة الدفع',
+  items: 'المشتريات',
+  total_amount: 'الإجمالي',
+};
+
+function _fmtAuditValue(field, val) {
+  if (val === null || val === undefined || val === '') return '<span class="text-muted">—</span>';
+  if (field === 'is_paid') return val ? 'مدفوع' : 'غير مدفوع';
+  if (field === 'sale_date') {
+    try { return new Date(val).toLocaleString('ar-IQ'); } catch(e) { return String(val); }
+  }
+  if (field === 'items' && Array.isArray(val)) {
+    return val.map(i => `${esc(i.product_name)} × ${i.quantity} @ ${fmt(i.unit_price)}`).join('، ') || '<span class="text-muted">—</span>';
+  }
+  if (field === 'total_amount') return fmt(val);
+  return esc(String(val));
+}
+
+function _renderHistoryList(logs) {
+  if (!logs || !logs.length) {
+    return '<div class="text-center text-muted small py-3"><i class="fas fa-info-circle me-1"></i>لا توجد تعديلات سابقة</div>';
+  }
+  return logs.map(log => {
+    const when = log.created_at ? new Date(log.created_at).toLocaleString('ar-IQ') : '';
+    const typeLbl = log.entity_type === 'sale' ? 'تعديل بيع' : 'تعديل بيانات الزبون';
+    const rows = (log.changes || []).map(ch => {
+      const lbl = _FIELD_LABELS_AR[ch.field] || ch.field;
+      return `
+        <div class="small mb-1">
+          <span class="fw-bold">${esc(lbl)}:</span>
+          <span class="text-muted">${_fmtAuditValue(ch.field, ch.old)}</span>
+          <i class="fas fa-arrow-left mx-1 text-warning"></i>
+          <span>${_fmtAuditValue(ch.field, ch.new)}</span>
+        </div>`;
+    }).join('');
+    return `
+      <div class="glass-card p-2 mb-2" style="border-right:3px solid #f59e0b">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="badge bg-warning text-dark">${typeLbl}</span>
+          <span class="small text-muted">${when}</span>
+        </div>
+        ${rows || '<div class="small text-muted">لا تغييرات</div>'}
+      </div>`;
+  }).join('');
+}
+
+async function toggleCustomerHistory(customerId, btn, targetId) {
+  const panel = document.getElementById(targetId || `ch-${customerId}`);
+  if (!panel) return;
+  if (panel.style.display !== 'none' && panel.dataset.loaded === '1') {
+    panel.style.display = 'none';
+    panel.dataset.loaded = '';
+    return;
+  }
+  panel.style.display = '';
+  panel.innerHTML = '<div class="text-center py-2"><div class="spinner-border spinner-border-sm text-info"></div></div>';
+  try {
+    const logs = await api('GET', `/market/customers/${customerId}/history`);
+    panel.innerHTML = _renderHistoryList(logs);
+    panel.dataset.loaded = '1';
+  } catch(e) {
+    panel.innerHTML = `<div class="text-danger small">${esc(e.message)}</div>`;
+  }
+}
+
+async function toggleSaleHistory(saleId) {
+  const panel = document.getElementById(`sh-${saleId}`);
+  if (!panel) return;
+  if (panel.style.display !== 'none' && panel.dataset.loaded === '1') {
+    panel.style.display = 'none';
+    panel.dataset.loaded = '';
+    return;
+  }
+  panel.style.display = '';
+  panel.innerHTML = '<div class="text-center py-2"><div class="spinner-border spinner-border-sm text-info"></div></div>';
+  try {
+    const logs = await api('GET', `/market/sales/${saleId}/history`);
+    panel.innerHTML = _renderHistoryList(logs);
+    panel.dataset.loaded = '1';
+  } catch(e) {
+    panel.innerHTML = `<div class="text-danger small">${esc(e.message)}</div>`;
+  }
+}
+
+// ── Sale row renderer (used inside customer detail modal) ─────
+function _renderSaleRow(s, isPaid) {
+  const items = (s.items || []).map(i => `${esc(i.product_name)} (${i.quantity}×${fmt(i.unit_price)})`).join('، ');
+  return `
+    <div class="glass-card p-2 mb-2 ${isPaid ? 'opacity-75' : ''}">
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="flex-grow-1">
+          <div class="fw-bold ${isPaid ? 'text-success' : 'text-danger'}">${fmt(s.total_amount)}</div>
+          <div class="small text-muted">${s.notes ? esc(s.notes) : '—'} · ${s.sale_date ? new Date(s.sale_date).toLocaleDateString('ar-IQ') : ''}</div>
+          ${items ? `<div class="small text-info mt-1"><i class="fas fa-box me-1"></i>${items}</div>` : ''}
+        </div>
+        <div class="d-flex flex-column gap-1 ms-2">
+          ${isPaid ? '<span class="badge bg-success">مدفوع</span>' : `<button class="btn btn-success btn-sm" onclick="markSalePaid('${s.id}')"><i class="fas fa-check me-1"></i>دفع</button>`}
+          <button class="btn btn-outline-warning btn-sm" onclick="openEditSaleModal('${s.id}')" title="تعديل"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-outline-info btn-sm" onclick="toggleSaleHistory('${s.id}')" title="سجل التعديلات"><i class="fas fa-history"></i></button>
+        </div>
+      </div>
+      <div id="sh-${s.id}" style="display:none" class="mt-2"></div>
+    </div>`;
+}
+
+// ── Edit Sale Modal ────────────────────────────────────────────
+let _editSaleCache = null;
+
+async function openEditSaleModal(saleId) {
+  loading(true);
+  try {
+    const s = await api('GET', `/market/sales/${saleId}`);
+    if (!s) { toast('البيع غير موجود', 'err'); return; }
+    _editSaleCache = s;
+    document.getElementById('esale-id').value = s.id;
+    document.getElementById('esale-notes').value = s.notes || '';
+    document.getElementById('esale-paid').checked = !!s.is_paid;
+    // datetime-local needs YYYY-MM-DDTHH:MM
+    if (s.sale_date) {
+      const d = new Date(s.sale_date);
+      const pad = n => String(n).padStart(2, '0');
+      document.getElementById('esale-date').value =
+        `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } else {
+      document.getElementById('esale-date').value = '';
+    }
+    // Items
+    document.getElementById('esale-items').innerHTML = '';
+    (s.items || []).forEach(it => _addEditSaleItemRow(it.product_name, it.quantity, it.unit_price));
+    if (!s.items || !s.items.length) _addEditSaleItemRow('', 1, 0);
+    _recomputeEditSaleTotal();
+    new bootstrap.Modal(document.getElementById('editSaleModal')).show();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+
+function _addEditSaleItemRow(name = '', qty = 1, price = 0) {
+  const container = document.getElementById('esale-items');
+  const div = document.createElement('div');
+  div.className = 'esale-item-row d-flex gap-2 mb-2 align-items-center';
+  div.innerHTML = `
+    <input type="text" class="form-control form-control-sm esale-i-name" placeholder="اسم المنتج" value="${esc(name)}" style="flex:2">
+    <input type="number" class="form-control form-control-sm esale-i-qty" placeholder="الكمية" min="0" step="any" value="${qty}" style="flex:1" dir="ltr">
+    <input type="number" class="form-control form-control-sm esale-i-price" placeholder="السعر" min="0" step="any" value="${price}" style="flex:1" dir="ltr">
+    <button class="btn btn-sm btn-outline-danger" type="button" title="حذف"><i class="fas fa-times"></i></button>
+  `;
+  div.querySelector('button').onclick = () => { div.remove(); _recomputeEditSaleTotal(); };
+  div.querySelectorAll('input').forEach(inp => inp.oninput = _recomputeEditSaleTotal);
+  container.appendChild(div);
+}
+
+function addEditSaleItem() {
+  _addEditSaleItemRow('', 1, 0);
+  _recomputeEditSaleTotal();
+}
+
+function _recomputeEditSaleTotal() {
+  let total = 0;
+  document.querySelectorAll('#esale-items .esale-item-row').forEach(row => {
+    const q = parseFloat(row.querySelector('.esale-i-qty').value) || 0;
+    const p = parseFloat(row.querySelector('.esale-i-price').value) || 0;
+    total += q * p;
+  });
+  const el = document.getElementById('esale-total');
+  if (el) el.textContent = fmt(Math.round(total * 100) / 100);
+}
+
+async function saveEditedSale() {
+  const id = document.getElementById('esale-id').value;
+  const notes = document.getElementById('esale-notes').value.trim() || null;
+  const isPaid = document.getElementById('esale-paid').checked;
+  const dateStr = document.getElementById('esale-date').value;
+  const items = [];
+  let invalid = false;
+  document.querySelectorAll('#esale-items .esale-item-row').forEach(row => {
+    const name = row.querySelector('.esale-i-name').value.trim();
+    const qty = parseFloat(row.querySelector('.esale-i-qty').value);
+    const price = parseFloat(row.querySelector('.esale-i-price').value);
+    if (!name || isNaN(qty) || qty <= 0 || isNaN(price) || price < 0) { invalid = true; return; }
+    items.push({ product_name: name, quantity: qty, unit_price: price });
+  });
+  if (!items.length || invalid) { toast('تأكد من تعبئة المنتجات بشكل صحيح', 'err'); return; }
+
+  const body = { notes, is_paid: isPaid, items };
+  if (dateStr) body.sale_date = new Date(dateStr).toISOString();
+
+  loading(true);
+  try {
+    await api('PATCH', `/market/sales/${id}`, body);
+    bootstrap.Modal.getInstance(document.getElementById('editSaleModal'))?.hide();
+    toast('تم حفظ التعديلات ✅');
+    const customerId = _editSaleCache?.customer_id;
+    if (customerId) await openCustomerDetail(customerId);
     await loadMarketCustomers();
   } catch(e) { toast(e.message, 'err'); }
   finally { loading(false); }

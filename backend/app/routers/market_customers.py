@@ -3,14 +3,19 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models.market import MarketCustomer, MarketSale
+from app.models.market import MarketCustomer, MarketSale, MarketAuditLog
 from app.models.user import User
-from app.schemas.market import MarketCustomerCreate, MarketCustomerUpdate, MarketCustomerOut
+from app.schemas.market import (
+    MarketCustomerCreate,
+    MarketCustomerUpdate,
+    MarketCustomerOut,
+    MarketAuditLogOut,
+)
 from app.utils.dependencies import get_current_market_owner
 
 router = APIRouter()
@@ -140,11 +145,18 @@ async def update_customer(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
+    changes: list[dict] = []
     if body.name is not None:
+        if body.name != customer.name:
+            changes.append({"field": "name", "old": customer.name, "new": body.name})
         customer.name = body.name
     if body.notes is not None:
+        if (body.notes or None) != (customer.notes or None):
+            changes.append({"field": "notes", "old": customer.notes, "new": body.notes})
         customer.notes = body.notes
     if body.phone is not None:
+        if (body.phone or None) != (customer.phone or None):
+            changes.append({"field": "phone", "old": customer.phone, "new": body.phone})
         customer.phone = body.phone
         # Re-link if phone changed
         user_result = await db.execute(
@@ -152,6 +164,16 @@ async def update_customer(
         )
         linked = user_result.scalar_one_or_none()
         customer.linked_user_id = linked.id if linked else None
+
+    if changes:
+        db.add(MarketAuditLog(
+            market_owner_id=current_user.id,
+            entity_type="customer",
+            entity_id=customer.id,
+            customer_id=customer.id,
+            action="update",
+            changes=changes,
+        ))
 
     await db.commit()
     await db.refresh(customer)
@@ -175,3 +197,34 @@ async def delete_customer(
         raise HTTPException(status_code=404, detail="Customer not found")
     await db.delete(customer)
     await db.commit()
+
+
+@router.get("/{customer_id}/history", response_model=list[MarketAuditLogOut])
+async def list_customer_history(
+    customer_id: uuid.UUID,
+    current_user: User = Depends(get_current_market_owner),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return all audit-log entries affecting this customer or any of its sales."""
+    # Verify ownership
+    result = await db.execute(
+        select(MarketCustomer.id).where(
+            MarketCustomer.id == customer_id,
+            MarketCustomer.market_owner_id == current_user.id,
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    logs_result = await db.execute(
+        select(MarketAuditLog)
+        .where(
+            MarketAuditLog.market_owner_id == current_user.id,
+            or_(
+                MarketAuditLog.customer_id == customer_id,
+                MarketAuditLog.entity_id == customer_id,
+            ),
+        )
+        .order_by(MarketAuditLog.created_at.desc())
+    )
+    return logs_result.scalars().all()

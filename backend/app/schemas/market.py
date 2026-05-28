@@ -3,6 +3,24 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+# ───────────────────────── Market Audit Log ─────────────────────────
+
+class MarketAuditChange(BaseModel):
+    field: str
+    old: object | None = None
+    new: object | None = None
+
+
+class MarketAuditLogOut(BaseModel):
+    id: uuid.UUID
+    entity_type: str
+    entity_id: uuid.UUID
+    customer_id: uuid.UUID | None
+    action: str
+    changes: list[dict] = []
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 # ─────────────────────────── Market Customer ───────────────────────────
 
@@ -58,8 +76,10 @@ class MarketSaleCreate(BaseModel):
 
 
 class MarketSaleUpdate(BaseModel):
+    sale_date: datetime | None = None
     notes: str | None = None
     is_paid: bool | None = None
+    items: list[MarketSaleItemCreate] | None = None
 
 
 class MarketSaleOut(BaseModel):

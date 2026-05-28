@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, Integer, Numeric, Text, ForeignKey, func, Uuid
+from sqlalchemy import String, Boolean, DateTime, Integer, Numeric, Text, ForeignKey, func, Uuid, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -112,3 +112,22 @@ class SupplierInvoiceItem(Base):
 
     # Relationship
     invoice: Mapped["SupplierInvoice"] = relationship("SupplierInvoice", back_populates="items")
+
+
+class MarketAuditLog(Base):
+    """Audit log of edits made by a market owner on customers/sales.
+
+    ``changes`` is a JSON array of ``{field, old, new}`` dicts.
+    """
+    __tablename__ = "market_audit_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
+    market_owner_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)  # 'customer' | 'sale'
+    entity_id: Mapped[uuid.UUID] = mapped_column(Uuid(), nullable=False, index=True)
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(20), nullable=False, default="update")
+    changes: Mapped[list | dict] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

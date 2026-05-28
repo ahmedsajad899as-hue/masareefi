@@ -8,9 +8,15 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.market import MarketSale, MarketSaleItem, MarketCustomer
+from app.models.market import MarketSale, MarketSaleItem, MarketCustomer, MarketAuditLog
 from app.models.user import User
-from app.schemas.market import MarketSaleCreate, MarketSaleUpdate, MarketSaleOut, MarketSaleItemOut
+from app.schemas.market import (
+    MarketSaleCreate,
+    MarketSaleUpdate,
+    MarketSaleOut,
+    MarketSaleItemOut,
+    MarketAuditLogOut,
+)
 from app.utils.dependencies import get_current_market_owner
 
 router = APIRouter()
@@ -158,12 +164,68 @@ async def update_sale(
     sale = result.scalar_one_or_none()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
-    if body.notes is not None:
+
+    changes: list[dict] = []
+
+    if body.notes is not None and (body.notes or None) != (sale.notes or None):
+        changes.append({"field": "notes", "old": sale.notes, "new": body.notes})
         sale.notes = body.notes
-    if body.is_paid is not None:
+
+    if body.sale_date is not None and body.sale_date != sale.sale_date:
+        changes.append({
+            "field": "sale_date",
+            "old": sale.sale_date.isoformat() if sale.sale_date else None,
+            "new": body.sale_date.isoformat(),
+        })
+        sale.sale_date = body.sale_date
+
+    if body.is_paid is not None and body.is_paid != sale.is_paid:
+        changes.append({"field": "is_paid", "old": sale.is_paid, "new": body.is_paid})
         sale.is_paid = body.is_paid
         if body.is_paid and not sale.paid_at:
             sale.paid_at = datetime.now(timezone.utc)
+        if not body.is_paid:
+            sale.paid_at = None
+
+    if body.items is not None:
+        if not body.items:
+            raise HTTPException(status_code=400, detail="At least one item is required")
+        old_items = [
+            {"product_name": i.product_name, "quantity": float(i.quantity), "unit_price": float(i.unit_price)}
+            for i in sale.items
+        ]
+        new_items = [
+            {"product_name": i.product_name, "quantity": float(i.quantity), "unit_price": float(i.unit_price)}
+            for i in body.items
+        ]
+        if old_items != new_items:
+            changes.append({"field": "items", "old": old_items, "new": new_items})
+            # Replace items
+            for it in list(sale.items):
+                await db.delete(it)
+            await db.flush()
+            for it in body.items:
+                db.add(MarketSaleItem(
+                    sale_id=sale.id,
+                    product_name=it.product_name,
+                    quantity=it.quantity,
+                    unit_price=it.unit_price,
+                ))
+            new_total = round(sum(i.quantity * i.unit_price for i in body.items), 2)
+            if float(sale.total_amount) != new_total:
+                changes.append({"field": "total_amount", "old": float(sale.total_amount), "new": new_total})
+            sale.total_amount = new_total
+
+    if changes:
+        db.add(MarketAuditLog(
+            market_owner_id=current_user.id,
+            entity_type="sale",
+            entity_id=sale.id,
+            customer_id=sale.customer_id,
+            action="update",
+            changes=changes,
+        ))
+
     await db.commit()
     result = await db.execute(
         select(MarketSale)
@@ -172,6 +234,35 @@ async def update_sale(
     )
     sale = result.scalar_one()
     return _build_sale_out(sale)
+
+
+@router.get("/{sale_id}/history", response_model=list[MarketAuditLogOut])
+async def list_sale_history(
+    sale_id: uuid.UUID,
+    current_user: User = Depends(get_current_market_owner),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return audit-log entries for a specific sale."""
+    result = await db.execute(
+        select(MarketSale.id, MarketSale.customer_id).where(
+            MarketSale.id == sale_id,
+            MarketSale.market_owner_id == current_user.id,
+        )
+    )
+    row = result.one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Sale not found")
+
+    logs_result = await db.execute(
+        select(MarketAuditLog)
+        .where(
+            MarketAuditLog.market_owner_id == current_user.id,
+            MarketAuditLog.entity_type == "sale",
+            MarketAuditLog.entity_id == sale_id,
+        )
+        .order_by(MarketAuditLog.created_at.desc())
+    )
+    return logs_result.scalars().all()
 
 
 @router.delete("/{sale_id}", status_code=status.HTTP_204_NO_CONTENT)
