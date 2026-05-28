@@ -75,6 +75,13 @@ class MarketSaleCreate(BaseModel):
     items: list[MarketSaleItemCreate]
 
 
+class MarketSaleQuickCreate(BaseModel):
+    items: list[MarketSaleItemCreate]
+    customer_id: uuid.UUID | None = None  # None = walk-in cash sale
+    is_paid: bool = True
+    notes: str | None = None
+
+
 class MarketSaleUpdate(BaseModel):
     sale_date: datetime | None = None
     notes: str | None = None

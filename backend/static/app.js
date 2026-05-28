@@ -631,6 +631,7 @@ const PAGE_TITLES = {
   'market-overdue':   '⚠️ الديون المتأخرة',
   'market-suppliers': '🚚 فواتير الموردين',
   'market-settings':  '⚙️ إعدادات المحل',
+  'market-checkout':  '🛒 الكاشير السريع',
   'my-purchases':     '🛒 مشترياتي من المحلات',
 };
 
@@ -680,6 +681,7 @@ function goTo(page) {
     case 'market-overdue':   loadOverdueCustomers(); break;
     case 'market-suppliers': loadMarketSuppliers(); break;
     case 'market-settings':  loadMarketSettings(); break;
+    case 'market-checkout':  loadCheckout(); break;
     case 'my-purchases':     loadMyPurchases(); break;
   }
 }
@@ -3754,6 +3756,247 @@ async function markSupplierPaid(invoiceId) {
     await loadMarketSuppliers();
   } catch(e) { toast(e.message, 'err'); }
   finally { loading(false); }
+}
+
+// ─────────────────────────── Quick Checkout ───────────────────────────
+let _checkoutItems = [];
+let _checkoutCustId = null;
+let _checkoutCustomers = [];
+
+function loadCheckout() {
+  checkoutLoadCustomers();
+  const hasItems = _checkoutItems.some(it => (it.product_name || '').trim());
+  const saveBtn = document.getElementById('checkout-save-btn');
+  const printBtn = document.getElementById('checkout-print-btn');
+  if (saveBtn) saveBtn.disabled = !hasItems;
+  if (printBtn) printBtn.disabled = !hasItems;
+}
+
+function checkoutLoadCustomers() {
+  api('GET', '/market/customers/')
+    .then(data => {
+      _checkoutCustomers = Array.isArray(data) ? data : (data.customers || []);
+      checkoutRenderCustomers();
+    })
+    .catch(() => {});
+}
+
+function checkoutRenderCustomers() {
+  const sel = document.getElementById('checkout-cust-select');
+  if (!sel) return;
+  const search = (document.getElementById('checkout-cust-search')?.value || '').trim().toLowerCase();
+  const filtered = _checkoutCustomers.filter(c =>
+    c.name.toLowerCase().includes(search) ||
+    (c.phone || '').includes(search)
+  );
+  sel.innerHTML = filtered.map(c =>
+    `<option value="${c.id}">${esc(c.name)}${c.phone ? ' — ' + esc(c.phone) : ''}</option>`
+  ).join('');
+  if (!_checkoutCustId && sel.options.length) _checkoutCustId = sel.options[0].value;
+}
+
+function checkoutFilterCustomers() { checkoutRenderCustomers(); }
+
+function checkoutToggleWalkin() {
+  const walkin = document.getElementById('checkout-walkin-toggle').checked;
+  document.getElementById('checkout-cust-wrap').style.display = walkin ? 'none' : '';
+  if (walkin) _checkoutCustId = null;
+}
+
+function checkoutFileSelected(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  document.getElementById('checkout-preview').src = URL.createObjectURL(file);
+  document.getElementById('checkout-img-wrap').style.display = '';
+  const statusEl = document.getElementById('checkout-status');
+  statusEl.innerHTML = '<div class="alert alert-info py-1 small">🔍 جاري التعرف على المنتجات...</div>';
+
+  visionCompressImage(file, 800, 0.72).then(blob => {
+    const fd = new FormData();
+    fd.append('file', blob, 'checkout.jpg');
+    fetch(API + '/market/vision/analyze', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.token },
+      body: fd,
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.items && data.items.length) {
+          const newItems = data.items.map(it => ({
+            product_name: it.product_name || '',
+            quantity: it.quantity || 1,
+            unit_price: it.unit_price || 0,
+          }));
+          const existing = _checkoutItems.filter(it => (it.product_name || '').trim());
+          _checkoutItems = [...existing, ...newItems];
+          checkoutRenderItems();
+          statusEl.innerHTML = `<div class="alert alert-success py-1 small">✅ تم التعرف على ${newItems.length} منتج</div>`;
+          document.getElementById('checkout-save-btn').disabled = false;
+          document.getElementById('checkout-print-btn').disabled = false;
+        } else {
+          statusEl.innerHTML = '<div class="alert alert-warning py-1 small">⚠️ لم يُتعرف على منتجات، أضف يدوياً</div>';
+        }
+      })
+      .catch(() => {
+        statusEl.innerHTML = '<div class="alert alert-danger py-1 small">خطأ في تحليل الصورة</div>';
+      });
+  });
+  ev.target.value = '';
+}
+
+function checkoutRenderItems() {
+  const tbody = document.getElementById('checkout-items');
+  if (!tbody) return;
+  if (!_checkoutItems.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-muted text-center small py-3">لا توجد منتجات — أضف أو التقط صورة</td></tr>';
+    checkoutRecalcTotal();
+    return;
+  }
+  tbody.innerHTML = _checkoutItems.map((it, i) => `
+    <tr>
+      <td><input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" value="${esc(it.product_name)}" oninput="checkoutUpdate(${i},'product_name',this.value)" placeholder="اسم المنتج"></td>
+      <td><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" value="${it.quantity}" min="0.1" step="0.1" oninput="checkoutUpdate(${i},'quantity',+this.value)" style="text-align:center"></td>
+      <td><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" value="${it.unit_price}" min="0" oninput="checkoutUpdate(${i},'unit_price',+this.value)" style="text-align:center"></td>
+      <td><button class="btn btn-sm btn-link text-danger p-0" onclick="checkoutRemoveItem(${i})"><i class="fas fa-times"></i></button></td>
+    </tr>`).join('');
+  checkoutRecalcTotal();
+}
+
+function checkoutUpdate(i, field, val) {
+  if (!_checkoutItems[i]) return;
+  _checkoutItems[i][field] = val;
+  checkoutRecalcTotal();
+  const hasItems = _checkoutItems.some(it => (it.product_name || '').trim());
+  document.getElementById('checkout-save-btn').disabled = !hasItems;
+}
+
+function checkoutRemoveItem(i) {
+  _checkoutItems.splice(i, 1);
+  checkoutRenderItems();
+  const hasItems = _checkoutItems.some(it => (it.product_name || '').trim());
+  document.getElementById('checkout-save-btn').disabled = !hasItems;
+}
+
+function checkoutAddItem() {
+  _checkoutItems.push({ product_name: '', quantity: 1, unit_price: 0 });
+  checkoutRenderItems();
+  document.getElementById('checkout-save-btn').disabled = false;
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('#checkout-items tr input[type=text]');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  }, 50);
+}
+
+function checkoutRecalcTotal() {
+  const total = _checkoutItems.reduce((s, it) => s + (it.quantity || 0) * (it.unit_price || 0), 0);
+  const el = document.getElementById('checkout-total');
+  if (el) el.textContent = total.toLocaleString('ar-IQ') + ' IQD';
+}
+
+async function checkoutSaveSale() {
+  const items = _checkoutItems.filter(it => (it.product_name || '').trim());
+  if (!items.length) return toast('أضف منتجاً واحداً على الأقل', 'err');
+  const walkin = document.getElementById('checkout-walkin-toggle').checked;
+  const custId = walkin ? null : (_checkoutCustId || document.getElementById('checkout-cust-select')?.value || null);
+  if (!walkin && !custId) return toast('اختر زبوناً أو فعّل زبون عابر', 'err');
+  const isPaid = document.querySelector('input[name="checkout-pay"]:checked')?.value !== 'credit';
+  const notes = document.getElementById('checkout-notes').value.trim() || null;
+
+  const btn = document.getElementById('checkout-save-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>يتم الحفظ...';
+
+  try {
+    const payload = { items, is_paid: isPaid, notes };
+    if (custId) payload.customer_id = custId;
+    const sale = await api('POST', '/market/sales/quick', payload);
+    toast('تم حفظ البيع بنجاح ✅');
+    window._lastCheckoutSale = sale;
+    document.getElementById('checkout-print-btn').disabled = false;
+    document.getElementById('checkout-status').innerHTML =
+      `<div class="alert alert-success py-2"><i class="fas fa-check-circle me-1"></i>تم الحفظ — المجموع: <strong>${Number(sale.total_amount).toLocaleString('ar-IQ')} IQD</strong><br><small class="text-muted">انقر "طباعة الفاتورة" لطباعة الإيصال</small></div>`;
+  } catch (e) {
+    toast(e.message || 'خطأ في الحفظ', 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-check me-1"></i>حفظ البيع';
+  }
+}
+
+function checkoutPrintReceipt() {
+  const items = _checkoutItems.filter(it => (it.product_name || '').trim());
+  if (!items.length) return toast('لا توجد منتجات للطباعة', 'err');
+
+  const storeName = S.user?.store_name || S.user?.full_name || 'المحل';
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('ar-IQ', { year: 'numeric', month: 'long', day: 'numeric' })
+    + ' — ' + now.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
+  const walkin = document.getElementById('checkout-walkin-toggle').checked;
+  const custId = walkin ? null : (_checkoutCustId || document.getElementById('checkout-cust-select')?.value || null);
+  const custName = custId ? (_checkoutCustomers.find(c => c.id === custId)?.name || 'زبون') : 'زبون عابر';
+  const isPaid = document.querySelector('input[name="checkout-pay"]:checked')?.value !== 'credit';
+  const total = items.reduce((s, it) => s + (it.quantity || 0) * (it.unit_price || 0), 0);
+
+  const rows = items.map(it => `
+    <tr>
+      <td>${esc(it.product_name)}</td>
+      <td style="text-align:center">${it.quantity}</td>
+      <td style="text-align:left">${Number(it.unit_price).toLocaleString('ar-IQ')}</td>
+      <td style="text-align:left">${(it.quantity * it.unit_price).toLocaleString('ar-IQ')}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>فاتورة — ${esc(storeName)}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#000;width:80mm;margin:auto;padding:10px}
+  .hd{text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:8px}
+  .hd h2{font-size:20px;font-weight:bold;margin-bottom:2px}
+  .meta{font-size:11px;margin-bottom:8px;line-height:1.7}
+  table{width:100%;border-collapse:collapse;margin-bottom:8px}
+  th{font-size:11px;border-bottom:1px solid #000;padding:2px 3px}
+  td{font-size:12px;padding:3px 3px;border-bottom:1px dotted #bbb}
+  .tot{border-top:2px solid #000;font-weight:bold;font-size:15px}
+  .ft{text-align:center;margin-top:8px;font-size:11px;border-top:1px dashed #000;padding-top:6px;color:#555}
+</style></head><body>
+<div class="hd"><h2>${esc(storeName)}</h2><div style="font-size:11px">${dateStr}</div></div>
+<div class="meta">الزبون: <strong>${esc(custName)}</strong><br>الدفع: <strong>${isPaid ? 'نقداً ✅' : 'آجل 📋'}</strong></div>
+<table>
+  <thead><tr><th>المنتج</th><th>ك</th><th>سعر</th><th>مجموع</th></tr></thead>
+  <tbody>${rows}<tr class="tot"><td colspan="3">الإجمالي</td><td>${total.toLocaleString('ar-IQ')} IQD</td></tr></tbody>
+</table>
+<div class="ft">شكراً لزيارتكم 🙏</div>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'width=340,height=600');
+  if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 400); }
+}
+
+function checkoutReset() {
+  _checkoutItems = [];
+  _checkoutCustId = null;
+  checkoutRenderItems();
+  const el = document.getElementById('checkout-total');
+  if (el) el.textContent = '0 IQD';
+  const statusEl = document.getElementById('checkout-status');
+  if (statusEl) statusEl.innerHTML = '';
+  const preview = document.getElementById('checkout-preview');
+  if (preview) preview.src = '';
+  const imgWrap = document.getElementById('checkout-img-wrap');
+  if (imgWrap) imgWrap.style.display = 'none';
+  const notesEl = document.getElementById('checkout-notes');
+  if (notesEl) notesEl.value = '';
+  const saveBtn = document.getElementById('checkout-save-btn');
+  if (saveBtn) saveBtn.disabled = true;
+  const printBtn = document.getElementById('checkout-print-btn');
+  if (printBtn) printBtn.disabled = true;
+  const toggle = document.getElementById('checkout-walkin-toggle');
+  if (toggle) { toggle.checked = true; checkoutToggleWalkin(); }
+  const cashRadio = document.querySelector('input[name="checkout-pay"][value="cash"]');
+  if (cashRadio) cashRadio.checked = true;
+  const fileEl = document.getElementById('checkout-file');
+  if (fileEl) fileEl.value = '';
+  toast('تم التصفير ✅');
 }
 
 // ── My Purchases (regular user, read-only) ──────────────────────

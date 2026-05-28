@@ -12,6 +12,7 @@ from app.models.market import MarketSale, MarketSaleItem, MarketCustomer, Market
 from app.models.user import User
 from app.schemas.market import (
     MarketSaleCreate,
+    MarketSaleQuickCreate,
     MarketSaleUpdate,
     MarketSaleOut,
     MarketSaleItemOut,
@@ -95,6 +96,79 @@ async def create_sale(
     await db.commit()
 
     # Reload with relationships
+    result = await db.execute(
+        select(MarketSale)
+        .options(selectinload(MarketSale.items), selectinload(MarketSale.customer))
+        .where(MarketSale.id == sale.id)
+    )
+    sale = result.scalar_one()
+    return _build_sale_out(sale)
+
+
+@router.post("/quick", response_model=MarketSaleOut, status_code=status.HTTP_201_CREATED)
+async def create_quick_sale(
+    body: MarketSaleQuickCreate,
+    current_user: User = Depends(get_current_market_owner),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cash register endpoint — optional customer, is_paid defaults True (cash)."""
+    if not body.items:
+        raise HTTPException(status_code=400, detail="At least one item is required")
+
+    # Resolve customer: use provided or auto-create walk-in placeholder
+    customer_id = body.customer_id
+    if customer_id:
+        cust_result = await db.execute(
+            select(MarketCustomer).where(
+                MarketCustomer.id == customer_id,
+                MarketCustomer.market_owner_id == current_user.id,
+            )
+        )
+        if not cust_result.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Customer not found")
+    else:
+        walkin_result = await db.execute(
+            select(MarketCustomer).where(
+                MarketCustomer.market_owner_id == current_user.id,
+                MarketCustomer.name == "زبون عابر",
+            ).limit(1)
+        )
+        walkin = walkin_result.scalar_one_or_none()
+        if not walkin:
+            walkin = MarketCustomer(
+                market_owner_id=current_user.id,
+                name="زبون عابر",
+                notes="حساب تلقائي للمبيعات النقدية",
+            )
+            db.add(walkin)
+            await db.flush()
+        customer_id = walkin.id
+
+    now = datetime.now(timezone.utc)
+    total = sum(round(i.quantity * i.unit_price, 2) for i in body.items)
+
+    sale = MarketSale(
+        market_owner_id=current_user.id,
+        customer_id=customer_id,
+        sale_date=now,
+        notes=body.notes,
+        total_amount=total,
+        is_paid=body.is_paid,
+        paid_at=now if body.is_paid else None,
+    )
+    db.add(sale)
+    await db.flush()
+
+    for item_data in body.items:
+        db.add(MarketSaleItem(
+            sale_id=sale.id,
+            product_name=item_data.product_name,
+            quantity=item_data.quantity,
+            unit_price=item_data.unit_price,
+        ))
+
+    await db.commit()
+
     result = await db.execute(
         select(MarketSale)
         .options(selectinload(MarketSale.items), selectinload(MarketSale.customer))
