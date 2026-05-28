@@ -483,6 +483,12 @@ function updateSidebarUser() {
   document.querySelectorAll('.market-only').forEach(el => {
     el.style.display = S.user.role === 'market_owner' ? '' : 'none';
   });
+  // For market_owner accounts, the personal-feature links are hidden unless
+  // the admin enabled them via show_personal_features.
+  const hidePersonal = S.user.role === 'market_owner' && !S.user.show_personal_features;
+  document.querySelectorAll('.personal-feature-link').forEach(el => {
+    el.style.display = hidePersonal ? 'none' : '';
+  });
   updatePlanUI();
 }
 
@@ -2708,6 +2714,10 @@ function openAddUserModal() {
   document.getElementById('um-role').value = 'user';
   document.getElementById('um-store-name').value = '';
   document.getElementById('um-store-wrap').style.display = 'none';
+  const spNew = document.getElementById('um-show-personal');
+  if (spNew) spNew.checked = false;
+  const spwNew = document.getElementById('um-show-personal-wrap');
+  if (spwNew) spwNew.style.display = 'none';
   ['um-c-daily','um-c-wallets','um-c-cats','um-c-budgets','um-c-goals','um-c-voice'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
@@ -2736,6 +2746,10 @@ function openEditUserModal(userId) {
   document.getElementById('um-role').value = role;
   document.getElementById('um-store-name').value = u.store_name || '';
   document.getElementById('um-store-wrap').style.display = role === 'market_owner' ? '' : 'none';
+  const spEdit = document.getElementById('um-show-personal');
+  if (spEdit) spEdit.checked = !!u.show_personal_features;
+  const spwEdit = document.getElementById('um-show-personal-wrap');
+  if (spwEdit) spwEdit.style.display = role === 'market_owner' ? '' : 'none';
   // Populate custom plan limit fields
   const setNum = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
   setNum('um-c-daily',   u.custom_daily_expenses);
@@ -2775,6 +2789,8 @@ function toggleMarketOwnerField() {
   const role = document.getElementById('um-role')?.value;
   const wrap = document.getElementById('um-store-wrap');
   if (wrap) wrap.style.display = role === 'market_owner' ? '' : 'none';
+  const spw = document.getElementById('um-show-personal-wrap');
+  if (spw) spw.style.display = role === 'market_owner' ? '' : 'none';
 }
 
 async function saveUser() {
@@ -2790,6 +2806,7 @@ async function saveUser() {
   const isActive = document.getElementById('um-active').checked;
   const role     = document.getElementById('um-role').value;
   const storeName = document.getElementById('um-store-name').value.trim() || null;
+  const showPersonal = document.getElementById('um-show-personal')?.checked || false;
 
   if (!name) { toast('أدخل الاسم', 'err'); return; }
   if (role === 'market_owner' && !storeName) { toast('أدخل اسم المحل', 'err'); return; }
@@ -2811,11 +2828,11 @@ async function saveUser() {
       // Create
       if (!email) { toast('أدخل البريد', 'err'); return; }
       if (!pass)  { toast('أدخل كلمة المرور', 'err'); return; }
-      await api('POST', '/admin/users', { full_name: name, email, phone_number: phone, password: pass, currency, is_admin: isAdmin, plan, plan_expires_at: planExpires, role, ...(role === 'market_owner' ? { store_name: storeName } : {}), ...customLimits });
+      await api('POST', '/admin/users', { full_name: name, email, phone_number: phone, password: pass, currency, is_admin: isAdmin, plan, plan_expires_at: planExpires, role, ...(role === 'market_owner' ? { store_name: storeName, show_personal_features: showPersonal } : {}), ...customLimits });
       toast('تم إنشاء الحساب ✅');
     } else {
       // Update
-      const body = { full_name: name, phone_number: phone, currency, is_admin: isAdmin, is_active: isActive, plan, plan_expires_at: planExpires, role, store_name: storeName, ...customLimits };
+      const body = { full_name: name, phone_number: phone, currency, is_admin: isAdmin, is_active: isActive, plan, plan_expires_at: planExpires, role, store_name: storeName, show_personal_features: showPersonal, ...customLimits };
       if (pass) body.password = pass;
       await api('PATCH', `/admin/users/${id}`, body);
       toast('تم التحديث ✅');

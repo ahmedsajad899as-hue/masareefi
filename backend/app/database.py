@@ -89,6 +89,7 @@ async def create_all_tables() -> None:
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS store_name VARCHAR(200) NULL",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS market_overdue_days INTEGER NOT NULL DEFAULT 30",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS show_personal_features BOOLEAN NOT NULL DEFAULT false",
             # Activity log table
             """CREATE TABLE IF NOT EXISTS user_activities (
                 id SERIAL PRIMARY KEY,

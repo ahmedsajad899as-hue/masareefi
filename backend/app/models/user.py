@@ -43,6 +43,10 @@ class User(Base):
     # Market owner fields
     store_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     market_overdue_days: Mapped[int] = mapped_column(Integer, default=30, server_default="30")
+    # When True, market_owner accounts also see the regular-user features
+    # (categories/budgets, wallets, voice assistant, statistics). Defaults to
+    # False so the sidebar stays focused on store management.
+    show_personal_features: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     # Password reset
     reset_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reset_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

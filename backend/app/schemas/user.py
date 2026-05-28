@@ -90,6 +90,7 @@ class UserOut(BaseModel):
     role: str = "user"
     store_name: str | None = None
     market_overdue_days: int = 30
+    show_personal_features: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

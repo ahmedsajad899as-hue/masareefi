@@ -30,6 +30,7 @@ class AdminCreateUser(BaseModel):
     plan_expires_at: str | None = None
     role: str = "user"  # 'user' or 'market_owner'
     store_name: str | None = None
+    show_personal_features: bool | None = None
     custom_daily_expenses: int | None = None
     custom_wallets: int | None = None
     custom_categories: int | None = None
@@ -50,6 +51,7 @@ class AdminUpdateUser(BaseModel):
     plan_expires_at: str | None = None
     role: str | None = None  # 'user' or 'market_owner'
     store_name: str | None = None
+    show_personal_features: bool | None = None
     custom_daily_expenses: int | None = None
     custom_wallets: int | None = None
     custom_categories: int | None = None
@@ -101,6 +103,7 @@ async def create_user(
         trial_started_at=datetime.now(timezone.utc) if body.plan == "trial" else None,
         role=body.role,
         store_name=body.store_name.strip() if body.store_name else None,
+        show_personal_features=bool(body.show_personal_features) if body.show_personal_features is not None else False,
         custom_daily_expenses=body.custom_daily_expenses,
         custom_wallets=body.custom_wallets,
         custom_categories=body.custom_categories,
