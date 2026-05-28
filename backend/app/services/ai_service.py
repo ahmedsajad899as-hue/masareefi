@@ -19,7 +19,24 @@ _AR_NUMS = {
     "سبع": 7, "سبعة": 7, "ثمان": 8, "ثمانية": 8, "تسع": 9, "تسعة": 9,
     "عشر": 10, "عشرة": 10, "عشرين": 20, "ثلاثين": 30, "أربعين": 40,
     "خمسين": 50, "ستين": 60, "سبعين": 70, "ثمانين": 80, "تسعين": 90,
-    "مية": 100, "مئة": 100, "ميتين": 200, "مئتين": 200,
+    # Iraqi dialect teens (11-19)
+    "حدعش": 11, "احدعش": 11, "إحدعش": 11, "حادعش": 11,
+    "ثنتعش": 12, "اثنتعش": 12, "اثنعش": 12,
+    "ثلطعش": 13, "تلطعش": 13, "ثلثطعش": 13, "ثلاثطعش": 13,
+    "أربعطعش": 14, "اربعطعش": 14, "أربعتعش": 14, "اربعتعش": 14,
+    "خمصطعش": 15, "خمستعش": 15, "خمسطعش": 15, "خمستاعش": 15,
+    "ستطعش": 16, "ستاعش": 16, "ستتعش": 16,
+    "سبعطعش": 17, "سبعتعش": 17,
+    "ثمنطعش": 18, "ثمانطعش": 18, "ثمانتعش": 18,
+    "تسعطعش": 19, "تسعتعش": 19,
+    # hundreds (with dialect forms)
+    "مية": 100, "مئة": 100, "ميه": 100, "مئه": 100, "ميتين": 200, "مئتين": 200,
+    "خمسمية": 500, "خمسمئة": 500, "خمسميه": 500,
+    "ستمية": 600, "ستمئة": 600, "ستميه": 600,
+    "سبعمية": 700, "سبعمئة": 700, "سبعميه": 700,
+    "ثمانمية": 800, "ثمنمية": 800, "ثمنميه": 800,
+    "تسعمية": 900, "تسعمئة": 900, "تسعميه": 900,
+    # thousands
     "ألف": 1000, "الف": 1000, "ألفين": 2000, "الفين": 2000,
     "ثلاث آلاف": 3000, "ثلاثة آلاف": 3000, "أربع آلاف": 4000, "أربعة آلاف": 4000,
     "خمس آلاف": 5000, "خمسة آلاف": 5000, "ست آلاف": 6000, "ستة آلاف": 6000,
@@ -487,83 +504,158 @@ def _parse_market_local(text: str, customers: list) -> list:
         'اليوم', 'ب', 'بـ', 'من', 'في', 'ل', 'لـ',
     }
 
-    # ── helper: parse a price string to float ────────────────────────────────
+    # ── Numbers that represent fractions of 1000 (never get ×1000 in market context) ──
+    _FRAC_WORDS = frozenset(['ربع', 'ربعه', 'ربعة', 'نص', 'نصف'])
+    # ── Hundreds markers (words containing مية/مئة → already IQD hundreds, no ×1000) ──
+    _MIA_RE = re.compile(r'(?:مية|مئة|ميه|مئه|مئتين|ميتين)')
+    # ── Thousands markers ──
+    _ALF_RE = re.compile(r'\b(?:الف|ألف|آلاف|الاف|الفين|ألفين|elf)\b', re.IGNORECASE)
+    # ── Build a set of word numbers (value < 1000, no الف entries) for price matching ──
+    _PRICE_WORDS = {k: v for k, v in _AR_NUMS.items() if 0 < v < 1000}
+
     def _price(s: str) -> "float | None":
+        """Parse a price string in Iraqi market context.
+        Bare word numbers 1-99 (without الف/مية qualifier) are treated as × 1000.
+        Special: ربع=250, نص/نصف=500, ونص=+500, وربع=+250.
+        """
         s = s.strip()
         if not s:
             return None
-        # Strip leading price connector "ب" / "بـ"
-        s = re.sub(r'^بـ?(?=\S)', '', s).strip()
-        # Speech recognition artifact: "7:30" → سبعة ونص → 7500
+        # Strip leading price connector "ب" / "بـ" (attached or with space)
+        s = re.sub(r'^بـ?\s*', '', s).strip()
+        if not s:
+            return None
+
+        # 1. Speech-recognition artifact: "7:30" → سبعة ونص → 7500
         m = re.fullmatch(r'(\d+):(\d{2})', s)
         if m:
             major, minor = int(m.group(1)), int(m.group(2))
             return float(major * 1000 + (500 if minor in (30, 50) else minor * 10))
-        # Digits + optional الف + optional ونص
+
+        # 2. Digits + optional الف + optional ونص/وربع
         m = re.match(
             r'^([\d,٫٬]+(?:\.\d+)?)\s*'
             r'(الف|ألف|آلاف|الاف|elf)?'
-            r'(?:\s*ونص)?$', s, re.IGNORECASE)
+            r'(\s*ونص|\s*وربع)?$', s, re.IGNORECASE)
         if m:
             try:
                 val = float(m.group(1).replace(',', '').replace('٫', '').replace('٬', ''))
                 if m.group(2):
                     val *= 1000
-                if 'ونص' in s:
-                    val += 500
+                if m.group(3):
+                    val += 500 if 'ونص' in (m.group(3) or '') else 250
                 return val if val > 0 else None
             except ValueError:
                 pass
-        # Pure "الف/آلاف" (no leading digits) e.g. "الف ونص"
-        if re.match(r'^(?:الف|ألف|آلاف|الاف)', s):
-            base = 1000.0
-            if 'ونص' in s:
-                base += 500
+
+        # 3. Fraction shortcuts: ربع=250, نص/نصف=500
+        s_norm = _normalize_arabic(s.split()[0]) if s.split() else ''
+        if s_norm in ('ربع', 'ربعه', 'ربعة'):
+            return 250.0
+        if s_norm in ('نص', 'نصف'):
+            return 500.0
+
+        # 4. Pure thousands prefix: الف, ألفين, آلاف alone
+        if re.match(r'^(?:الف|ألف|آلاف|الاف|الفين|ألفين)(?:\s+ونص|\s+وربع)?$', s, re.IGNORECASE):
+            base = 2000.0 if re.match(r'^(?:الفين|ألفين)', s, re.IGNORECASE) else 1000.0
+            if 'ونص' in s: base += 500
+            if 'وربع' in s: base += 250
             return base
-        # Arabic word numbers: "خمسة الاف ونص", "عشرين الف"
+
+        # 5. Word-number parsing
+        # Scan for word numbers (use only entries < 1000 to avoid double-multiply with الف)
         val = 0.0
         found = False
-        for word, num in sorted(_AR_NUMS.items(), key=lambda x: -len(x[0])):
-            if re.search(r'(?:^|\s)' + re.escape(word) + r'(?:\s|$)', s):
+        for word, num in sorted(_PRICE_WORDS.items(), key=lambda x: -len(x[0])):
+            if re.search(r'(?:^|\s)' + re.escape(word) + r'(?:\s|$)', s, re.IGNORECASE):
                 val += float(num)
                 found = True
-        if re.search(r'\b(?:الف|ألف|آلاف|الاف|elf)\b', s, re.IGNORECASE):
-            val = val * 1000 if found else 1000.0
+
+        has_alf = bool(_ALF_RE.search(s))
+        has_mia = bool(_MIA_RE.search(s))
+        is_frac = s_norm in _FRAC_WORDS
+
+        if has_alf:
+            # Explicit thousands multiplier: "خمسة الاف" = 5000, "الفين" = 2000
+            if re.match(r'^(?:الفين|ألفين)', s, re.IGNORECASE):
+                val = 2000.0
+            else:
+                val = val * 1000 if found else 1000.0
             found = True
+        elif found and not has_mia and not is_frac and 1 <= val <= 99:
+            # Bare word number in Iraqi market context → implied thousands
+            # (e.g., ثلاثه=3 → 3000, عشرين=20 → 20000, خمصطعش=15 → 15000)
+            val *= 1000
+        # val stays as-is if has_mia (hundreds: مية=100, خمسمية=500, etc.)
+        # or if it's a fraction word (ربع=250, نص=500)
+
+        # Apply ونص (+500) and وربع (+250) suffixes
         if 'ونص' in s:
             val += 500
             found = True
+        if 'وربع' in s:
+            val += 250
+            found = True
+
         return val if found and val > 0 else None
+
+    # ── helper: build a regex that matches a price token at end of string ──────
+    _PRICE_WORD_ALT = '|'.join(
+        re.escape(w) for w in sorted(_AR_NUMS, key=len, reverse=True)
+        if _AR_NUMS[w] >= 1
+    )
+    _END_PRICE_RE = re.compile(
+        r'\s+('
+        # digits + optional الف + optional ونص/وربع
+        r'[\d,٫٬]+(?:[:.]\d+)?(?:\s*(?:الف|ألف|آلاف|الاف))?(?:\s*ونص|\s*وربع)?'
+        r'|'
+        # pure الف/ألفين + optional ونص
+        r'(?:الف|ألف|الفين|ألفين|آلاف|الاف)(?:\s+ونص|\s+وربع)?'
+        r'|'
+        # word number + optional الف + optional ونص/وربع
+        r'(?:' + _PRICE_WORD_ALT + r')(?:\s+(?:الف|ألف|آلاف|الاف))?(?:\s+ونص|\s+وربع)?'
+        r')$',
+        re.IGNORECASE
+    )
 
     # ── helper: parse "item_name ب price" segment ────────────────────────────
     def _item_price(seg: str) -> "tuple[str, float | None]":
-        """Return (item_name, price_or_None) for one item segment."""
+        """Return (item_name, price_or_None) for one item segment.
+        Tries in order:
+          1. name + \" ب \" + price  (explicit ب with spaces)
+          2. name + \" بWORD\"        (ب attached to word: بثلاثه, بالف, بخمسه ونص)
+          3. name + PRICE_AT_END     (price words at segment end, no ب marker)
+        """
         seg = seg.strip()
-        # "name ب price_digits_or_words" with optional space between ب and price
-        m = re.match(
-            r'^(.+?)\s+ب\s+'
-            r'([\d,٫٬]+(?:[:.]\d+)?(?:\s*(?:الف|ألف|آلاف|الاف|elf))?(?:\s*ونص)?'
-            r'|(?:الف|ألف|آلاف|الاف)(?:\s+ونص)?'
-            r'|(?:' + '|'.join(re.escape(w) for w in sorted(_AR_NUMS, key=len, reverse=True))
-            + r')(?:\s+(?:الف|ألف|آلاف|الاف))?(?:\s+ونص)?)$',
-            seg)
-        if m:
-            p = _price(m.group(2))
-            if p:
-                return m.group(1).strip(), p
-        # "name بالف..." — ب attached directly to الف (no space)
-        m = re.match(r'^(.+?)\s+(ب(?:الف|ألف|آلاف|الاف)(?:\s+ونص)?)$', seg)
-        if m:
-            price_str = m.group(2)[1:]  # strip leading ب
-            p = _price(price_str)
-            if p:
-                return m.group(1).strip(), p
-        # Fallback: try "name ب anything"
+
+        # 1. Explicit "name ب price" — space on both sides of ب
         m = re.match(r'^(.+?)\s+ب\s+(.+)$', seg)
         if m:
             p = _price(m.group(2))
             if p:
                 return m.group(1).strip(), p
+
+        # 2. "name بWORD" — ب attached directly to an Arabic word price
+        # Handles: "بثلاثه", "بالف", "بخمسه ونص", "بالف ونص"
+        m = re.match(
+            r'^(.+?)\s+(ب[\u0600-\u06FF][\u0600-\u06FF\s]*?(?:ونص|وربع)?)$',
+            seg)
+        if m:
+            price_str = m.group(2)[1:]  # strip leading ب
+            p = _price(price_str)
+            if p:
+                return m.group(1).strip(), p
+
+        # 3. Price at END of segment (no ب marker)
+        # Handles: "لبن اربعه ونص" → لبن: 4500, "زيت عشرين الف" → زيت: 20000
+        m = _END_PRICE_RE.search(seg)
+        if m and m.start() > 0:
+            p = _price(m.group(1))
+            if p:
+                item_name = seg[:m.start()].strip()
+                if item_name:
+                    return item_name, p
+
         return seg, None
 
     # ── Split text into per-customer chunks ──────────────────────────────────
@@ -810,54 +902,101 @@ async def transcribe_audio_for_market(audio_bytes: bytes, filename: str) -> str:
 # ═════════════════════════════════════════════════════════════════════════════
 
 VISION_SYSTEM_PROMPT = """
-You are an expert product-recognition assistant for an Iraqi grocery/market shop owner.
-You will receive a photo from the shop owner. The photo may contain:
+You are an expert product-recognition assistant for an Iraqi grocery / supermarket
+shop owner. You will receive a photo from the shop. The photo may contain:
   - one or more physical products on a counter, shelf, or in a bag
   - a handwritten note listing products
   - a printed receipt
   - a screenshot of a shopping list
 
-Your job: identify EVERY product visible (even if only ONE product is in the photo)
+Your job: identify EVERY product visible (even if only ONE item is in the photo)
 and return a JSON array. NEVER return an empty array if any product, package, brand,
 or written word is visible — always extract at least the visible item.
+
+PRODUCT CATEGORIES YOU MUST RECOGNIZE WELL (Iraqi market staples):
+• Soft drinks / juices: بيبسي, كوكا كولا, سبايت, ميريندا, 7 Up, رواني, برتقال, تفاح, عصير راني, عصير سنتوب …
+• Water bottles: جبل صافي, صفا, سباركل … (ماء 250مل / 500مل / 1.5ل / 5ل / جالون)
+• Energy drinks: ريد بول, بول شارك, تايغر, تين بوي …
+• Dairy / eggs: حليب نيدو, حليب لاكتيل, لبن, جبن كيري, زبدة, بيض …
+• Snacks / chips: لايز, چيتوس, دوريتوس, برينجلز, مرتديلا, بوب كورن …
+• Chocolate & sweets: كدبري, سنيكرز, مارس, بونجو, كت كات, توفف, بسكوت, حلوى …
+• Tea & coffee: شاي الغزالين, شاي لبتون, نسكافيه, قهوة تركية, نس كافي جولد …
+• Bakery & grains: خبز, صمون, ارز بسمتي, رز العروس, طحين, برغل, عدس, حمص, فول …
+• Oils & condiments: زيت صافية, زيت دوار الشمس, سكر, ملح, فلفل, كاتشاب حينز, مايونيز, خل …
+• Canned goods: تونة, رب طماطة, فول مدمس, حمص بصلصة …
+• Hygiene / personal care: صابون, شامبو, فرشاة أسنان, معجون أسنان (سيغنال, كولغيت), فوط صحية, حفاضات …
+• Tissues / paper: مناديل لورد, كلينكس, فاين, بيبي فاين, ورق تواليت …
+• Cleaning / detergents: تايد سائل, أريال, داوني, فيري, ليزول, جلادي, كلوروكس, مبيضات …
+• Plastic bags / disposables: أكياس, صحون بلاستك, كوب بلاستك, سفرة …
+• Cigarettes / tobacco: مارلبورو, غروين, وينستون, سبتر …
+• Fresh produce: طماطة, بصل, بطاطا, خيار, باذنجان, تفاح, موز, برتقال …
+• Meat / proteins (if visible): دجاج, لحم, أسماك …
+• Stationery / school: دفتر, قلم, مسطرة, براية …
 
 Each object MUST have:
 - "product_name": string — Arabic name preferred by Iraqi shop customers.
   • Read brand names and product type from the packaging (Arabic OR English text).
   • Combine brand + type when useful, e.g.:
-        "مناديل لورد", "كلينكس لورد", "شاي الغزالين",
-        "بيبسي 1 لتر", "حليب نيدو 250غرام", "زيت صافية 1 لتر".
-  • If you cannot read the brand, name the product by its category:
-        "مناديل ورقية", "خبز", "رز", "سكر", "بيض", "بطاطا".
+        "مناديل لورد", "شاي الغزالين", "بيبسي 1 لتر",
+        "حليب نيدو 400غرام", "زيت صافية 1 لتر".
+  • Include size/volume when visible (250مل / 500مل / 1لتر / 1كغ …).
+  • If you cannot read the brand, name the product by its category only.
 - "quantity": number — how many units are visible. Default 1.
 - "unit_price": number — estimated price in Iraqi Dinar (IQD).
-  • If a price tag/sticker is visible, read it.
-  • Otherwise estimate a reasonable Iraqi retail price
-      (مناديل ورقية ≈ 1000–2000, خبز ≈ 500–1000, بيبسي 1ل ≈ 1500,
-       حليب نيدو 250غ ≈ 4000, زيت 1ل ≈ 3000, رز 1كغ ≈ 2500).
+  • If a price tag is visible, read it.
+  • If the owner has previously sold the same product (provided to you), use
+    THE OWNER'S OWN PRICE (sent as "سعر سابق"). This is the most important rule:
+    the owner's learned price ALWAYS overrides any market estimate.
+  • Otherwise estimate a reasonable Iraqi retail price.
   • If unsure, use 0 — the shop owner will edit it.
-
-If the owner has a history of products they sold before, you will receive it in the user
-message as "المنتجات المعروفة". When the photo matches one of these names exactly,
-USE that exact name (it helps statistics). Otherwise pick the most appropriate Arabic name.
 
 Rules:
 - Return ONLY a valid JSON array. No markdown fences, no explanation, no leading/trailing text.
 - Do NOT return an empty array unless the image is completely blank/blurry beyond recognition.
 - Be concrete: a clearly-visible packet of tissues is "مناديل + brand", not "غرض غير معروف".
+- Prefer the EXACT product_name from "المنتجات المعروفة" when there is a clear match —
+  this keeps the owner's records consistent for statistics.
 """
+
+
+def _normalize_product_key(name: str) -> str:
+    """Loose normalization used to match a vision-returned product to a learned one."""
+    if not name:
+        return ""
+    s = name.strip().lower()
+    # Arabic letter variants → canonical
+    table = str.maketrans({
+        "أ": "ا", "إ": "ا", "آ": "ا",
+        "ى": "ي", "ئ": "ي",
+        "ؤ": "و",
+        "ة": "ه",
+    })
+    s = s.translate(table)
+    # Strip Arabic diacritics + tatweel
+    s = re.sub(r"[\u064b-\u0652\u0670\u0640]", "", s)
+    # Collapse whitespace and drop non-alnum
+    s = re.sub(r"[\s\-_/\\.\,]+", " ", s).strip()
+    return s
 
 
 async def analyze_image_for_market_items(
     image_bytes: bytes,
     mime_type: str,
-    known_products: "list[str] | None" = None,
+    known_products: "list[str] | list[dict] | None" = None,
 ) -> "tuple[list[dict], str]":
     """
     Use GPT-4o vision (preferred) or Gemini 1.5 Flash (fallback) to identify products.
-    `known_products` is an optional list of product names previously sold by the owner.
+
+    `known_products` may be either:
+      - a list of strings (legacy)  — just product names previously sold, OR
+      - a list of dicts             — {name, last_price, avg_price, count}.
+
+    When the dict form is supplied, the function will:
+      1. Tell the model the owner's previously-charged price (so it learns).
+      2. Post-process the model output: if a returned product matches a known one
+         (loose Arabic normalization), override `unit_price` with the owner's
+         most recent price for that product.
     Returns (items_list, raw_response).
-    Each item: {"product_name": str, "quantity": float, "unit_price": float}
     """
     import base64
 
@@ -873,12 +1012,35 @@ async def analyze_image_for_market_items(
 
     b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    user_text = "حلل الصورة واستخرج قائمة المنتجات بالتنسيق المطلوب (JSON array فقط)."
+    # Build the learned-products section + lookup table for override
+    learned_lookup: dict[str, dict] = {}
+    known_section_lines: list[str] = []
     if known_products:
-        sample = list(dict.fromkeys(known_products))[:60]
+        for entry in known_products[:80]:
+            if isinstance(entry, str):
+                key = _normalize_product_key(entry)
+                if key and key not in learned_lookup:
+                    learned_lookup[key] = {"name": entry.strip(), "last_price": None}
+                    known_section_lines.append(f"- {entry.strip()}")
+            elif isinstance(entry, dict):
+                name = (entry.get("name") or "").strip()
+                if not name:
+                    continue
+                key = _normalize_product_key(name)
+                if not key or key in learned_lookup:
+                    continue
+                last_price = entry.get("last_price")
+                learned_lookup[key] = {"name": name, "last_price": last_price}
+                if last_price:
+                    known_section_lines.append(f"- {name}  | سعر سابق: {last_price:g} د.ع")
+                else:
+                    known_section_lines.append(f"- {name}")
+
+    user_text = "حلل الصورة واستخرج قائمة المنتجات بالتنسيق المطلوب (JSON array فقط)."
+    if known_section_lines:
         user_text += (
-            "\n\nالمنتجات المعروفة (باعها صاحب المحل سابقاً — استخدم بالضبط إذا طابقت):\n- "
-            + "\n- ".join(sample)
+            "\n\nالمنتجات المعروفة (باعها صاحب المحل سابقاً — إذا طابقت استخدم نفس الاسم ونفس السعر):\n"
+            + "\n".join(known_section_lines)
         )
 
     raw = ""
@@ -971,11 +1133,6 @@ async def analyze_image_for_market_items(
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
 
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-
     try:
         data = json.loads(cleaned)
         if not isinstance(data, list):
@@ -990,6 +1147,24 @@ async def analyze_image_for_market_items(
                 price = float(item.get("unit_price", 0) or 0)
             except (TypeError, ValueError):
                 qty, price = 1.0, 0.0
+
+            # ── Price-learning override ─────────────────────────────────
+            # If this product matches one the owner sold before, prefer
+            # their most recently charged price + their canonical name.
+            key = _normalize_product_key(name)
+            learned = learned_lookup.get(key) if key else None
+            if learned is None and key:
+                # Loose substring match (covers "بيبسي 1 لتر" vs "بيبسي")
+                for lk, lv in learned_lookup.items():
+                    if lk and (lk in key or key in lk) and min(len(lk), len(key)) >= 3:
+                        learned = lv
+                        break
+            if learned:
+                name = learned.get("name") or name
+                lp = learned.get("last_price")
+                if lp and lp > 0:
+                    price = float(lp)
+
             items.append({"product_name": name, "quantity": qty, "unit_price": price})
         return items, raw
     except (json.JSONDecodeError, KeyError, ValueError):

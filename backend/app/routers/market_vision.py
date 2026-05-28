@@ -30,27 +30,58 @@ class VisionAnalyzeResponse(BaseModel):
     raw_response: str
 
 
-async def _load_owner_product_history(db: AsyncSession, owner_id) -> list[str]:
-    """Return distinct product names previously sold by this owner (most recent first)."""
+async def _load_owner_product_history(db: AsyncSession, owner_id) -> "list[dict]":
+    """Return distinct products previously sold by this owner with their last & avg price.
+
+    Order: most recent first. Output items: { name, last_price, avg_price, count }.
+    The learned `last_price` is what the owner most recently charged — used to
+    override the vision model's price estimate when the same product is seen again.
+    """
     result = await db.execute(
-        select(MarketSaleItem.product_name)
+        select(
+            MarketSaleItem.product_name,
+            MarketSaleItem.unit_price,
+            MarketSale.created_at,
+        )
         .join(MarketSale, MarketSale.id == MarketSaleItem.sale_id)
         .where(MarketSale.market_owner_id == owner_id)
         .order_by(MarketSale.created_at.desc())
-        .limit(300)
+        .limit(800)
     )
-    names = []
-    seen = set()
-    for (n,) in result.all():
-        if not n:
+    by_key: dict[str, dict] = {}
+    for name, price, _ in result.all():
+        if not name:
             continue
-        key = n.strip()
-        if key and key not in seen:
-            seen.add(key)
-            names.append(key)
-        if len(names) >= 60:
+        key = name.strip().lower()
+        if not key:
+            continue
+        try:
+            p = float(price or 0)
+        except (TypeError, ValueError):
+            p = 0.0
+        entry = by_key.get(key)
+        if entry is None:
+            by_key[key] = {
+                "name": name.strip(),
+                "last_price": p,           # most recent (first encountered due to desc)
+                "sum": p,
+                "count": 1,
+            }
+        else:
+            entry["sum"] += p
+            entry["count"] += 1
+    out: list[dict] = []
+    for entry in by_key.values():
+        avg = entry["sum"] / max(1, entry["count"])
+        out.append({
+            "name": entry["name"],
+            "last_price": round(entry["last_price"], 2),
+            "avg_price": round(avg, 2),
+            "count": entry["count"],
+        })
+        if len(out) >= 80:
             break
-    return names
+    return out
 
 
 @router.post("/analyze", response_model=VisionAnalyzeResponse)
