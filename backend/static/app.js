@@ -2942,12 +2942,23 @@ async function openCustomerDetail(customerId) {
     const unpaid = (sales || []).filter(s => !s.is_paid);
     const paid = (sales || []).filter(s => s.is_paid);
     const totalUnpaid = unpaid.reduce((s, x) => s + (x.total_amount || 0), 0);
+    // Inject "new sale" button next to customer name in modal header
+    const titleEl = document.getElementById('cdm-title');
+    if (titleEl && !document.getElementById('cdm-new-sale-btn')) {
+      const btn = document.createElement('button');
+      btn.id = 'cdm-new-sale-btn';
+      btn.className = 'btn btn-warning btn-sm text-dark ms-3';
+      btn.innerHTML = '<i class="fas fa-plus me-1"></i>بيع جديد';
+      btn.onclick = () => openAddSaleModal(customerId);
+      titleEl.after(btn);
+    } else if (document.getElementById('cdm-new-sale-btn')) {
+      document.getElementById('cdm-new-sale-btn').onclick = () => openAddSaleModal(customerId);
+    }
     body.innerHTML = `
-      <div class="d-flex gap-2 mb-3 flex-wrap">
-        <button class="btn btn-warning btn-sm text-dark" onclick="openAddSaleModal('${customerId}')"><i class="fas fa-plus me-1"></i>بيع جديد</button>
-        <button class="btn btn-outline-primary btn-sm" onclick="openEditCustomerModalById('${customerId}')"><i class="fas fa-user-edit me-1"></i>تعديل الزبون</button>
-        <button class="btn btn-outline-info btn-sm" onclick="toggleCustomerHistory('${customerId}', this, 'cdm-history')"><i class="fas fa-history me-1"></i>سجل التعديلات</button>
-        <button class="btn btn-outline-danger btn-sm" onclick="deleteCustomer('${customerId}')"><i class="fas fa-trash me-1"></i>حذف الزبون</button>
+      <div class="d-flex gap-1 mb-3 flex-wrap justify-content-end">
+        <button class="btn btn-outline-primary py-0 px-2" style="font-size:.7rem" onclick="openEditCustomerModalById('${customerId}')" title="تعديل الزبون"><i class="fas fa-user-edit"></i></button>
+        <button class="btn btn-outline-info py-0 px-2" style="font-size:.7rem" onclick="toggleCustomerHistory('${customerId}', this, 'cdm-history')" title="سجل التعديلات"><i class="fas fa-history"></i></button>
+        <button class="btn btn-outline-danger py-0 px-2" style="font-size:.7rem" onclick="deleteCustomer('${customerId}')" title="حذف الزبون"><i class="fas fa-trash"></i></button>
       </div>
       <div id="cdm-history" style="display:none" class="mb-3"></div>
       <div class="alert alert-${totalUnpaid > 0 ? 'danger' : 'success'} py-2">
@@ -3132,6 +3143,8 @@ function _diffItems(oldList, newList) {
 
 function _renderChangeRow(ch) {
   if (!ch || !ch.field) return '';
+  // Hide sale_date — created_at at the card header already shows when the edit happened
+  if (ch.field === 'sale_date') return '';
   const lbl = _FIELD_LABELS_AR[ch.field] || ch.field;
 
   if (ch.field === 'items') {
