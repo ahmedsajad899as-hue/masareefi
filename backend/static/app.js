@@ -2906,7 +2906,7 @@ async function openCustomerDetail(customerId) {
   body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-warning"></div></div>';
   modal.show();
   try {
-    const sales = await api('GET', `/market/sales?customer_id=${customerId}`);
+    const sales = await api('GET', `/market/sales/?customer_id=${customerId}`);
     const unpaid = (sales || []).filter(s => !s.is_paid);
     const paid = (sales || []).filter(s => s.is_paid);
     const totalUnpaid = unpaid.reduce((s, x) => s + (x.total_amount || 0), 0);
@@ -2923,7 +2923,7 @@ async function openCustomerDetail(customerId) {
         <div class="glass-card p-2 mb-2 d-flex justify-content-between align-items-center">
           <div>
             <div class="fw-bold text-danger">${fmt(s.total_amount)}</div>
-            <div class="small text-muted">${s.description || '—'} · ${s.sale_date ? new Date(s.sale_date).toLocaleDateString('ar-IQ') : ''}</div>
+            <div class="small text-muted">${s.notes || '—'} · ${s.sale_date ? new Date(s.sale_date).toLocaleDateString('ar-IQ') : ''}</div>
           </div>
           <button class="btn btn-success btn-sm" onclick="markSalePaid('${s.id}')"><i class="fas fa-check me-1"></i>دفع</button>
         </div>
@@ -2933,7 +2933,7 @@ async function openCustomerDetail(customerId) {
         <div class="glass-card p-2 mb-2 d-flex justify-content-between align-items-center opacity-50">
           <div>
             <div class="fw-bold text-success">${fmt(s.total_amount)}</div>
-            <div class="small text-muted">${s.description || '—'} · ${s.sale_date ? new Date(s.sale_date).toLocaleDateString('ar-IQ') : ''}</div>
+            <div class="small text-muted">${s.notes || '—'} · ${s.sale_date ? new Date(s.sale_date).toLocaleDateString('ar-IQ') : ''}</div>
           </div>
           <span class="badge bg-success">مدفوع</span>
         </div>
