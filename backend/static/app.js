@@ -3160,16 +3160,30 @@ function _renderChangeRow(ch) {
 
   if (ch.field === 'items') {
     const { added, removed, changed } = _diffItems(ch.old, ch.new);
-    const parts = [];
-    added.forEach(it => parts.push(`<div class="small text-success"><i class="fas fa-plus-circle me-1"></i>إضافة: ${_itemLine(it)}</div>`));
-    removed.forEach(it => parts.push(`<div class="small text-danger"><i class="fas fa-minus-circle me-1"></i>حذف: ${_itemLine(it)}</div>`));
-    changed.forEach(p => parts.push(`<div class="small text-warning"><i class="fas fa-pen me-1"></i>تعديل: ${_itemLine(p.old)} <i class="fas fa-arrow-left mx-1"></i> ${_itemLine(p.new)}</div>`));
-    if (!parts.length) return '';
-    return `<div class="mb-1"><span class="fw-bold small">${esc(lbl)}:</span>${parts.join('')}</div>`;
+    const rowOf = (icon, color, label, txt, txt2) => `
+      <tr>
+        <td class="text-${color}" style="width:1%;white-space:nowrap"><i class="fas ${icon} me-1"></i>${label}</td>
+        <td class="small">${txt}</td>
+        ${txt2 ? `<td class="small text-muted" style="white-space:nowrap"><i class="fas fa-arrow-left text-warning mx-1"></i>${txt2}</td>` : '<td></td>'}
+      </tr>`;
+    const rows = [];
+    added.forEach(it => rows.push(rowOf('fa-plus-circle','success','إضافة', _itemLine(it), '')));
+    removed.forEach(it => rows.push(rowOf('fa-minus-circle','danger','حذف', _itemLine(it), '')));
+    changed.forEach(p => rows.push(rowOf('fa-pen','warning','تعديل', _itemLine(p.old), _itemLine(p.new))));
+    if (!rows.length) return '';
+    return `
+      <div class="mb-2">
+        <div class="fw-bold small mb-1">${esc(lbl)}</div>
+        <div class="table-responsive">
+          <table class="table table-sm table-borderless mb-0" style="color:inherit">
+            <tbody>${rows.join('')}</tbody>
+          </table>
+        </div>
+      </div>`;
   }
 
   return `
-    <div class="small mb-1">
+    <div class="small mb-1 d-flex flex-wrap align-items-center gap-1">
       <span class="fw-bold">${esc(lbl)}:</span>
       <span class="text-muted">${_fmtAuditValue(ch.field, ch.old)}</span>
       <i class="fas fa-arrow-left mx-1 text-warning"></i>
@@ -3217,13 +3231,23 @@ async function toggleSaleHistory(saleId) {
 
 // ── Sale row renderer (used inside customer detail modal) ─────
 function _renderSaleRow(s, isPaid) {
-  const items = (s.items || []).map(i => `${esc(i.product_name)} (${i.quantity}×${fmt(i.unit_price)})`).join('، ');
+  const itemsArr = Array.isArray(s.items) ? s.items : [];
+  const items = itemsArr.map(i => `${esc(i.product_name)} (${i.quantity}×${fmt(i.unit_price)})`).join('، ');
+  // Avoid duplicate display: if the notes match the items text or the only item's name, hide notes
+  const itemNames = itemsArr.map(i => String(i.product_name || '').trim().toLowerCase());
+  const notesNorm = String(s.notes || '').trim().toLowerCase();
+  const notesDup = !!notesNorm && (itemNames.includes(notesNorm) || (itemsArr.length === 1 && itemNames[0] === notesNorm));
+  const showNotes = !!s.notes && !notesDup;
+  const dateStr = s.sale_date ? new Date(s.sale_date).toLocaleDateString('ar-IQ') : '';
+  const metaParts = [];
+  if (showNotes) metaParts.push(esc(s.notes));
+  if (dateStr)   metaParts.push(dateStr);
   return `
     <div class="glass-card p-2 mb-2 ${isPaid ? 'opacity-75' : ''}">
       <div class="d-flex justify-content-between align-items-center">
         <div class="flex-grow-1">
           <div class="fw-bold ${isPaid ? 'text-success' : 'text-danger'}">${fmt(s.total_amount)}</div>
-          <div class="small text-muted">${s.notes ? esc(s.notes) : '—'} · ${s.sale_date ? new Date(s.sale_date).toLocaleDateString('ar-IQ') : ''}</div>
+          ${metaParts.length ? `<div class="small text-muted">${metaParts.join(' · ')}</div>` : ''}
           ${items ? `<div class="small text-info mt-1"><i class="fas fa-box me-1"></i>${items}</div>` : ''}
         </div>
         <div class="d-flex flex-column gap-1 ms-2">
@@ -3262,7 +3286,15 @@ async function openEditSaleModal(saleId) {
     (s.items || []).forEach(it => _addEditSaleItemRow(it.product_name, it.quantity, it.unit_price));
     if (!s.items || !s.items.length) _addEditSaleItemRow('', 1, 0);
     _recomputeEditSaleTotal();
-    new bootstrap.Modal(document.getElementById('editSaleModal')).show();
+    const esEl = document.getElementById('editSaleModal');
+    const esModal = new bootstrap.Modal(esEl);
+    esModal.show();
+    // Bump z-index so it sits above the already-open customerDetailModal backdrop
+    setTimeout(() => {
+      esEl.style.zIndex = '1080';
+      const bds = document.querySelectorAll('.modal-backdrop');
+      if (bds.length) bds[bds.length - 1].style.zIndex = '1075';
+    }, 10);
   } catch(e) { toast(e.message, 'err'); }
   finally { loading(false); }
 }
