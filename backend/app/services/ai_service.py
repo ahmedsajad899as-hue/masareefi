@@ -517,6 +517,7 @@ def _parse_market_local(text: str, customers: list) -> list:
         """Parse a price string in Iraqi market context.
         Bare word numbers 1-99 (without الف/مية qualifier) are treated as × 1000.
         Special: ربع=250, نص/نصف=500, ونص=+500, وربع=+250.
+        All matching is done on normalized Arabic (ة→ه, أإآ→ا).
         """
         s = s.strip()
         if not s:
@@ -525,6 +526,9 @@ def _parse_market_local(text: str, customers: list) -> list:
         s = re.sub(r'^بـ?\s*', '', s).strip()
         if not s:
             return None
+
+        # Normalize once for all comparison operations
+        sn = _normalize_arabic(s)
 
         # 1. Speech-recognition artifact: "7:30" → سبعة ونص → 7500
         m = re.fullmatch(r'(\d+):(\d{2})', s)
@@ -535,8 +539,8 @@ def _parse_market_local(text: str, customers: list) -> list:
         # 2. Digits + optional الف + optional ونص/وربع
         m = re.match(
             r'^([\d,٫٬]+(?:\.\d+)?)\s*'
-            r'(الف|ألف|آلاف|الاف|elf)?'
-            r'(\s*ونص|\s*وربع)?$', s, re.IGNORECASE)
+            r'(الف|الف|الاف|الاف|elf)?'
+            r'(\s*ونص|\s*وربع)?$', sn, re.IGNORECASE)
         if m:
             try:
                 val = float(m.group(1).replace(',', '').replace('٫', '').replace('٬', ''))
@@ -549,35 +553,34 @@ def _parse_market_local(text: str, customers: list) -> list:
                 pass
 
         # 3. Fraction shortcuts: ربع=250, نص/نصف=500
-        s_norm = _normalize_arabic(s.split()[0]) if s.split() else ''
-        if s_norm in ('ربع', 'ربعه', 'ربعة'):
+        sn0 = sn.split()[0] if sn.split() else ''
+        if sn0 in ('ربع', 'ربعه', 'ربعة'):
             return 250.0
-        if s_norm in ('نص', 'نصف'):
+        if sn0 in ('نص', 'نصف'):
             return 500.0
 
-        # 4. Pure thousands prefix: الف, ألفين, آلاف alone
-        if re.match(r'^(?:الف|ألف|آلاف|الاف|الفين|ألفين)(?:\s+ونص|\s+وربع)?$', s, re.IGNORECASE):
-            base = 2000.0 if re.match(r'^(?:الفين|ألفين)', s, re.IGNORECASE) else 1000.0
-            if 'ونص' in s: base += 500
-            if 'وربع' in s: base += 250
+        # 4. Pure thousands prefix: الف, الفين, الاف alone (match normalized)
+        if re.match(r'^(?:الف|الفين|الاف)(?:\s+ونص|\s+وربع)?$', sn, re.IGNORECASE):
+            base = 2000.0 if sn.startswith('الفين') else 1000.0
+            if 'ونص' in sn: base += 500
+            if 'وربع' in sn: base += 250
             return base
 
-        # 5. Word-number parsing
-        # Scan for word numbers (use only entries < 1000 to avoid double-multiply with الف)
+        # 5. Word-number parsing (normalize both key and input for matching)
         val = 0.0
         found = False
         for word, num in sorted(_PRICE_WORDS.items(), key=lambda x: -len(x[0])):
-            if re.search(r'(?:^|\s)' + re.escape(word) + r'(?:\s|$)', s, re.IGNORECASE):
+            word_n = _normalize_arabic(word)
+            if re.search(r'(?:^|\s)' + re.escape(word_n) + r'(?:\s|$)', sn, re.IGNORECASE):
                 val += float(num)
                 found = True
 
-        has_alf = bool(_ALF_RE.search(s))
-        has_mia = bool(_MIA_RE.search(s))
-        is_frac = s_norm in _FRAC_WORDS
+        has_alf = bool(re.search(r'\b(?:الف|الاف|الفين)\b', sn, re.IGNORECASE))
+        has_mia = bool(_MIA_RE.search(sn))
+        is_frac = sn0 in _FRAC_WORDS
 
         if has_alf:
-            # Explicit thousands multiplier: "خمسة الاف" = 5000, "الفين" = 2000
-            if re.match(r'^(?:الفين|ألفين)', s, re.IGNORECASE):
+            if sn.startswith('الفين'):
                 val = 2000.0
             else:
                 val = val * 1000 if found else 1000.0
@@ -586,34 +589,35 @@ def _parse_market_local(text: str, customers: list) -> list:
             # Bare word number in Iraqi market context → implied thousands
             # (e.g., ثلاثه=3 → 3000, عشرين=20 → 20000, خمصطعش=15 → 15000)
             val *= 1000
-        # val stays as-is if has_mia (hundreds: مية=100, خمسمية=500, etc.)
+        # val stays as-is if has_mia (hundreds: ميه=100, خمسميه=500, etc.)
         # or if it's a fraction word (ربع=250, نص=500)
 
         # Apply ونص (+500) and وربع (+250) suffixes
-        if 'ونص' in s:
+        if 'ونص' in sn:
             val += 500
             found = True
-        if 'وربع' in s:
+        if 'وربع' in sn:
             val += 250
             found = True
 
         return val if found and val > 0 else None
 
     # ── helper: build a regex that matches a price token at end of string ──────
-    _PRICE_WORD_ALT = '|'.join(
-        re.escape(w) for w in sorted(_AR_NUMS, key=len, reverse=True)
+    # Use NORMALIZED keys so dialect input (ثلاثه, اربعه, سته) matches correctly
+    _PRICE_WORD_NORM_ALT = '|'.join(
+        re.escape(_normalize_arabic(w)) for w in sorted(_AR_NUMS, key=len, reverse=True)
         if _AR_NUMS[w] >= 1
     )
     _END_PRICE_RE = re.compile(
         r'\s+('
         # digits + optional الف + optional ونص/وربع
-        r'[\d,٫٬]+(?:[:.]\d+)?(?:\s*(?:الف|ألف|آلاف|الاف))?(?:\s*ونص|\s*وربع)?'
+        r'[\d,٫٬]+(?:[:.]\d+)?(?:\s*(?:الف|الاف|الفين))?(?:\s*ونص|\s*وربع)?'
         r'|'
-        # pure الف/ألفين + optional ونص
-        r'(?:الف|ألف|الفين|ألفين|آلاف|الاف)(?:\s+ونص|\s+وربع)?'
+        # pure الف/الفين alone + optional ونص
+        r'(?:الف|الفين|الاف)(?:\s+ونص|\s+وربع)?'
         r'|'
-        # word number + optional الف + optional ونص/وربع
-        r'(?:' + _PRICE_WORD_ALT + r')(?:\s+(?:الف|ألف|آلاف|الاف))?(?:\s+ونص|\s+وربع)?'
+        # normalized word number + optional الف + optional ونص/وربع
+        r'(?:' + _PRICE_WORD_NORM_ALT + r')(?:\s+(?:الف|الاف|الفين))?(?:\s+ونص|\s+وربع)?'
         r')$',
         re.IGNORECASE
     )
@@ -625,8 +629,10 @@ def _parse_market_local(text: str, customers: list) -> list:
           1. name + \" ب \" + price  (explicit ب with spaces)
           2. name + \" بWORD\"        (ب attached to word: بثلاثه, بالف, بخمسه ونص)
           3. name + PRICE_AT_END     (price words at segment end, no ب marker)
+        All matching done on normalized Arabic forms.
         """
         seg = seg.strip()
+        seg_n = _normalize_arabic(seg)  # normalized version for matching
 
         # 1. Explicit "name ب price" — space on both sides of ب
         m = re.match(r'^(.+?)\s+ب\s+(.+)$', seg)
@@ -646,13 +652,13 @@ def _parse_market_local(text: str, customers: list) -> list:
             if p:
                 return m.group(1).strip(), p
 
-        # 3. Price at END of segment (no ب marker)
+        # 3. Price at END of segment (no ب marker) — search on normalized form
         # Handles: "لبن اربعه ونص" → لبن: 4500, "زيت عشرين الف" → زيت: 20000
-        m = _END_PRICE_RE.search(seg)
+        m = _END_PRICE_RE.search(seg_n)
         if m and m.start() > 0:
-            p = _price(m.group(1))
+            p = _price(seg_n[m.start() + 1:])  # pass normalized price string
             if p:
-                item_name = seg[:m.start()].strip()
+                item_name = seg[:m.start()].strip()  # return original item name
                 if item_name:
                     return item_name, p
 
@@ -747,20 +753,25 @@ def _parse_market_local(text: str, customers: list) -> list:
             # ── Single total mode (no per-item prices or ambiguous) ───────────
             total = None
 
-            # Try extracting one total from the rest string
-            amt_m = re.search(
-                r'(?:ب\s*)?([\d,٫٬]+(?:[:.]\d+)?)\s*'
-                r'(الف|ألف|آلاف|الاف|elf)?(?:\s*ونص)?',
-                rest or '', re.IGNORECASE)
-            if amt_m:
-                total = _price(
-                    (amt_m.group(1) or '') + (' ' + (amt_m.group(2) or '') if amt_m.group(2) else '') +
-                    (' ونص' if 'ونص' in (rest or '') else ''))
+            # First: try treating the whole rest as a price expression
+            # Handles: "ربع", "سته ونص", "خمسميه", "الف ونص", etc.
+            total = _price(rest or '')
+
+            # Second: look for a digit-based amount in rest
+            if not total:
+                amt_m = re.search(
+                    r'(?:ب\s*)?([\d,٫٬]+(?:[:.]\d+)?)\s*'
+                    r'(الف|ألف|آلاف|الاف|elf)?(?:\s*ونص)?',
+                    rest or '', re.IGNORECASE)
+                if amt_m:
+                    total = _price(
+                        (amt_m.group(1) or '') + (' ' + (amt_m.group(2) or '') if amt_m.group(2) else '') +
+                        (' ونص' if 'ونص' in (rest or '') else ''))
             if not total:
                 for word, num in sorted(_AR_NUMS.items(), key=lambda x: -len(x[0])):
                     m_w = re.search(
-                        r'(?:^|\s)' + re.escape(word) + r'(?:\s+(الف|ألف|آلاف|الاف))?',
-                        rest or '')
+                        r'(?:^|\s)' + re.escape(_normalize_arabic(word)) + r'(?:\s+(?:الف|الاف|الفين))?',
+                        _normalize_arabic(rest or ''))
                     if m_w:
                         total = float(num) * (1000 if m_w.group(1) else 1)
                         if 'ونص' in (rest or ''):
@@ -913,7 +924,23 @@ Your job: identify EVERY product visible (even if only ONE item is in the photo)
 and return a JSON array. NEVER return an empty array if any product, package, brand,
 or written word is visible — always extract at least the visible item.
 
-PRODUCT CATEGORIES YOU MUST RECOGNIZE WELL (Iraqi market staples):
+═══════════════════════════════════════════════════════════════════════════
+  ⚠ IMPORTANT: There are THOUSANDS of products in an Iraqi market. The
+  list below is JUST EXAMPLES, NOT a closed catalog. You MUST also
+  recognize ANY product even if it is not in the list — including unknown
+  brands, niche items, imported items, regional brands, and new releases.
+  For unfamiliar packaging:
+    • Read the brand from the label (Arabic, English, Turkish, Persian).
+    • Read the product type from icons / pictures on the package.
+    • Read the size, weight, volume, or piece-count from the front label.
+    • Build a clear Arabic product_name like
+        "<brand> <product-type> <size>"  (e.g. "هاي بسكويت 50غرام").
+    • If brand is unreadable but type is clear → name by category + size
+        (e.g. "شامبو 400مل", "بسكويت سادة", "كيس أرز 5كغ").
+    • Estimate a reasonable Iraqi retail price for unknown items.
+═══════════════════════════════════════════════════════════════════════════
+
+PRODUCT CATEGORIES YOU MUST RECOGNIZE WELL (Iraqi market staples — examples only):
 • Soft drinks / juices: بيبسي, كوكا كولا, سبايت, ميريندا, 7 Up, رواني, برتقال, تفاح, عصير راني, عصير سنتوب …
 • Water bottles: جبل صافي, صفا, سباركل … (ماء 250مل / 500مل / 1.5ل / 5ل / جالون)
 • Energy drinks: ريد بول, بول شارك, تايغر, تين بوي …
@@ -935,13 +962,22 @@ PRODUCT CATEGORIES YOU MUST RECOGNIZE WELL (Iraqi market staples):
 
 Each object MUST have:
 - "product_name": string — Arabic name preferred by Iraqi shop customers.
-  • Read brand names and product type from the packaging (Arabic OR English text).
-  • Combine brand + type when useful, e.g.:
-        "مناديل لورد", "شاي الغزالين", "بيبسي 1 لتر",
-        "حليب نيدو 400غرام", "زيت صافية 1 لتر".
-  • Include size/volume when visible (250مل / 500مل / 1لتر / 1كغ …).
-  • If you cannot read the brand, name the product by its category only.
-- "quantity": number — how many units are visible. Default 1.
+  • Read brand names and product type from the packaging in ANY language
+    visible on the label (Arabic, English, Turkish, Persian, Kurdish).
+  • ALWAYS try to read and INCLUDE the packaging detail in the name:
+        size (250مل / 500مل / 1لتر / 5لتر),
+        weight (50غرام / 250غرام / 1كغ / 5كغ),
+        piece count (10 قطع / علبة 24 / كرتون 12),
+        flavor / variant (شوكلاتة, فراولة, دايت, لايت).
+  • Example formats:
+        "مناديل لورد 150 منديل", "شاي الغزالين 450غرام",
+        "بيبسي 1 لتر", "حليب نيدو 400غرام", "زيت صافية 1.8 لتر",
+        "بسكويت اوريو 60غرام", "كاتشاب حينز 460غرام".
+  • If the brand is unreadable but the type is clear, name by category + size:
+        "بسكويت سادة 50غ", "شامبو 400مل", "كيس أرز 5كغ".
+  • If even the type is unclear, describe what you see honestly:
+        "علبة كرتون بنية اللون 250غ", "قنينة بلاستك 1لتر سائل أزرق".
+- "quantity": number — how many UNITS of that product are visible. Default 1.
 - "unit_price": number — estimated price in Iraqi Dinar (IQD).
   • If a price tag is visible, read it.
   • If the owner has previously sold the same product (provided to you), use
