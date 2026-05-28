@@ -1262,7 +1262,10 @@
     <section id="pg-market-customers" class="pg" style="display:none">
       <div class="pg-head">
         <h2><i class="fas fa-users me-2 text-warning"></i>الزبائن والديون</h2>
-        <button class="btn btn-warning btn-sm text-dark" onclick="openAddCustomerModal()"><i class="fas fa-user-plus me-1"></i>زبون جديد</button>
+        <div class="d-flex gap-2">
+          <button class="btn btn-success btn-sm" onclick="openVisionModal(null)" title="فاتورة بالكاميرا"><i class="fas fa-camera me-1"></i>كاميرا</button>
+          <button class="btn btn-warning btn-sm text-dark" onclick="openAddCustomerModal()"><i class="fas fa-user-plus me-1"></i>زبون جديد</button>
+        </div>
       </div>
       <div class="mb-3">
         <input type="search" id="mc-search" class="form-control" placeholder="بحث باسم أو هاتف..." oninput="filterCustomers()">
@@ -1438,6 +1441,13 @@
               <button class="btn btn-success flex-grow-1" onclick="visionPickFile()">
                 <i class="fas fa-camera me-2"></i>التقاط / اختيار صورة
               </button>
+            </div>
+            <!-- Customer picker (visible only when opened without a preset customer) -->
+            <div id="vision-cust-row" class="mb-3" style="display:none">
+              <label class="form-label small">الزبون الذي تُنسب له هذه الفاتورة <span class="text-danger">*</span></label>
+              <input type="text" id="vision-cust-search" class="form-control form-control-sm bg-dark text-white border-secondary mb-1" placeholder="ابحث باسم الزبون..." oninput="visionFilterCustomers()">
+              <select id="vision-cust-select" class="form-select form-select-sm bg-dark text-white border-secondary" size="5" onchange="visionPickCustomer(this.value)"></select>
+              <div class="small text-muted mt-1" id="vision-cust-hint">اختر زبون قبل الحفظ.</div>
             </div>
             <div class="text-center mb-2">
               <img id="vision-preview" style="display:none;max-height:200px;border-radius:8px;border:1px solid #333" alt="preview">
@@ -1766,7 +1776,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=69"></script>
+<script src="/static/app.js?v=70"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══
@@ -1943,13 +1953,32 @@
     var html = '';
     for (var i = 0; i < fabParsed.length; i++) {
       var it = fabParsed[i];
-      var newBadge = it.is_new_customer ? ' <span class="badge bg-warning text-dark badge-sm">زبون جديد</span>' : ' <span class="badge bg-success badge-sm">موجود</span>';
+      var hasCandidates = it.candidates && it.candidates.length > 1;
+      var newBadge = hasCandidates
+        ? ' <span class="badge bg-danger badge-sm">اختر الزبون</span>'
+        : (it.is_new_customer
+            ? ' <span class="badge bg-warning text-dark badge-sm">زبون جديد</span>'
+            : ' <span class="badge bg-success badge-sm">موجود</span>');
       html += '<div class="fab-va-item" id="fvi-' + i + '">';
       html += '<div class="fvi-row1">';
       html += '<div class="fab-va-item-info"><i class="fas fa-user me-1"></i>' + esc(it.customer_name || '') + newBadge + '</div>';
       html += '<div class="fab-va-item-amt">' + Number(it.amount).toLocaleString() + ' IQD</div>';
       html += '<button class="fab-va-item-del" data-idx="' + i + '"><i class="fas fa-trash-alt"></i></button>';
       html += '</div>';
+      // Candidate disambiguation picker
+      if (hasCandidates) {
+        html += '<div class="fvi-note-row">';
+        html += '<select class="fvi-cand-input" data-idx="' + i + '" style="flex:1;margin-bottom:4px;padding:6px 10px;border:2px solid #dc3545;border-radius:6px;font-size:13px;background:#fff5f5">';
+        html += '<option value="">— أي ' + esc(it.customer_name) + ' تقصد؟ —</option>';
+        for (var ci = 0; ci < it.candidates.length; ci++) {
+          var cand = it.candidates[ci];
+          var sel = (it.customer_id === cand.id) ? ' selected' : '';
+          html += '<option value="' + esc(cand.id) + '"' + sel + '>' + esc(cand.name) + '</option>';
+        }
+        html += '<option value="__NEW__">+ زبون جديد بهذا الاسم</option>';
+        html += '</select>';
+        html += '</div>';
+      }
       // Editable customer name
       html += '<div class="fvi-note-row">';
       html += '<input class="fvi-cust-input" type="text" placeholder="اسم الزبون" data-idx="' + i + '" value="' + esc(it.customer_name || '') + '" style="flex:1;margin-bottom:4px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">';
@@ -1958,9 +1987,9 @@
       html += '<div class="fvi-note-row">';
       html += '<input class="fvi-amt-input" type="number" min="0" step="any" placeholder="المبلغ" data-idx="' + i + '" value="' + Number(it.amount) + '" style="flex:1;margin-bottom:4px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">';
       html += '</div>';
-      // Notes
+      // Notes (multi-line textarea so item lists are clear)
       html += '<div class="fvi-note-row">';
-      html += '<input class="fvi-note-input" type="text" placeholder="ملاحظة (اختياري)" data-idx="' + i + '" value="' + esc(it.notes || '') + '">';
+      html += '<textarea class="fvi-note-input" rows="3" placeholder="ملاحظات / المشتريات (سطر لكل ايتم)" data-idx="' + i + '" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;line-height:1.5;white-space:pre-wrap">' + esc(it.notes || '') + '</textarea>';
       html += '</div>';
       html += '</div>';
     }
@@ -1974,6 +2003,30 @@
         var idx = parseInt(this.getAttribute('data-idx'));
         fabParsed.splice(idx, 1);
         if (fabParsed.length === 0) { clearResults(); } else { showMarketResults(); }
+      };
+    }
+    // Candidate selectors
+    var candSelects = div.querySelectorAll('.fvi-cand-input');
+    for (var cs = 0; cs < candSelects.length; cs++) {
+      candSelects[cs].onchange = function() {
+        var idx = parseInt(this.getAttribute('data-idx'));
+        var v = this.value;
+        if (!v) { fabParsed[idx].customer_id = null; return; }
+        if (v === '__NEW__') {
+          fabParsed[idx].customer_id = null;
+          fabParsed[idx].is_new_customer = true;
+        } else {
+          var pick = (fabParsed[idx].candidates || []).find(function(c){ return c.id === v; });
+          fabParsed[idx].customer_id = v;
+          fabParsed[idx].is_new_customer = false;
+          if (pick) {
+            fabParsed[idx].customer_name = pick.name;
+            // Reflect in name input
+            var row = document.getElementById('fvi-' + idx);
+            var ni = row && row.querySelector('.fvi-cust-input');
+            if (ni) ni.value = pick.name;
+          }
+        }
       };
     }
     // Customer name edits
@@ -2005,6 +2058,19 @@
   // ── Market Owner: save parsed sales (auto-creates new customers) ──
   function confirmMarket() {
     if (fabParsed.length === 0) return;
+    // Block save if any item has unresolved candidates
+    var unresolved = fabParsed.find(function(it){
+      return it.candidates && it.candidates.length > 1 && !it.customer_id && !it.is_new_customer;
+    });
+    // If user never touched the selector → customer_id stays null AND is_new_customer is still true,
+    // so treat that as needs-selection too.
+    var needPick = fabParsed.find(function(it){
+      return it.candidates && it.candidates.length > 1 && !it.customer_id;
+    });
+    if (needPick) {
+      addMsg('⚠️ يوجد اسم يطابق أكثر من زبون — اختر الزبون الصحيح من القائمة قبل الحفظ.', true);
+      return;
+    }
     var tok = getToken();
     var todayISO = new Date().toISOString();
     var saved = 0;
@@ -2042,12 +2108,21 @@
         }).then(function(c) { return c.id; });
       }
       return ensureCust.then(function(custId) {
+        // First non-empty line of notes makes a nicer product_name; full notes still saved.
+        var firstLine = '';
+        if (item.notes) {
+          var lines = String(item.notes).split('\n');
+          for (var li = 0; li < lines.length; li++) {
+            var ln = lines[li].replace(/^[\s\-•:]+/, '').trim();
+            if (ln) { firstLine = ln.split(':')[0].trim(); break; }
+          }
+        }
         return postJSON('/api/v1/market/sales/', {
           customer_id: custId,
           sale_date: todayISO,
           notes: item.notes || null,
           items: [{
-            product_name: item.notes ? item.notes : 'بيع صوتي',
+            product_name: firstLine || 'بيع صوتي',
             quantity: 1,
             unit_price: Number(item.amount) || 0,
           }],
@@ -2063,6 +2138,10 @@
         clearResults();
         if (typeof refreshActivePage === 'function') refreshActivePage();
         if (typeof loadMarketCustomers === 'function') loadMarketCustomers();
+        // Close the voice assistant popup after a successful save
+        if (failed === 0 && saved > 0) {
+          setTimeout(function(){ window.fabVaClose(); }, 600);
+        }
         return;
       }
       var it = pending.shift();
@@ -2318,6 +2397,19 @@
     if (e.key === 'Enter' && e.target && e.target.id === 'fab-va-text') {
       window.fabVaSend();
     }
+  });
+
+  // Close popup when clicking outside it
+  document.addEventListener('mousedown', function(e) {
+    var popup = document.getElementById('fab-va-popup');
+    if (!popup || popup.style.display === 'none') return;
+    var fab = document.getElementById('fab-va');
+    if (popup.contains(e.target)) return;
+    if (fab && fab.contains(e.target)) return;
+    // Don't auto-close when interacting with wallet picker overlay
+    var wpo = document.getElementById('wallet-picker-overlay');
+    if (wpo && wpo.style.display !== 'none' && wpo.contains(e.target)) return;
+    window.fabVaClose();
   });
 })();
 </script>

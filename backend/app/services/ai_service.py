@@ -362,19 +362,30 @@ sale records from the spoken text and return them as a JSON array.
 
 Each object must have:
 - "customer_name": string — the customer's name as the owner pronounced it (clean it: no titles like "السيد", no extra connectors). If the owner says only a nickname (e.g., "أبو علي", "أم محمد") keep it as said.
-- "amount": number — the sale total in IQD (Iraqi Dinar). Always positive.
 - "notes": string or null — VERY IMPORTANT: this is where ALL purchased products / items / goods go.
-  Put EVERY product the customer bought in this field, joined by " و " (e.g., "زيت و تمن و ماي", "بيبسي و عصير و زين", "خبز و حليب و بيض").
-  Also include any extra context the owner mentioned (e.g., "بضاعة", "جيرانه", "نسيئة لأسبوع"). Use null ONLY if nothing besides the name and amount was said.
+  Format the notes as a CLEAN multi-line list, one item per line. If a per-item price was spoken,
+  include it after the product name with a colon. If no per-item price was given, just list the item.
+  Examples of the EXACT format you must produce:
+      "- زيت: 10000\n- تمن: 5000\n- ماي: 3000"
+      "- خبز\n- حليب\n- بيض"
+      "- بيبسي: 1500\n- عصير"
+  Also include any extra context the owner mentioned on its own line (e.g., "- بضاعة", "- نسيئة لأسبوع").
+  Use null ONLY if nothing besides the name and total amount was said.
+- "amount": number — the sale total in IQD (Iraqi Dinar). Always positive.
+    • If the owner spoke ONE single total (e.g., "ب 20 الف") use it directly.
+    • If the owner spoke a price for EACH item separately (e.g., "زيت ب 10 الاف وتمن ب 5 الاف وماي ب 3 الاف"),
+      SUM those per-item prices and put the SUM as "amount" (here: 18000). Always include the per-item
+      prices in "notes" as shown above.
 - "confidence": float between 0 and 1.
 
 Rules:
 - The owner may dictate MULTIPLE customers in one recording. Return one object per customer.
 - The product list can appear BEFORE or AFTER the amount — capture it either way and put it in "notes":
-  • "محمد اشترى زيت و تمن و ماي ب 20 الف"           → name=محمد, amount=20000, notes="زيت و تمن و ماي"
-  • "محمد اشترى ب 15 الف زين و ببسي و عصير"         → name=محمد, amount=15000, notes="زين و ببسي و عصير"
-  • "احمد اخذ خبز و حليب ب 8 الاف"                  → name=احمد, amount=8000, notes="خبز و حليب"
-  • "اكتبلي على علي 10 الاف سكر و شاي و رز"          → name=علي, amount=10000, notes="سكر و شاي و رز"
+  • "محمد اشترى زيت و تمن و ماي ب 20 الف"           → name=محمد, amount=20000, notes="- زيت\n- تمن\n- ماي"
+  • "محمد اشترى ب 15 الف زين و ببسي و عصير"         → name=محمد, amount=15000, notes="- زين\n- ببسي\n- عصير"
+  • "احمد اخذ خبز و حليب ب 8 الاف"                  → name=احمد, amount=8000, notes="- خبز\n- حليب"
+  • "اكتبلي على علي 10 الاف سكر و شاي و رز"          → name=علي, amount=10000, notes="- سكر\n- شاي\n- رز"
+  • "محمد اخذ زيت ب 10 الاف وتمن ب 5 الاف وماي ب 3 الاف" → name=محمد, amount=18000, notes="- زيت: 10000\n- تمن: 5000\n- ماي: 3000"
 - Other Iraqi colloquial wording examples you MUST understand:
   • "اكتبلي على محمد عشرين الف خبز وحليب"
   • "احمد ابو علي اخذ بضاعة ب 25000"
@@ -409,6 +420,7 @@ def _match_existing_customer(name: str, customers: list) -> "tuple[uuid.UUID | N
     """
     Try to match a parsed customer name against the shop's existing customer list.
     Returns (customer_id, is_new). Match is fuzzy: normalized substring in either direction.
+    Exact normalized match wins over partial matches even if multiple partials exist.
     """
     import uuid as _uuid
     if not name or not customers:
@@ -420,12 +432,38 @@ def _match_existing_customer(name: str, customers: list) -> "tuple[uuid.UUID | N
     for c in customers:
         if _normalize_arabic(c.name) == target:
             return c.id, False
-    # Substring either way (handles "محمد" matching "محمد علي")
+    # Otherwise: collect all partial matches
+    partials = []
     for c in customers:
         cn = _normalize_arabic(c.name)
         if cn and (cn in target or target in cn):
-            return c.id, False
+            partials.append(c)
+    if len(partials) == 1:
+        return partials[0].id, False
+    # >1 → ambiguous; let the UI ask the owner which one. Treat as "new" for now
+    # so a fallback "create new customer" still works if the UI doesn't disambiguate.
     return None, True
+
+
+def _find_candidates(name: str, customers: list) -> list:
+    """Return the list of existing customers whose normalized name matches the
+    spoken name as a substring in either direction. Used to disambiguate when
+    the owner says just "علي" but multiple customers contain "علي"."""
+    if not name or not customers:
+        return []
+    target = _normalize_arabic(name)
+    if not target:
+        return []
+    # If exactly one is an exact match, no disambiguation needed.
+    exact = [c for c in customers if _normalize_arabic(c.name) == target]
+    if len(exact) == 1:
+        return []
+    partials = []
+    for c in customers:
+        cn = _normalize_arabic(c.name)
+        if cn and (cn in target or target in cn):
+            partials.append(c)
+    return partials if len(partials) > 1 else []
 
 
 def _parse_market_local(text: str, customers: list) -> list:
@@ -549,9 +587,11 @@ def _parse_market_local(text: str, customers: list) -> list:
                 continue
             seen.add(key)
             clean_notes.append(t)
-        notes = " و ".join(clean_notes) if clean_notes else None
+        notes = "\n".join(f"- {t}" for t in clean_notes) if clean_notes else None
 
         cust_id, is_new = _match_existing_customer(name, customers)
+        cands = _find_candidates(name, customers)
+        cand_list = [{"id": c.id, "name": c.name} for c in cands]
         items.append(ParsedMarketSale(
             customer_name=name,
             customer_id=cust_id,
@@ -559,6 +599,7 @@ def _parse_market_local(text: str, customers: list) -> list:
             amount=amount,
             notes=notes,
             confidence=0.6,
+            candidates=cand_list,
         ))
     return items
 
@@ -612,6 +653,8 @@ async def parse_market_sales_from_text(text: str, customers: list) -> "tuple[lis
             if not name:
                 continue
             cust_id, is_new = _match_existing_customer(name, customers)
+            cands = _find_candidates(name, customers)
+            cand_list = [{"id": c.id, "name": c.name} for c in cands]
             items.append(ParsedMarketSale(
                 customer_name=name,
                 customer_id=cust_id,
@@ -619,6 +662,7 @@ async def parse_market_sales_from_text(text: str, customers: list) -> "tuple[lis
                 amount=amt,
                 notes=(item.get("notes") or None) or None,
                 confidence=float(item.get("confidence", 0.9)),
+                candidates=cand_list,
             ))
         return items, raw
     except (json.JSONDecodeError, KeyError, ValueError):

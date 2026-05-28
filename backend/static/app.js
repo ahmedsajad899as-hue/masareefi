@@ -3004,9 +3004,10 @@ function openAddSaleModal(customerId) {
 // ── Vision (Camera + AI) ──────────────────────────────────────────────
 let _visionCustomerId = null;
 let _visionItems = [];
+let _visionCustomers = [];   // cache for picker
 
 function openVisionModal(customerId) {
-  _visionCustomerId = customerId;
+  _visionCustomerId = customerId || null;
   _visionItems = [];
   // Reset modal contents (modal is opened only after user picks an image)
   document.getElementById('vision-preview').style.display = 'none';
@@ -3017,8 +3018,55 @@ function openVisionModal(customerId) {
   document.getElementById('vision-notes').value = '';
   document.getElementById('vision-save-btn').disabled = true;
   document.getElementById('vision-file').value = '';
+  // Show / hide customer picker depending on entry point
+  const custRow = document.getElementById('vision-cust-row');
+  if (custRow) {
+    if (_visionCustomerId) {
+      custRow.style.display = 'none';
+    } else {
+      custRow.style.display = '';
+      visionLoadCustomers();
+    }
+  }
   // Open camera directly
   document.getElementById('vision-file').click();
+}
+
+async function visionLoadCustomers() {
+  try {
+    if (!_visionCustomers || _visionCustomers.length === 0) {
+      _visionCustomers = await api('GET', '/market/customers/');
+    }
+    visionRenderCustomerOptions(_visionCustomers);
+    document.getElementById('vision-cust-search').value = '';
+  } catch (e) {
+    document.getElementById('vision-cust-hint').textContent = 'تعذّر تحميل قائمة الزبائن: ' + e.message;
+  }
+}
+
+function visionRenderCustomerOptions(list) {
+  const sel = document.getElementById('vision-cust-select');
+  if (!sel) return;
+  sel.innerHTML = list.map(c =>
+    `<option value="${c.id}">${(c.name || '').replace(/</g,'&lt;')}${c.phone ? ' — ' + c.phone : ''}</option>`
+  ).join('');
+}
+
+function visionFilterCustomers() {
+  const q = (document.getElementById('vision-cust-search').value || '').trim().toLowerCase();
+  const filtered = !q ? _visionCustomers : _visionCustomers.filter(c =>
+    (c.name || '').toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q)
+  );
+  visionRenderCustomerOptions(filtered);
+}
+
+function visionPickCustomer(id) {
+  _visionCustomerId = id || null;
+  const hint = document.getElementById('vision-cust-hint');
+  if (hint) {
+    const picked = _visionCustomers.find(c => c.id === id);
+    hint.textContent = picked ? ('الزبون المختار: ' + picked.name) : 'اختر زبون قبل الحفظ.';
+  }
 }
 
 function visionPickFile() { document.getElementById('vision-file').click(); }
@@ -3128,6 +3176,12 @@ function visionRecalcTotal() {
 }
 
 async function visionSaveSale() {
+  if (!_visionCustomerId) {
+    toast('اختر الزبون المُسند له هذه الفاتورة', 'err');
+    const row = document.getElementById('vision-cust-row');
+    if (row) row.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
   const items = _visionItems
     .filter(it => (it.product_name || '').trim().length > 0)
     .map(it => ({
@@ -3147,7 +3201,9 @@ async function visionSaveSale() {
     });
     bootstrap.Modal.getInstance(document.getElementById('visionModal'))?.hide();
     toast('تم حفظ الفاتورة ✅');
-    await openCustomerDetail(_visionCustomerId);
+    if (typeof openCustomerDetail === 'function') {
+      try { await openCustomerDetail(_visionCustomerId); } catch(e) {}
+    }
     await loadMarketCustomers();
   } catch (e) { toast(e.message, 'err'); }
   finally { loading(false); }
