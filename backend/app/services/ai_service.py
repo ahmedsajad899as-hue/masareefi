@@ -753,32 +753,54 @@ async def analyze_image_for_market_items(
 
     # ── Fallback to Gemini if OpenAI failed or absent ──
     if (not raw or raw.startswith("openai-error")) and has_gemini:
+        import httpx
+        # Try multiple model names — Google rotates availability.
+        gemini_models = [
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-001",
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-flash",
+            "gemini-flash-latest",
+        ]
+        payload = {
+            "systemInstruction": {"parts": [{"text": VISION_SYSTEM_PROMPT}]},
+            "contents": [
+                {
+                    "parts": [
+                        {"inline_data": {"mime_type": mime_type, "data": b64}},
+                        {"text": user_text},
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 900,
+                "responseMimeType": "application/json",
+            },
+        }
+        last_err = ""
+        gem_data = None
+        async with httpx.AsyncClient(timeout=60.0) as http:
+            for model in gemini_models:
+                url = (
+                    f"https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{model}:generateContent?key={gemini_key}"
+                )
+                try:
+                    r = await http.post(url, json=payload)
+                    if r.status_code == 404:
+                        last_err = f"404 on {model}"
+                        continue
+                    r.raise_for_status()
+                    gem_data = r.json()
+                    break
+                except Exception as e:
+                    last_err = f"{model}: {str(e)[:100]}"
+                    continue
+        if gem_data is None:
+            return [], f"gemini-error: {last_err or 'all models failed'}"
         try:
-            import httpx
-            gem_url = (
-                "https://generativelanguage.googleapis.com/v1beta/models/"
-                "gemini-1.5-flash:generateContent?key=" + gemini_key
-            )
-            payload = {
-                "systemInstruction": {"parts": [{"text": VISION_SYSTEM_PROMPT}]},
-                "contents": [
-                    {
-                        "parts": [
-                            {"inline_data": {"mime_type": mime_type, "data": b64}},
-                            {"text": user_text},
-                        ]
-                    }
-                ],
-                "generationConfig": {
-                    "temperature": 0.2,
-                    "maxOutputTokens": 900,
-                    "responseMimeType": "application/json",
-                },
-            }
-            async with httpx.AsyncClient(timeout=60.0) as http:
-                r = await http.post(gem_url, json=payload)
-                r.raise_for_status()
-                gem_data = r.json()
             parts = (
                 gem_data.get("candidates", [{}])[0]
                 .get("content", {})
@@ -786,7 +808,7 @@ async def analyze_image_for_market_items(
             )
             raw = "".join(p.get("text", "") for p in parts) or "[]"
         except Exception as e:
-            return [], f"gemini-error: {str(e)[:200]}"
+            return [], f"gemini-parse-error: {str(e)[:200]}"
 
     cleaned = raw.strip()
     if cleaned.startswith("```"):
