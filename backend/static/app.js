@@ -3008,6 +3008,7 @@ let _visionItems = [];
 function openVisionModal(customerId) {
   _visionCustomerId = customerId;
   _visionItems = [];
+  // Reset modal contents (modal is opened only after user picks an image)
   document.getElementById('vision-preview').style.display = 'none';
   document.getElementById('vision-preview').src = '';
   document.getElementById('vision-status').innerHTML = '';
@@ -3016,7 +3017,8 @@ function openVisionModal(customerId) {
   document.getElementById('vision-notes').value = '';
   document.getElementById('vision-save-btn').disabled = true;
   document.getElementById('vision-file').value = '';
-  new bootstrap.Modal(document.getElementById('visionModal')).show();
+  // Open camera directly
+  document.getElementById('vision-file').click();
 }
 
 function visionPickFile() { document.getElementById('vision-file').click(); }
@@ -3026,6 +3028,11 @@ async function visionFileSelected(ev) {
   if (!file) return;
   if (!/^image\//.test(file.type)) { toast('يرجى اختيار صورة', 'err'); return; }
   if (file.size > 20 * 1024 * 1024) { toast('حجم الصورة كبير (الحد 20MB)', 'err'); return; }
+  // Show modal now that we have a photo
+  const modalEl = document.getElementById('visionModal');
+  if (!bootstrap.Modal.getInstance(modalEl)) {
+    new bootstrap.Modal(modalEl).show();
+  }
   const reader = new FileReader();
   reader.onload = e => {
     const img = document.getElementById('vision-preview');
