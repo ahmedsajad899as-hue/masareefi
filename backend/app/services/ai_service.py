@@ -1140,14 +1140,15 @@ async def analyze_image_for_market_items(
     if (not raw or raw.startswith("openai-error")) and has_gemini:
         import httpx
         # Try multiple model names — Google rotates availability.
-        # Order: newest stable → older fallbacks. 1.5 family was retired Sept 2025.
+        # Order: flash models first (higher rate limits on free tier) → pro models.
+        # 1.5 family was retired Sept 2025.
         gemini_models = [
             "gemini-2.5-flash",
-            "gemini-2.5-pro",
             "gemini-2.0-flash",
             "gemini-2.0-flash-001",
             "gemini-2.0-flash-lite",
             "gemini-flash-latest",
+            "gemini-2.5-pro",
             "gemini-pro-latest",
         ]
         payload = {
@@ -1167,6 +1168,7 @@ async def analyze_image_for_market_items(
             },
         }
         last_err = ""
+        rate_limited = False
         gem_data = None
         async with httpx.AsyncClient(timeout=60.0) as http:
             for model in gemini_models:
@@ -1179,13 +1181,28 @@ async def analyze_image_for_market_items(
                     if r.status_code == 404:
                         last_err = f"404 on {model}"
                         continue
+                    if r.status_code == 429:
+                        rate_limited = True
+                        last_err = f"429 on {model}"
+                        # Retry once after a short delay on the same model
+                        import asyncio
+                        await asyncio.sleep(2.0)
+                        r = await http.post(url, json=payload)
+                        if r.status_code == 429:
+                            continue
                     r.raise_for_status()
                     gem_data = r.json()
+                    rate_limited = False
                     break
                 except Exception as e:
                     last_err = f"{model}: {str(e)[:100]}"
                     continue
         if gem_data is None:
+            if rate_limited:
+                return [], (
+                    "gemini-rate-limit: تم تجاوز الحد المسموح للطلبات على Gemini "
+                    "(الحساب المجاني محدود). انتظر دقيقة وحاول مجدداً، أو أضف منتجاً يدوياً."
+                )
             return [], f"gemini-error: {last_err or 'all models failed'}"
         try:
             parts = (

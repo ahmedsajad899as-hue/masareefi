@@ -3122,6 +3122,8 @@ async function visionAnalyze(file) {
       let hint = 'لم يتم استخراج منتجات تلقائياً. أضفها يدوياً.';
       if (rawHint === 'no-api-key') {
         hint = 'لم يتم إعداد أي مفتاح ذكاء اصطناعي على السيرفر (OpenAI أو Gemini). أضف المنتجات يدوياً.';
+      } else if (rawHint.startsWith('gemini-rate-limit')) {
+        hint = '⏳ تم تجاوز الحد المسموح للطلبات على Gemini (الحساب المجاني محدود بـ 15 طلب/دقيقة). انتظر دقيقة وحاول مجدداً، أو أضف المنتجات يدوياً.';
       } else if (rawHint.startsWith('openai-error') || rawHint.startsWith('gemini-error') || rawHint.startsWith('error:')) {
         hint = 'خطأ في الذكاء الاصطناعي: ' + rawHint.slice(0, 200);
       }
