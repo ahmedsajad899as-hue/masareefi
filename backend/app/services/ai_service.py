@@ -350,6 +350,210 @@ async def parse_expenses_from_text(text: str) -> tuple[list[ParsedExpenseItem], 
         return [], raw
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# ── Market Owner Voice Parsing ──────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
+
+MARKET_SYSTEM_PROMPT = """
+You are an intelligent assistant for a small grocery/market shop owner in Iraq.
+The shop owner speaks Arabic (Iraqi colloquial — العامية العراقية — or Modern Standard Arabic),
+and dictates credit-sale entries for their customers. Your job is to extract structured
+sale records from the spoken text and return them as a JSON array.
+
+Each object must have:
+- "customer_name": string — the customer's name as the owner pronounced it (clean it: no titles like "السيد", no extra connectors). If the owner says only a nickname (e.g., "أبو علي", "أم محمد") keep it as said.
+- "amount": number — the sale total in IQD (Iraqi Dinar). Always positive.
+- "notes": string or null — short description of what was sold OR any extra context the owner mentioned (e.g., "خبز وحليب", "بضاعة", "جيرانه"). Use null if nothing was said.
+- "confidence": float between 0 and 1.
+
+Rules:
+- The owner may dictate MULTIPLE customers in one recording. Return one object per customer.
+- Iraqi colloquial wording examples you MUST understand:
+  • "اكتبلي على محمد عشرين الف خبز وحليب"
+  • "احمد ابو علي اخذ بضاعة ب 25000"
+  • "أم زينب جيرانه ديهنها 10 الاف"
+  • "كتبلي على ابو سيف خمسين الف"
+  • "محمد جابر علي 30 الف ومحمود علي 15 الف"
+- Treat "الف" / "الاف" / "آلاف" as thousands. "خمسين الف" = 50000. "عشر آلاف" = 10000.
+- Treat "مية" / "ميه" / "مئة" as 100. "ميتين" = 200.
+- "ديهنه" / "ديهنها" / "عليه" / "على" / "اخذ" / "كتبلي" / "حاسبلي" all indicate the customer owes the shop.
+- If only ONE name is mentioned and one amount, return one object.
+- If the owner says a customer paid (e.g., "دفع", "سدد", "ما عليه شي") — DO NOT return that as a sale. Skip it.
+- Always return a valid JSON array, even if empty: []
+- Do NOT include markdown or explanation outside the JSON array.
+- Be tolerant of stutters, pauses, repetitions in the transcript. Extract intent, not literal text.
+"""
+
+
+def _normalize_arabic(s: str) -> str:
+    """Strip diacritics and unify alef/yaa forms for matching."""
+    if not s:
+        return ""
+    table = str.maketrans({
+        "أ": "ا", "إ": "ا", "آ": "ا", "ى": "ي", "ة": "ه",
+        "\u064b": "", "\u064c": "", "\u064d": "", "\u064e": "",
+        "\u064f": "", "\u0650": "", "\u0651": "", "\u0652": "",
+    })
+    return s.translate(table).strip().lower()
+
+
+def _match_existing_customer(name: str, customers: list) -> "tuple[uuid.UUID | None, bool]":
+    """
+    Try to match a parsed customer name against the shop's existing customer list.
+    Returns (customer_id, is_new). Match is fuzzy: normalized substring in either direction.
+    """
+    import uuid as _uuid
+    if not name or not customers:
+        return None, True
+    target = _normalize_arabic(name)
+    if not target:
+        return None, True
+    # Exact normalized match first
+    for c in customers:
+        if _normalize_arabic(c.name) == target:
+            return c.id, False
+    # Substring either way (handles "محمد" matching "محمد علي")
+    for c in customers:
+        cn = _normalize_arabic(c.name)
+        if cn and (cn in target or target in cn):
+            return c.id, False
+    return None, True
+
+
+def _parse_market_local(text: str, customers: list) -> list:
+    """
+    Fallback regex parser for market sales. Handles simple patterns like
+    "محمد 25000" or "احمد خمسين الف".
+    """
+    from app.schemas.market_voice import ParsedMarketSale
+    items: list[ParsedMarketSale] = []
+
+    # Pattern: name (1-3 Arabic words) + optional connector + amount
+    # We split on common separators and look for amount nearby a name
+    chunks = re.split(r'(?:\s+و\s+|\s+ثم\s+|،|\.)', text)
+    for chunk in chunks:
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        # Find amount (digits or Arabic words)
+        amount = None
+        amount_match = re.search(r'([\d,٫٬.]+)\s*(?:الف|ألف|آلاف|الاف)?', chunk)
+        if amount_match:
+            try:
+                amount = float(amount_match.group(1).replace(",", ""))
+                if "الف" in amount_match.group(0) or "ألف" in amount_match.group(0) or "آلاف" in amount_match.group(0) or "الاف" in amount_match.group(0):
+                    amount *= 1000
+            except ValueError:
+                amount = None
+        if not amount:
+            amount = _parse_arabic_number(chunk)
+        if not amount or amount <= 0:
+            continue
+        # Strip the amount/keywords; what remains may be the name
+        leftover = re.sub(r'[\d,٫٬.]+', ' ', chunk)
+        leftover = re.sub(r'(?:الف|ألف|آلاف|الاف|دينار|دنانير|ديهنه|ديهنها|عليه|على|اخذ|أخذ|كتبلي|كتب|حاسبلي|حاسب|ل|من|في)', ' ', leftover)
+        name_words = [w for w in leftover.split() if len(w) > 1][:3]
+        name = " ".join(name_words).strip()
+        if not name:
+            continue
+        cust_id, is_new = _match_existing_customer(name, customers)
+        items.append(ParsedMarketSale(
+            customer_name=name,
+            customer_id=cust_id,
+            is_new_customer=is_new,
+            amount=amount,
+            notes=None,
+            confidence=0.55,
+        ))
+    return items
+
+
+async def parse_market_sales_from_text(text: str, customers: list) -> "tuple[list, str]":
+    """
+    Use GPT-4o to extract structured market sales from a dictation transcript.
+    `customers` is a list of MarketCustomer ORM objects for the current owner — used
+    to match parsed names to existing customer IDs.
+    Returns (parsed_sales, raw_response).
+    """
+    from app.schemas.market_voice import ParsedMarketSale
+
+    # Local fallback when OpenAI key missing
+    if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY.startswith("sk-placeholder"):
+        return _parse_market_local(text, customers), "local"
+
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": MARKET_SYSTEM_PROMPT},
+                {"role": "user", "content": text},
+            ],
+            temperature=0.1,
+            max_tokens=800,
+        )
+        raw = response.choices[0].message.content or "[]"
+    except Exception:
+        return _parse_market_local(text, customers), "fallback"
+
+    # Strip code fences if model wrapped output
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
+        cleaned = re.sub(r'\s*```$', '', cleaned)
+
+    try:
+        data = json.loads(cleaned)
+        if not isinstance(data, list):
+            return [], raw
+        items: list[ParsedMarketSale] = []
+        for item in data:
+            try:
+                amt = float(item.get("amount", 0))
+            except (TypeError, ValueError):
+                continue
+            if amt <= 0:
+                continue
+            name = (item.get("customer_name") or "").strip()
+            if not name:
+                continue
+            cust_id, is_new = _match_existing_customer(name, customers)
+            items.append(ParsedMarketSale(
+                customer_name=name,
+                customer_id=cust_id,
+                is_new_customer=is_new,
+                amount=amt,
+                notes=(item.get("notes") or None) or None,
+                confidence=float(item.get("confidence", 0.9)),
+            ))
+        return items, raw
+    except (json.JSONDecodeError, KeyError, ValueError):
+        # Fall back to local on parse failure
+        return _parse_market_local(text, customers), raw
+
+
+async def transcribe_audio_for_market(audio_bytes: bytes, filename: str) -> str:
+    """
+    Whisper transcription tuned for Iraqi market dictation.
+    Uses an Arabic prompt to bias the model towards common shop-keeping vocabulary,
+    which improves recognition of customer names and amounts spoken in dialect.
+    """
+    import io
+    audio_file = io.BytesIO(audio_bytes)
+    audio_file.name = filename
+    response = await client.audio.transcriptions.create(
+        model="whisper-1",
+        file=audio_file,
+        language="ar",
+        prompt=(
+            "تسجيل لصاحب محل بقالة عراقي يملي ديون زبائنه. "
+            "أسماء أشخاص (محمد، أحمد، علي، حسين، فاطمة، أم زينب، أبو علي) ومبالغ بالدينار العراقي. "
+            "الف، آلاف، خمسين الف، عشرة الاف، ميتين الف، مليون."
+        ),
+        temperature=0.0,
+    )
+    return response.text
+
+
 def _local_insights(monthly_summary: dict) -> str:
     """Generate simple local insights without OpenAI."""
     total = monthly_summary.get("total", 0)
