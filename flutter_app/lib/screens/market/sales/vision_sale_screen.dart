@@ -1,9 +1,9 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
+import '../../../utils/pick_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -59,25 +59,17 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
       });
 
   Future<void> _pickImage() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    final bytes = file.bytes ??
-        (file.path != null ? await File(file.path!).readAsBytes() : null);
-    if (bytes == null) return;
+    // Guard: prevent opening the picker while a previous analysis is still running
+    if (_analyzing) return;
 
-    final ext = (file.extension ?? 'jpg').toLowerCase();
-    final mime = ext == 'png'
-        ? 'image/png'
-        : ext == 'webp'
-            ? 'image/webp'
-            : 'image/jpeg';
+    // pickImageFile() is platform-aware:
+    //   • Web    → fresh dart:html FileUploadInputElement (reliable repeated picks)
+    //   • Native → file_picker package
+    final picked = await pickImageFile();
+    if (picked == null) return;
 
-    setState(() => _imageBytes = bytes);
-    await _analyzeImage(bytes, mime);
+    setState(() => _imageBytes = picked.bytes);
+    await _analyzeImage(picked.bytes, picked.mime);
   }
 
   Future<void> _analyzeImage(Uint8List bytes, String mime) async {
@@ -118,7 +110,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
             backgroundColor: AppColors.error,
           ),
         );
-        _items.add(_ItemRow());
+        setState(() => _items.add(_ItemRow()));
       }
     } finally {
       if (mounted) setState(() => _analyzing = false);
