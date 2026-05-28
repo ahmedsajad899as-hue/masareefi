@@ -1,6 +1,6 @@
 """My Market Debts router — regular user sees debts/purchases recorded against their phone."""
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import select, or_, and_, update as sa_update
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,37 @@ from app.schemas.market import (
 )
 from app.utils.dependencies import get_current_user
 
+
+async def _find_my_customers(current_user: User, db: AsyncSession) -> list[MarketCustomer]:
+    """Find all MarketCustomer records for this user by linked_user_id OR phone number match.
+
+    Also heals missing linked_user_id on the fly so future calls are faster.
+    """
+    conditions = [MarketCustomer.linked_user_id == current_user.id]
+    if current_user.phone_number:
+        conditions.append(
+            and_(
+                MarketCustomer.phone == current_user.phone_number,
+                MarketCustomer.linked_user_id.is_(None),
+            )
+        )
+
+    result = await db.execute(select(MarketCustomer).where(or_(*conditions)))
+    customers = result.scalars().all()
+
+    # Heal: set linked_user_id for any customer matched only by phone
+    unlinked = [c for c in customers if c.linked_user_id is None]
+    if unlinked:
+        unlinked_ids = [c.id for c in unlinked]
+        await db.execute(
+            sa_update(MarketCustomer)
+            .where(MarketCustomer.id.in_(unlinked_ids))
+            .values(linked_user_id=current_user.id)
+        )
+        await db.commit()
+
+    return customers
+
 router = APIRouter()
 
 
@@ -22,11 +53,7 @@ async def my_market_debts(
     db: AsyncSession = Depends(get_db),
 ):
     """Return all unpaid debts across all markets linked to the current user's account."""
-    # Find all MarketCustomer records linked to this user
-    cust_result = await db.execute(
-        select(MarketCustomer).where(MarketCustomer.linked_user_id == current_user.id)
-    )
-    customers = cust_result.scalars().all()
+    customers = await _find_my_customers(current_user, db)
 
     if not customers:
         return []
@@ -91,10 +118,7 @@ async def my_all_purchases(
 ):
     """Return ALL sales (paid + unpaid) across all markets linked to the current user's account.
     Used by the regular-user 'My Purchases' read-only view."""
-    cust_result = await db.execute(
-        select(MarketCustomer).where(MarketCustomer.linked_user_id == current_user.id)
-    )
-    customers = cust_result.scalars().all()
+    customers = await _find_my_customers(current_user, db)
 
     if not customers:
         return []
