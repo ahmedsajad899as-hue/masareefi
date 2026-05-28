@@ -1140,13 +1140,15 @@ async def analyze_image_for_market_items(
     if (not raw or raw.startswith("openai-error")) and has_gemini:
         import httpx
         # Try multiple model names — Google rotates availability.
+        # Order: newest stable → older fallbacks. 1.5 family was retired Sept 2025.
         gemini_models = [
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
             "gemini-2.0-flash",
             "gemini-2.0-flash-001",
             "gemini-2.0-flash-lite",
-            "gemini-1.5-flash-latest",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro-latest",
+            "gemini-flash-latest",
+            "gemini-pro-latest",
         ]
         payload = {
             "systemInstruction": {"parts": [{"text": VISION_SYSTEM_PROMPT}]},
