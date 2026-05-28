@@ -15,26 +15,56 @@ from app.utils.dependencies import get_current_user
 
 
 async def _find_my_customers(current_user: User, db: AsyncSession) -> list[MarketCustomer]:
-    """Find all MarketCustomer records for this user by linked_user_id OR phone number match."""
-    conditions = [MarketCustomer.linked_user_id == current_user.id]
-    if current_user.phone_number:
-        # Match by phone regardless of existing link status
-        conditions.append(MarketCustomer.phone == current_user.phone_number)
+    """Return MarketCustomer records that truly belong to this user.
 
-    result = await db.execute(select(MarketCustomer).where(or_(*conditions)))
-    customers = result.scalars().all()
+    Ground truth = phone number match (not just linked_user_id).
+    Side-effects:
+      - Sets linked_user_id on phone-matched customers that are unlinked or wrong.
+      - CLEARS linked_user_id on customers that point to this user but phone no longer matches.
+        (happens when user changes their phone number)
+    """
+    phone = current_user.phone_number
 
-    # Heal: ensure linked_user_id is set for all matched customers
-    to_fix = [c.id for c in customers if c.linked_user_id != current_user.id]
-    if to_fix:
+    if not phone:
+        # No phone → nothing to show
+        return []
+
+    # Fetch: phone matches OR currently linked to me (to catch stale links for cleanup)
+    result = await db.execute(
+        select(MarketCustomer).where(
+            or_(
+                MarketCustomer.phone == phone,
+                MarketCustomer.linked_user_id == current_user.id,
+            )
+        )
+    )
+    all_candidates = result.scalars().all()
+
+    correct   = [c for c in all_candidates if c.phone == phone]
+    stale     = [c for c in all_candidates if c.linked_user_id == current_user.id and c.phone != phone]
+
+    if correct:
+        correct_ids = [c.id for c in correct if c.linked_user_id != current_user.id]
+        if correct_ids:
+            await db.execute(
+                sa_update(MarketCustomer)
+                .where(MarketCustomer.id.in_(correct_ids))
+                .values(linked_user_id=current_user.id)
+            )
+
+    if stale:
+        stale_ids = [c.id for c in stale]
         await db.execute(
             sa_update(MarketCustomer)
-            .where(MarketCustomer.id.in_(to_fix))
-            .values(linked_user_id=current_user.id)
+            .where(MarketCustomer.id.in_(stale_ids))
+            .values(linked_user_id=None)
         )
+
+    needs_commit = bool(stale) or bool([c for c in correct if c.linked_user_id != current_user.id])
+    if needs_commit:
         await db.commit()
 
-    return customers
+    return correct
 
 router = APIRouter()
 

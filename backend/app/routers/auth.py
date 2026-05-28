@@ -182,23 +182,36 @@ async def update_profile(
     current_user: User = Depends(get_current_user),
 ):
     updates = body.model_dump(exclude_none=True)
+    # Capture old phone before applying changes
+    old_phone = current_user.phone_number
     for field, value in updates.items():
         setattr(current_user, field, value)
     await db.commit()
 
-    # When phone number is saved, auto-link any market customer records
-    # that have the same phone but are not yet linked to any user account.
-    if "phone_number" in updates and updates["phone_number"]:
+    # Sync market customer links whenever phone changes
+    if "phone_number" in updates:
         from app.models.market import MarketCustomer
         from sqlalchemy import update as sa_update
+        new_phone = updates["phone_number"]  # may be None / empty string
+
+        # Clear stale links: customers linked to this user but with a different phone
         await db.execute(
             sa_update(MarketCustomer)
             .where(
-                MarketCustomer.phone == updates["phone_number"],
-                MarketCustomer.linked_user_id == None,  # noqa: E711
+                MarketCustomer.linked_user_id == current_user.id,
+                MarketCustomer.phone != new_phone if new_phone else True,
             )
-            .values(linked_user_id=current_user.id)
+            .values(linked_user_id=None)
         )
+
+        if new_phone:
+            # Link customers whose phone matches the new number
+            await db.execute(
+                sa_update(MarketCustomer)
+                .where(MarketCustomer.phone == new_phone)
+                .values(linked_user_id=current_user.id)
+            )
+
         await db.commit()
 
     await db.refresh(current_user)
