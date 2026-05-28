@@ -631,6 +631,17 @@ function goTo(page) {
     if (personalPages.includes(page)) page = 'market-customers';
   }
   closeReferralDropdown();
+  // Close any open Bootstrap modal + clear lingering backdrops to prevent overlap between pages
+  try {
+    document.querySelectorAll('.modal.show').forEach(m => {
+      const inst = bootstrap.Modal.getInstance(m);
+      if (inst) inst.hide();
+    });
+    document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+  } catch (e) { /* noop */ }
   document.querySelectorAll('.pg').forEach(el => el.style.display = 'none');
   const pg = document.getElementById(`pg-${page}`);
   if (pg) pg.style.display = '';
@@ -2924,7 +2935,7 @@ function renderCustomerList(list) {
         </div>
       </div>
       <div class="d-flex gap-2 mt-2 justify-content-end">
-        <button class="btn btn-sm btn-outline-primary" title="تعديل الزبون" onclick="event.stopPropagation(); openEditCustomerModalById('${c.id}')"><i class="fas fa-edit"></i></button>
+        <button class="btn btn-sm btn-warning text-dark" title="بيع جديد" onclick="event.stopPropagation(); openAddSaleModal('${c.id}')"><i class="fas fa-plus me-1"></i>بيع جديد</button>
       </div>
     </div>
   `).join('');
