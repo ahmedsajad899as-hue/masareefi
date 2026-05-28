@@ -394,6 +394,9 @@ Rules:
   • "محمد جابر علي 30 الف ومحمود علي 15 الف"
 - Treat "الف" / "الاف" / "آلاف" / "elf" as thousands. "خمسين الف" = 50000. "عشر آلاف" = 10000. "ب 20 الف" = 20000.
 - Treat "مية" / "ميه" / "مئة" as 100. "ميتين" = 200.
+- "ونص" / "ون" = 0.5 → "الف ونص" = 1500, "بالف ونص" = 1500 (ب is the price marker), "خمسة الاف ونص" = 5500.
+- "7:30" is a speech-recognition artifact for "سبعة ونص" → treat as 7500.
+- "بالف" = ب (price marker) + الف (1000) → price = 1000. "بالف ونص" → 1500.
 - "ديهنه" / "ديهنها" / "عليه" / "على" / "اخذ" / "اشترى" / "اشتره" / "كتبلي" / "حاسبلي" all indicate the customer owes the shop.
 - The connector "ب" / "بـ" before a number means "for" (price). Treat as a separator, not part of a name.
 - DO NOT put products into customer_name. Products are NEVER part of the customer name — they go in notes.
@@ -468,126 +471,235 @@ def _find_candidates(name: str, customers: list) -> list:
 
 def _parse_market_local(text: str, customers: list) -> list:
     """
-    Fallback regex parser for market sales. Extracts:
-      - customer name (words before the purchase verb or amount)
-      - amount (digits or Arabic number words, with "الف" multiplier)
-      - notes (the remaining product list — what the customer bought)
-    Handles patterns like:
-      "محمد اشترى زيت و تمن و ماي ب 20 الف"
-      "احمد اخذ خبز و حليب ب 8 الاف"
-      "علي 10 الاف سكر و شاي"
+    Improved fallback regex/heuristic parser for Iraqi market sales dictation.
+    Handles:
+      - Single total:     "محمد اشترى زيت ولبن ب 20 الف"
+      - Per-item prices:  "محمد زيت ب 5000 ولبن بالف ونص ولحم ب 10,000"
+                          → total = 16500, notes = "- زيت: 5000\n- لبن: 1500\n- لحم: 10000"
+      - Multiple customers separated by ، / ثم / "و اسم فعل"
     """
     from app.schemas.market_voice import ParsedMarketSale
+
+    PURCHASE_VERBS_RE = r'(?:اشترى|اشتره|اشترت|اشترا|اخذ|أخذ|اخذت|كتبلي|حاسبلي|ديهنه|ديهنها|اكتبلي|اكتب)'
+    PAID_RE = r'\b(?:دفع|سدد|سددها|ما\s+عليه|خلص)\b'
+    STOP_NAME = {
+        'على', 'عليه', 'عليها', 'اكتبلي', 'كتبلي', 'حاسبلي',
+        'اليوم', 'ب', 'بـ', 'من', 'في', 'ل', 'لـ',
+    }
+
+    # ── helper: parse a price string to float ────────────────────────────────
+    def _price(s: str) -> "float | None":
+        s = s.strip()
+        if not s:
+            return None
+        # Strip leading price connector "ب" / "بـ"
+        s = re.sub(r'^بـ?(?=\S)', '', s).strip()
+        # Speech recognition artifact: "7:30" → سبعة ونص → 7500
+        m = re.fullmatch(r'(\d+):(\d{2})', s)
+        if m:
+            major, minor = int(m.group(1)), int(m.group(2))
+            return float(major * 1000 + (500 if minor in (30, 50) else minor * 10))
+        # Digits + optional الف + optional ونص
+        m = re.match(
+            r'^([\d,٫٬]+(?:\.\d+)?)\s*'
+            r'(الف|ألف|آلاف|الاف|elf)?'
+            r'(?:\s*ونص)?$', s, re.IGNORECASE)
+        if m:
+            try:
+                val = float(m.group(1).replace(',', '').replace('٫', '').replace('٬', ''))
+                if m.group(2):
+                    val *= 1000
+                if 'ونص' in s:
+                    val += 500
+                return val if val > 0 else None
+            except ValueError:
+                pass
+        # Pure "الف/آلاف" (no leading digits) e.g. "الف ونص"
+        if re.match(r'^(?:الف|ألف|آلاف|الاف)', s):
+            base = 1000.0
+            if 'ونص' in s:
+                base += 500
+            return base
+        # Arabic word numbers: "خمسة الاف ونص", "عشرين الف"
+        val = 0.0
+        found = False
+        for word, num in sorted(_AR_NUMS.items(), key=lambda x: -len(x[0])):
+            if re.search(r'(?:^|\s)' + re.escape(word) + r'(?:\s|$)', s):
+                val += float(num)
+                found = True
+        if re.search(r'\b(?:الف|ألف|آلاف|الاف|elf)\b', s, re.IGNORECASE):
+            val = val * 1000 if found else 1000.0
+            found = True
+        if 'ونص' in s:
+            val += 500
+            found = True
+        return val if found and val > 0 else None
+
+    # ── helper: parse "item_name ب price" segment ────────────────────────────
+    def _item_price(seg: str) -> "tuple[str, float | None]":
+        """Return (item_name, price_or_None) for one item segment."""
+        seg = seg.strip()
+        # "name ب price_digits_or_words" with optional space between ب and price
+        m = re.match(
+            r'^(.+?)\s+ب\s+'
+            r'([\d,٫٬]+(?:[:.]\d+)?(?:\s*(?:الف|ألف|آلاف|الاف|elf))?(?:\s*ونص)?'
+            r'|(?:الف|ألف|آلاف|الاف)(?:\s+ونص)?'
+            r'|(?:' + '|'.join(re.escape(w) for w in sorted(_AR_NUMS, key=len, reverse=True))
+            + r')(?:\s+(?:الف|ألف|آلاف|الاف))?(?:\s+ونص)?)$',
+            seg)
+        if m:
+            p = _price(m.group(2))
+            if p:
+                return m.group(1).strip(), p
+        # "name بالف..." — ب attached directly to الف (no space)
+        m = re.match(r'^(.+?)\s+(ب(?:الف|ألف|آلاف|الاف)(?:\s+ونص)?)$', seg)
+        if m:
+            price_str = m.group(2)[1:]  # strip leading ب
+            p = _price(price_str)
+            if p:
+                return m.group(1).strip(), p
+        # Fallback: try "name ب anything"
+        m = re.match(r'^(.+?)\s+ب\s+(.+)$', seg)
+        if m:
+            p = _price(m.group(2))
+            if p:
+                return m.group(1).strip(), p
+        return seg, None
+
+    # ── Split text into per-customer chunks ──────────────────────────────────
+    CUST_SEP = re.compile(
+        r'\s*ثم\s*'
+        r'|[،,]'
+        r'|\.\s+'
+        r'|\s+و\s+(?=[ا-ي]{2,5}\s+(?:' + PURCHASE_VERBS_RE[3:-1] + r'))'  # و احمد اشترى
+        r'|\s+و\s+(?=[ا-ي]{2,5}\s+\d)'                                       # و احمد 5000
+        r'|\s+و\s+(?=[ا-ي]{2,5}\s+(?:الف|ألف|خمس|عشر|ميه|مية|ميتين))'      # و احمد عشرين الف
+    )
+    chunks = CUST_SEP.split(text)
+
     items: list[ParsedMarketSale] = []
-
-    # Split into customer chunks. We split on " و " ONLY when it likely separates
-    # customers (heuristic: when the next chunk starts with a known purchase verb
-    # or a single capitalised-looking word followed by a verb). To stay safe we
-    # split on stronger separators only — products inside one chunk stay together.
-    chunks = re.split(r'(?:\s+ثم\s+|،|\.|\bو\s+(?=[ا-ي]{2,}\s+(?:اشترى|اشتره|اخذ|أخذ|كتبلي|حاسبلي|ديهنه|ديهنها|عليه))|\bو\s+(?=[ا-ي]{2,}\s+\d))', text)
-
-    # Words to strip when isolating notes/name
-    STOP_WORDS = {
-        "الف", "ألف", "آلاف", "الاف", "elf",
-        "دينار", "دنانير", "دن", "دين", "iqd", "usd",
-        "ديهنه", "ديهنها", "ديهنهم", "عليه", "عليها", "على",
-        "اخذ", "أخذ", "اخذت", "اشترى", "اشتره", "اشترت", "اشترا",
-        "كتبلي", "كتب", "حاسبلي", "حاسب", "اكتبلي", "اكتب",
-        "ب", "بـ", "ل", "لـ", "من", "في", "الى", "إلى",
-        "هذا", "هذه", "هاي", "هاد", "ذاك", "اليوم",
-    }
-    PURCHASE_VERBS = {
-        "اشترى", "اشتره", "اشترت", "اشترا", "اخذ", "أخذ", "اخذت",
-        "كتبلي", "حاسبلي", "ديهنه", "ديهنها", "اكتبلي",
-    }
 
     for chunk in chunks:
         chunk = chunk.strip()
-        if not chunk:
+        if not chunk or re.search(PAID_RE, chunk):
             continue
 
-        # Skip "paid" chunks
-        if re.search(r'\b(دفع|سدد|سددها|ما\s+عليه|خلص)\b', chunk):
-            continue
-
-        # ─ Extract amount ─
-        amount = None
-        # Try digits followed by optional "الف"
-        amt_match = re.search(r'([\d,٫٬.]+)\s*(الف|ألف|آلاف|الاف)?', chunk)
-        if amt_match:
-            try:
-                amount = float(amt_match.group(1).replace(",", "").replace("٫", "").replace("٬", ""))
-                if amt_match.group(2):
-                    amount *= 1000
-            except ValueError:
-                amount = None
-        if not amount:
-            # Try Arabic word numbers ("خمسة الاف", "عشرين الف")
-            for word, val in sorted(_AR_NUMS.items(), key=lambda x: -len(x[0])):
-                pat = r'(?:^|\s)' + re.escape(word) + r'(?:\s+(الف|ألف|آلاف|الاف))?'
-                m = re.search(pat, chunk)
-                if m:
-                    amount = float(val) * (1000 if m.group(1) else 1)
-                    break
-        if not amount or amount <= 0:
-            continue
-
-        # ─ Tokenize and remove amount + stop words ─
-        # Remove digits/punct first
-        rest = re.sub(r'[\d,٫٬.]+', ' ', chunk)
-        # Remove "الف" forms
-        rest = re.sub(r'\b(?:الف|ألف|آلاف|الاف|elf)\b', ' ', rest, flags=re.IGNORECASE)
-        # Remove "ب" or "بـ" when standalone or attached
-        rest = re.sub(r'(?:^|\s)ب(?:ـ)?(?=\s|$)', ' ', rest)
-        # Also try to remove the Arabic word number we matched
-        for word in sorted(_AR_NUMS.keys(), key=lambda x: -len(x)):
-            rest = re.sub(r'(?:^|\s)' + re.escape(word) + r'(?:\s|$)', ' ', rest)
-
-        tokens = [t for t in re.split(r'\s+', rest) if t and len(t) > 1]
-
-        # ─ Find first purchase verb position to split name vs notes ─
-        verb_idx = -1
-        for i, t in enumerate(tokens):
-            tn = _normalize_arabic(t)
-            if tn in {_normalize_arabic(v) for v in PURCHASE_VERBS}:
-                verb_idx = i
-                break
-
-        if verb_idx >= 0:
-            name_tokens = tokens[:verb_idx]
-            note_tokens = tokens[verb_idx + 1:]
+        # ── Extract customer name ─────────────────────────────────────────────
+        verb_m = re.search(r'^((?:[ا-ي]+(?:\s+[ا-ي]+){0,2})\s+)(?:' + PURCHASE_VERBS_RE[3:-1] + r')\s*', chunk)
+        if verb_m:
+            name_raw = verb_m.group(1).strip()
+            rest = chunk[verb_m.end():].strip()
         else:
-            # No verb — name = first 1-2 tokens, rest = notes
-            name_tokens = tokens[:1] if tokens else []
-            note_tokens = tokens[1:]
+            # First 1-3 Arabic words before a digit or price word
+            m_n = re.match(
+                r'^((?:[ا-ي]+(?:\s+[ا-ي]+){0,2})?)\s*'
+                r'(?=[\d,٫٬]|الف|ألف|خمس|عشر|ميه|مية|ميتين|ب\s*[\d])',
+                chunk)
+            if m_n and m_n.group(1).strip():
+                name_raw = m_n.group(1).strip()
+                rest = chunk[len(m_n.group(0)):].strip()
+            else:
+                words = chunk.split()
+                name_raw = words[0] if words else ''
+                rest = ' '.join(words[1:])
 
-        # Clean stop words from both
-        name_tokens = [t for t in name_tokens if _normalize_arabic(t) not in {_normalize_arabic(s) for s in STOP_WORDS}]
-        note_tokens = [t for t in note_tokens if _normalize_arabic(t) not in {_normalize_arabic(s) for s in STOP_WORDS}]
-
-        # Keep up to 3 name words (handles "ابو علي" / "أم زينب" / "محمد علي")
-        if name_tokens and name_tokens[0] in {"ابو", "أبو", "ام", "أم"} and len(name_tokens) >= 2:
-            name = " ".join(name_tokens[:2])
-            note_tokens = name_tokens[2:] + note_tokens
+        # Clean name
+        name_words = [
+            w for w in name_raw.split()
+            if _normalize_arabic(w) not in {_normalize_arabic(x) for x in STOP_NAME}
+        ]
+        # Handle "ابو علي", "أم زينب" (keep 2 words for these prefixes)
+        if name_words and name_words[0] in {'ابو', 'أبو', 'ام', 'أم'}:
+            name = ' '.join(name_words[:2])
         else:
-            name = " ".join(name_tokens[:2]) if name_tokens else ""
+            name = ' '.join(name_words[:2]).strip()
 
         if not name:
             continue
 
-        # Notes = remaining products, joined with " و "
-        # Filter out single-letter junk and dedupe
-        seen = set()
-        clean_notes: list[str] = []
-        for t in note_tokens:
-            if len(t) < 2:
+        # ── Try per-item price mode ───────────────────────────────────────────
+        # Split rest on " و " separators
+        segs = re.split(r'\s+و\s+', rest) if rest else []
+
+        # Remove leading price connector from entire rest if no items at all
+        # (pattern: "ب 20 الف" with no item name)
+        if len(segs) == 1 and re.match(r'^(?:ب\s*|على\s*)', segs[0]):
+            segs[0] = re.sub(r'^(?:ب\s*|على\s*)', '', segs[0])
+
+        pair_list: "list[tuple[str, float | None]]" = []
+        for seg in segs:
+            seg = seg.strip()
+            if not seg:
                 continue
-            key = _normalize_arabic(t)
-            if key in seen or key == "و":
+            item_n, item_p = _item_price(seg)
+            pair_list.append((item_n, item_p))
+
+        priced = [(n, p) for n, p in pair_list if p is not None and p > 0]
+        unpriced = [(n, p) for n, p in pair_list if p is None or p <= 0]
+
+        if len(priced) > 1:
+            # ── Multiple items with individual prices → sum ───────────────────
+            total = sum(p for _, p in priced)
+            note_lines = [f"- {n}: {int(p)}" for n, p in priced]
+            for n, _ in unpriced:
+                if n and len(n) > 1:
+                    note_lines.append(f"- {n}")
+            notes: "str | None" = '\n'.join(note_lines)
+
+        elif len(priced) == 1 and not unpriced:
+            # Single item = its price is the total; no notes needed
+            total = priced[0][1]
+            notes = None
+
+        else:
+            # ── Single total mode (no per-item prices or ambiguous) ───────────
+            total = None
+
+            # Try extracting one total from the rest string
+            amt_m = re.search(
+                r'(?:ب\s*)?([\d,٫٬]+(?:[:.]\d+)?)\s*'
+                r'(الف|ألف|آلاف|الاف|elf)?(?:\s*ونص)?',
+                rest or '', re.IGNORECASE)
+            if amt_m:
+                total = _price(
+                    (amt_m.group(1) or '') + (' ' + (amt_m.group(2) or '') if amt_m.group(2) else '') +
+                    (' ونص' if 'ونص' in (rest or '') else ''))
+            if not total:
+                for word, num in sorted(_AR_NUMS.items(), key=lambda x: -len(x[0])):
+                    m_w = re.search(
+                        r'(?:^|\s)' + re.escape(word) + r'(?:\s+(الف|ألف|آلاف|الاف))?',
+                        rest or '')
+                    if m_w:
+                        total = float(num) * (1000 if m_w.group(1) else 1)
+                        if 'ونص' in (rest or ''):
+                            total += 500
+                        break
+            if not total or total <= 0:
                 continue
-            seen.add(key)
-            clean_notes.append(t)
-        notes = "\n".join(f"- {t}" for t in clean_notes) if clean_notes else None
+
+            # Build notes from all item segments (excluding price tokens)
+            PRICE_STOP = {
+                'الف', 'ألف', 'آلاف', 'الاف', 'elf', 'دينار', 'ب', 'بـ',
+                'ل', 'لـ', 'من', 'في', 'الى', 'إلى', 'هذا', 'هذه',
+                'هاي', 'هاد', 'اليوم', 'ونص',
+            }
+            # Rebuild rest without digits / الف forms
+            clean = re.sub(r'[\d,٫٬.:]+', ' ', rest or '')
+            clean = re.sub(r'\b(?:الف|ألف|آلاف|الاف|elf)\b', ' ', clean, re.IGNORECASE)
+            clean = re.sub(r'(?:^|\s)بـ?(?=\s|$)', ' ', clean)
+            for word in sorted(_AR_NUMS.keys(), key=len, reverse=True):
+                clean = re.sub(r'(?:^|\s)' + re.escape(word) + r'(?:\s|$)', ' ', clean)
+            toks: list[str] = []
+            seen: set[str] = set()
+            for t in re.split(r'\s+', clean):
+                if len(t) < 2:
+                    continue
+                k = _normalize_arabic(t)
+                if k in seen or k in {_normalize_arabic(s) for s in PRICE_STOP}:
+                    continue
+                seen.add(k)
+                toks.append(t)
+            notes = '\n'.join(f'- {t}' for t in toks) if toks else None
 
         cust_id, is_new = _match_existing_customer(name, customers)
         cands = _find_candidates(name, customers)
@@ -596,9 +708,9 @@ def _parse_market_local(text: str, customers: list) -> list:
             customer_name=name,
             customer_id=cust_id,
             is_new_customer=is_new,
-            amount=amount,
+            amount=float(total),
             notes=notes,
-            confidence=0.6,
+            confidence=0.65,
             candidates=cand_list,
         ))
     return items
