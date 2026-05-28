@@ -1043,6 +1043,7 @@ async def analyze_image_for_market_items(
     Returns (items_list, raw_response).
     """
     import base64
+    import io as _io
 
     has_openai = settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-placeholder")
     gemini_key = (
@@ -1053,6 +1054,28 @@ async def analyze_image_for_market_items(
 
     if not has_openai and not has_gemini:
         return [], "no-api-key"
+
+    # ── Resize image to max 1600 px on longest side to reduce API token costs ──
+    try:
+        from PIL import Image as _PILImage
+        _img = _PILImage.open(_io.BytesIO(image_bytes))
+        # Convert RGBA → RGB so JPEG save doesn't fail
+        if _img.mode in ("RGBA", "P"):
+            _img = _img.convert("RGB")
+        _max_side = max(_img.size)
+        if _max_side > 1600:
+            _scale = 1600 / _max_side
+            _new_w = max(1, int(_img.size[0] * _scale))
+            _new_h = max(1, int(_img.size[1] * _scale))
+            _img = _img.resize((_new_w, _new_h), _PILImage.LANCZOS)
+        _buf = _io.BytesIO()
+        _fmt = "PNG" if mime_type == "image/png" else "JPEG"
+        _img.save(_buf, format=_fmt, quality=85)
+        image_bytes = _buf.getvalue()
+        if _fmt == "JPEG":
+            mime_type = "image/jpeg"
+    except Exception:
+        pass  # If resize fails, use original bytes unchanged
 
     b64 = base64.b64encode(image_bytes).decode("utf-8")
 
@@ -1105,7 +1128,7 @@ async def analyze_image_for_market_items(
                     },
                 ],
                 temperature=0.2,
-                max_tokens=900,
+                max_tokens=2048,
             )
             raw = response.choices[0].message.content or "[]"
         except Exception as e:
@@ -1118,12 +1141,12 @@ async def analyze_image_for_market_items(
         import httpx
         # Try multiple model names — Google rotates availability.
         gemini_models = [
-            "gemini-2.5-flash",
             "gemini-2.0-flash",
             "gemini-2.0-flash-001",
+            "gemini-2.0-flash-lite",
             "gemini-1.5-flash-latest",
             "gemini-1.5-flash",
-            "gemini-flash-latest",
+            "gemini-1.5-pro-latest",
         ]
         payload = {
             "systemInstruction": {"parts": [{"text": VISION_SYSTEM_PROMPT}]},
@@ -1137,7 +1160,7 @@ async def analyze_image_for_market_items(
             ],
             "generationConfig": {
                 "temperature": 0.2,
-                "maxOutputTokens": 900,
+                "maxOutputTokens": 2048,
                 "responseMimeType": "application/json",
             },
         }
@@ -1176,6 +1199,12 @@ async def analyze_image_for_market_items(
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    # If model prepended explanation text, find the JSON array wherever it starts
+    if not cleaned.startswith("["):
+        match = re.search(r"\[.*\]", cleaned, re.DOTALL)
+        if match:
+            cleaned = match.group(0)
 
     try:
         data = json.loads(cleaned)

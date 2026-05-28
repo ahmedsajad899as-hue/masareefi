@@ -38,6 +38,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
   final List<_ItemRow> _items = [];
   bool _analyzing = false;
   bool _saving = false;
+  bool _analysisDoneEmpty = false;
   Uint8List? _imageBytes;
 
   final fmt = NumberFormat('#,###', 'ar');
@@ -104,7 +105,10 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
         _items.add(row);
       }
       if (_items.isEmpty) {
+        _analysisDoneEmpty = true;
         _items.add(_ItemRow());
+      } else {
+        _analysisDoneEmpty = false;
       }
     } catch (e) {
       if (mounted) {
@@ -239,6 +243,32 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
                 ),
               )
             else if (_items.isNotEmpty) ...[
+              if (_analysisDoneEmpty) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    border:
+                        Border.all(color: Colors.amber.shade300),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded,
+                          color: Colors.amber.shade800, size: 20),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'لم يتم استخراج منتجات تلقائياً. أضفها يدوياً.',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const Text('المنتجات المستخرجة',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               const SizedBox(height: 8),
