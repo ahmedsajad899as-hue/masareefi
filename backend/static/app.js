@@ -2962,8 +2962,18 @@ async function openCustomerDetail(customerId) {
       btn.innerHTML = '<i class="fas fa-plus me-1"></i>بيع جديد';
       btn.onclick = () => openAddSaleModal(customerId);
       titleEl.after(btn);
+
+      const camBtn = document.createElement('button');
+      camBtn.id = 'cdm-vision-btn';
+      camBtn.className = 'btn btn-success btn-sm ms-2';
+      camBtn.innerHTML = '<i class="fas fa-camera me-1"></i>كاميرا';
+      camBtn.title = 'تصوير المشتريات وتحليلها بالذكاء الاصطناعي';
+      camBtn.onclick = () => openVisionModal(customerId);
+      btn.after(camBtn);
     } else if (document.getElementById('cdm-new-sale-btn')) {
       document.getElementById('cdm-new-sale-btn').onclick = () => openAddSaleModal(customerId);
+      const cb = document.getElementById('cdm-vision-btn');
+      if (cb) cb.onclick = () => openVisionModal(customerId);
     }
     body.innerHTML = `
       <div class="d-flex gap-1 mb-3 flex-wrap justify-content-end">
@@ -2989,6 +2999,144 @@ function openAddSaleModal(customerId) {
   document.getElementById('sale-desc').value = '';
   document.getElementById('sale-paid').checked = false;
   new bootstrap.Modal(document.getElementById('addSaleModal')).show();
+}
+
+// ── Vision (Camera + AI) ──────────────────────────────────────────────
+let _visionCustomerId = null;
+let _visionItems = [];
+
+function openVisionModal(customerId) {
+  _visionCustomerId = customerId;
+  _visionItems = [];
+  document.getElementById('vision-preview').style.display = 'none';
+  document.getElementById('vision-preview').src = '';
+  document.getElementById('vision-status').innerHTML = '';
+  document.getElementById('vision-items').innerHTML = '';
+  document.getElementById('vision-total').textContent = '0';
+  document.getElementById('vision-notes').value = '';
+  document.getElementById('vision-save-btn').disabled = true;
+  document.getElementById('vision-file').value = '';
+  new bootstrap.Modal(document.getElementById('visionModal')).show();
+}
+
+function visionPickFile() { document.getElementById('vision-file').click(); }
+
+async function visionFileSelected(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { toast('يرجى اختيار صورة', 'err'); return; }
+  if (file.size > 20 * 1024 * 1024) { toast('حجم الصورة كبير (الحد 20MB)', 'err'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById('vision-preview');
+    img.src = e.target.result;
+    img.style.display = '';
+  };
+  reader.readAsDataURL(file);
+  await visionAnalyze(file);
+}
+
+async function visionAnalyze(file) {
+  const status = document.getElementById('vision-status');
+  status.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-success"></div><div class="mt-2 small">جاري تحليل الصورة بالذكاء الاصطناعي...</div></div>';
+  document.getElementById('vision-items').innerHTML = '';
+  document.getElementById('vision-save-btn').disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('image', file);
+    const token = localStorage.getItem('access_token');
+    const baseUrl = (window.API_BASE || '/api/v1');
+    const resp = await fetch(baseUrl + '/market/vision/analyze', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: fd,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || ('HTTP ' + resp.status));
+    }
+    const data = await resp.json();
+    _visionItems = (data.items || []).map(it => ({
+      product_name: it.product_name || '',
+      quantity: Number(it.quantity) || 1,
+      unit_price: Number(it.unit_price) || 0,
+    }));
+    if (_visionItems.length === 0) {
+      _visionItems.push({ product_name: '', quantity: 1, unit_price: 0 });
+      status.innerHTML = '<div class="alert alert-warning py-2 small">لم يتم استخراج منتجات تلقائياً. أضفها يدوياً.</div>';
+    } else {
+      status.innerHTML = `<div class="alert alert-success py-2 small">تم استخراج ${_visionItems.length} منتج. عدّل القيم إذا احتجت.</div>`;
+    }
+    visionRenderItems();
+    document.getElementById('vision-save-btn').disabled = false;
+  } catch (e) {
+    status.innerHTML = `<div class="alert alert-danger py-2 small">فشل التحليل: ${e.message}</div>`;
+  }
+}
+
+function visionRenderItems() {
+  const tbody = document.getElementById('vision-items');
+  tbody.innerHTML = _visionItems.map((it, i) => `
+    <tr>
+      <td><input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" value="${(it.product_name || '').replace(/"/g, '&quot;')}" onchange="visionUpdate(${i}, 'product_name', this.value)"></td>
+      <td style="width:80px"><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" value="${it.quantity}" min="0" step="0.5" onchange="visionUpdate(${i}, 'quantity', this.value)"></td>
+      <td style="width:110px"><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" value="${it.unit_price}" min="0" step="250" onchange="visionUpdate(${i}, 'unit_price', this.value)"></td>
+      <td style="width:40px"><button class="btn btn-sm btn-outline-danger" onclick="visionRemoveItem(${i})"><i class="fas fa-times"></i></button></td>
+    </tr>
+  `).join('');
+  visionRecalcTotal();
+}
+
+function visionUpdate(i, field, value) {
+  if (!_visionItems[i]) return;
+  if (field === 'quantity' || field === 'unit_price') {
+    _visionItems[i][field] = parseFloat(value) || 0;
+  } else {
+    _visionItems[i][field] = value;
+  }
+  visionRecalcTotal();
+}
+
+function visionRemoveItem(i) {
+  _visionItems.splice(i, 1);
+  if (_visionItems.length === 0) _visionItems.push({ product_name: '', quantity: 1, unit_price: 0 });
+  visionRenderItems();
+}
+
+function visionAddItem() {
+  _visionItems.push({ product_name: '', quantity: 1, unit_price: 0 });
+  visionRenderItems();
+}
+
+function visionRecalcTotal() {
+  const total = _visionItems.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
+  document.getElementById('vision-total').textContent = fmt(total);
+}
+
+async function visionSaveSale() {
+  const items = _visionItems
+    .filter(it => (it.product_name || '').trim().length > 0)
+    .map(it => ({
+      product_name: it.product_name.trim(),
+      quantity: Number(it.quantity) || 1,
+      unit_price: Number(it.unit_price) || 0,
+    }));
+  if (items.length === 0) { toast('أضف منتج واحد على الأقل', 'err'); return; }
+  const notes = document.getElementById('vision-notes').value.trim() || null;
+  loading(true);
+  try {
+    await api('POST', '/market/sales/', {
+      customer_id: _visionCustomerId,
+      sale_date: new Date().toISOString(),
+      notes,
+      items,
+    });
+    bootstrap.Modal.getInstance(document.getElementById('visionModal'))?.hide();
+    toast('تم حفظ الفاتورة ✅');
+    await openCustomerDetail(_visionCustomerId);
+    await loadMarketCustomers();
+  } catch (e) { toast(e.message, 'err'); }
+  finally { loading(false); }
 }
 
 async function saveSale() {
