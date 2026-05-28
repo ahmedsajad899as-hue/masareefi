@@ -500,9 +500,9 @@ def _parse_market_local(text: str, customers: list) -> list:
     PURCHASE_VERBS_RE = r'(?:اشترى|اشتره|اشترت|اشترا|اخذ|أخذ|اخذت|كتبلي|حاسبلي|ديهنه|ديهنها|اكتبلي|اكتب)'
     PAID_RE = r'\b(?:دفع|سدد|سددها|ما\s+عليه|خلص)\b'
     STOP_NAME = {
-        'على', 'عليه', 'عليها', 'اكتبلي', 'كتبلي', 'حاسبلي',
+        'عليه', 'عليها', 'اكتبلي', 'كتبلي', 'حاسبلي',
         'اليوم', 'ب', 'بـ', 'من', 'في', 'ل', 'لـ',
-    }
+    }  # 'على' removed — it normalizes to 'علي' (common name Ali)
 
     # ── Numbers that represent fractions of 1000 (never get ×1000 in market context) ──
     _FRAC_WORDS = frozenset(['ربع', 'ربعه', 'ربعة', 'نص', 'نصف'])
@@ -567,10 +567,16 @@ def _parse_market_local(text: str, customers: list) -> list:
             return base
 
         # 5. Word-number parsing (normalize both key and input for matching)
+        # Deduplicate keys that normalize to the same form to avoid double-counting
+        # e.g., 'خمسمية' and 'خمسميه' both normalize to 'خمسميه' → only count once
         val = 0.0
         found = False
+        _seen_norms: set = set()
         for word, num in sorted(_PRICE_WORDS.items(), key=lambda x: -len(x[0])):
             word_n = _normalize_arabic(word)
+            if word_n in _seen_norms:
+                continue
+            _seen_norms.add(word_n)
             if re.search(r'(?:^|\s)' + re.escape(word_n) + r'(?:\s|$)', sn, re.IGNORECASE):
                 val += float(num)
                 found = True
@@ -690,7 +696,7 @@ def _parse_market_local(text: str, customers: list) -> list:
         else:
             # First 1-3 Arabic words before a digit or price word
             m_n = re.match(
-                r'^((?:[ا-ي]+(?:\s+[ا-ي]+){0,2})?)\s*'
+                r'^((?:[ا-ي]+(?:\s+[ا-ي]+){0,2})?)\s+'
                 r'(?=[\d,٫٬]|الف|ألف|خمس|عشر|ميه|مية|ميتين|ب\s*[\d])',
                 chunk)
             if m_n and m_n.group(1).strip():
@@ -717,7 +723,9 @@ def _parse_market_local(text: str, customers: list) -> list:
 
         # ── Try per-item price mode ───────────────────────────────────────────
         # Split rest on " و " separators
-        segs = re.split(r'\s+و\s+', rest) if rest else []
+        # Split on ' و' separator — handles both 'و word' (attached) and 'و word' (spaced)
+        # Use negative lookahead to keep 'ونص' / 'وربع' / 'ونصف' as price suffixes
+        segs = re.split(r'\s+و(?!(?:نص|ربع|نصف))', rest) if rest else []
 
         # Remove leading price connector from entire rest if no items at all
         # (pattern: "ب 20 الف" with no item name)
