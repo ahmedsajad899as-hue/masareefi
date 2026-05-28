@@ -649,6 +649,96 @@ async def transcribe_audio_for_market(audio_bytes: bytes, filename: str) -> str:
     return response.text
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# ── Market Vision (Image Analysis) ──────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
+
+VISION_SYSTEM_PROMPT = """
+You are an intelligent assistant for a small grocery/market shop owner in Iraq.
+You will receive an image of products, a handwritten note, or a receipt.
+Your job is to identify all products visible in the image and return them as a JSON array.
+
+Each object must have:
+- "product_name": string — Arabic product name (e.g., "زيت", "تمن", "ماي", "شاي", "سكر")
+- "quantity": number — estimated quantity (default 1 if not clear)
+- "unit_price": number — estimated price in IQD (use 0 if not visible/readable)
+
+Rules:
+- Return ONLY a valid JSON array. No markdown, no explanations.
+- If the image is a receipt or written list, extract exactly what is written.
+- If the image shows physical products on a shelf or counter, estimate what's visible.
+- Use Arabic product names preferred by Iraqi market owners.
+- If nothing relevant is found, return: []
+"""
+
+
+async def analyze_image_for_market_items(
+    image_bytes: bytes, mime_type: str
+) -> "tuple[list[dict], str]":
+    """
+    Use GPT-4o vision to identify products in an image.
+    Returns (items_list, raw_response).
+    Each item: {"product_name": str, "quantity": float, "unit_price": float}
+    """
+    import base64
+
+    if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY.startswith("sk-placeholder"):
+        return [], "no-api-key"
+
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+    data_url = f"data:{mime_type};base64,{b64}"
+
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": VISION_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": data_url, "detail": "high"},
+                        },
+                        {
+                            "type": "text",
+                            "text": "حلل الصورة واستخرج قائمة المنتجات بالتنسيق المطلوب.",
+                        },
+                    ],
+                },
+            ],
+            temperature=0.1,
+            max_tokens=800,
+        )
+        raw = response.choices[0].message.content or "[]"
+    except Exception as e:
+        return [], f"error: {str(e)[:200]}"
+
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    try:
+        data = json.loads(cleaned)
+        if not isinstance(data, list):
+            return [], raw
+        items = []
+        for item in data:
+            name = (item.get("product_name") or "").strip()
+            if not name:
+                continue
+            try:
+                qty = float(item.get("quantity", 1) or 1)
+                price = float(item.get("unit_price", 0) or 0)
+            except (TypeError, ValueError):
+                qty, price = 1.0, 0.0
+            items.append({"product_name": name, "quantity": qty, "unit_price": price})
+        return items, raw
+    except (json.JSONDecodeError, KeyError, ValueError):
+        return [], raw
+
+
 def _local_insights(monthly_summary: dict) -> str:
     """Generate simple local insights without OpenAI."""
     total = monthly_summary.get("total", 0)

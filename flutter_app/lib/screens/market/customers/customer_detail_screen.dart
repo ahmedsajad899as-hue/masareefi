@@ -60,11 +60,27 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () =>
-            context.push('/market/sales/add', extra: {'customerId': widget.customerId}),
-        icon: const Icon(Icons.add_shopping_cart_rounded),
-        label: const Text('إضافة دين'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            heroTag: 'vision_fab',
+            onPressed: () =>
+                context.push('/market/vision-sale/${widget.customerId}'),
+            backgroundColor: AppColors.success,
+            tooltip: 'فاتورة بالكاميرا',
+            child: const Icon(Icons.add_a_photo_rounded),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+            heroTag: 'add_sale_fab',
+            onPressed: () => context.push('/market/sales/add',
+                extra: {'customerId': widget.customerId}),
+            icon: const Icon(Icons.add_shopping_cart_rounded),
+            label: const Text('إضافة دين'),
+          ),
+        ],
       ),
       body: salesState.isLoading
           ? const Center(child: CircularProgressIndicator())

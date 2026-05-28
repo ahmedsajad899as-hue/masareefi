@@ -21,6 +21,7 @@ import '../../screens/market/customers/market_customers_screen.dart';
 import '../../screens/market/customers/customer_detail_screen.dart';
 import '../../screens/market/customers/overdue_customers_screen.dart';
 import '../../screens/market/sales/add_sale_screen.dart';
+import '../../screens/market/sales/vision_sale_screen.dart';
 import '../../screens/market/suppliers/supplier_invoices_screen.dart';
 import '../../screens/market/suppliers/add_supplier_invoice_screen.dart';
 
@@ -104,6 +105,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/market/suppliers/add',
         builder: (_, __) => const AddSupplierInvoiceScreen(),
+      ),
+      GoRoute(
+        path: '/market/vision-sale/:customerId',
+        builder: (_, state) => VisionSaleScreen(
+            customerId: state.pathParameters['customerId']!),
       ),
 
       // ── Regular routes (no shell) ───────────────────────────────────

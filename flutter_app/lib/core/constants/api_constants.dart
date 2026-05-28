@@ -58,6 +58,9 @@ class ApiConstants {
   // Market Owner — Settings
   static const marketSettings = '/market/settings';
 
+  // Market Owner — Vision
+  static const marketVisionAnalyze = '/market/vision/analyze';
+
   // Regular User — My Market Debts
   static const myMarketDebts = '/my-debts';
 
