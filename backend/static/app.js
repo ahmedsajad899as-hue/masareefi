@@ -3091,14 +3091,53 @@ async function visionFileSelected(ev) {
   await visionAnalyze(file);
 }
 
+// Compress an image File to a smaller JPEG Blob (max dimension `maxDim`, quality 0-1).
+// Falls back to the original file if anything goes wrong.
+async function visionCompressImage(file, maxDim, quality) {
+  try {
+    if (!file || !file.type || !file.type.startsWith('image/')) return file;
+    if (file.size < 350 * 1024) return file; // already small enough
+    let w, h, source;
+    if (window.createImageBitmap) {
+      const bitmap = await createImageBitmap(file).catch(() => null);
+      if (bitmap) { w = bitmap.width; h = bitmap.height; source = bitmap; }
+    }
+    if (!source) {
+      const url = URL.createObjectURL(file);
+      const img = await new Promise((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = reject;
+        i.src = url;
+      });
+      w = img.naturalWidth; h = img.naturalHeight; source = img;
+      URL.revokeObjectURL(url);
+    }
+    if (w <= maxDim && h <= maxDim && file.size < 800 * 1024) return file;
+    const scale = Math.min(1, maxDim / Math.max(w, h));
+    const tw = Math.round(w * scale), th = Math.round(h * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = tw; canvas.height = th;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(source, 0, 0, tw, th);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', quality || 0.8));
+    return blob || file;
+  } catch (e) {
+    return file;
+  }
+}
+
 async function visionAnalyze(file) {
   const status = document.getElementById('vision-status');
   status.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-success"></div><div class="mt-2 small">جاري تحليل الصورة بالذكاء الاصطناعي...</div></div>';
   document.getElementById('vision-items').innerHTML = '';
   document.getElementById('vision-save-btn').disabled = true;
   try {
+    // Compress + downscale image client-side to speed up upload & analysis.
+    // Vision models don't gain accuracy past ~1024px for shop photos.
+    const compressed = await visionCompressImage(file, 1024, 0.78);
     const fd = new FormData();
-    fd.append('image', file);
+    fd.append('image', compressed, 'photo.jpg');
     const token = localStorage.getItem('access_token');
     const baseUrl = (window.API_BASE || '/api/v1');
     const resp = await fetch(baseUrl + '/market/vision/analyze', {
@@ -3142,10 +3181,10 @@ function visionRenderItems() {
   const tbody = document.getElementById('vision-items');
   tbody.innerHTML = _visionItems.map((it, i) => `
     <tr>
-      <td style="min-width:140px"><input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" style="width:100%;font-size:14px" value="${(it.product_name || '').replace(/"/g, '&quot;')}" onchange="visionUpdate(${i}, 'product_name', this.value)"></td>
-      <td style="width:60px"><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary text-center" style="padding:4px 2px;font-size:12px" value="${it.quantity}" min="0" step="0.5" onchange="visionUpdate(${i}, 'quantity', this.value)"></td>
-      <td style="width:85px"><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary text-center" style="padding:4px 2px;font-size:12px" value="${it.unit_price}" min="0" step="250" onchange="visionUpdate(${i}, 'unit_price', this.value)"></td>
-      <td style="width:34px"><button class="btn btn-sm btn-outline-danger" style="padding:2px 6px" onclick="visionRemoveItem(${i})"><i class="fas fa-times"></i></button></td>
+      <td style="min-width:170px"><input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" style="width:100%;font-size:15px;padding:6px 8px" value="${(it.product_name || '').replace(/"/g, '&quot;')}" onchange="visionUpdate(${i}, 'product_name', this.value)"></td>
+      <td style="width:48px"><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary text-center" style="padding:3px 1px;font-size:11px" value="${it.quantity}" min="0" step="0.5" onchange="visionUpdate(${i}, 'quantity', this.value)"></td>
+      <td style="width:70px"><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary text-center" style="padding:3px 1px;font-size:11px" value="${it.unit_price}" min="0" step="250" onchange="visionUpdate(${i}, 'unit_price', this.value)"></td>
+      <td style="width:28px"><button class="btn btn-sm btn-outline-danger" style="padding:1px 5px" onclick="visionRemoveItem(${i})"><i class="fas fa-times"></i></button></td>
     </tr>
   `).join('');
   visionRecalcTotal();

@@ -1116,19 +1116,19 @@ async def analyze_image_for_market_items(
         data_url = f"data:{mime_type};base64,{b64}"
         try:
             response = await client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",  # faster + cheaper, plenty good for shop photos
                 messages=[
                     {"role": "system", "content": VISION_SYSTEM_PROMPT},
                     {
                         "role": "user",
                         "content": [
-                            {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}},
+                            {"type": "image_url", "image_url": {"url": data_url, "detail": "low"}},
                             {"type": "text", "text": user_text},
                         ],
                     },
                 ],
-                temperature=0.2,
-                max_tokens=2048,
+                temperature=0.1,
+                max_tokens=900,
             )
             raw = response.choices[0].message.content or "[]"
         except Exception as e:
@@ -1140,13 +1140,13 @@ async def analyze_image_for_market_items(
     if (not raw or raw.startswith("openai-error")) and has_gemini:
         import httpx
         # Try multiple model names — Google rotates availability.
-        # Order: flash models first (higher rate limits on free tier) → pro models.
-        # 1.5 family was retired Sept 2025.
+        # Order: fastest flash-lite → flash → pro. 1.5 family was retired Sept 2025.
         gemini_models = [
+            "gemini-2.5-flash-lite",
+            "gemini-2.0-flash-lite",
             "gemini-2.5-flash",
             "gemini-2.0-flash",
             "gemini-2.0-flash-001",
-            "gemini-2.0-flash-lite",
             "gemini-flash-latest",
             "gemini-2.5-pro",
             "gemini-pro-latest",
@@ -1162,15 +1162,15 @@ async def analyze_image_for_market_items(
                 }
             ],
             "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": 2048,
+                "temperature": 0.1,
+                "maxOutputTokens": 900,
                 "responseMimeType": "application/json",
             },
         }
         last_err = ""
         rate_limited = False
         gem_data = None
-        async with httpx.AsyncClient(timeout=60.0) as http:
+        async with httpx.AsyncClient(timeout=30.0) as http:
             for model in gemini_models:
                 url = (
                     f"https://generativelanguage.googleapis.com/v1beta/models/"
