@@ -456,11 +456,16 @@ async function initApp(freshLogin = false) {
     if (!S.token) return;
     await loadWalletsData();
     if (!S.token) return;
+    const isMarketOnly = S.user?.role === 'market_owner' && !S.user?.show_personal_features;
+    const fallback = isMarketOnly ? 'market-customers' : 'dashboard';
+    const personalPages = ['dashboard','expenses','add-expense','categories','wallets','voice-assistant','statistics'];
     const savedPage = freshLogin
-      ? (S.user?.role === 'market_owner' ? 'market-customers' : 'dashboard')
-      : (localStorage.getItem('last_page') || location.hash.replace('#', '') || 'dashboard');
+      ? fallback
+      : (localStorage.getItem('last_page') || location.hash.replace('#', '') || fallback);
     const validPages = Object.keys(PAGE_TITLES);
-    goTo(validPages.includes(savedPage) ? savedPage : 'dashboard');
+    let target = validPages.includes(savedPage) ? savedPage : fallback;
+    if (isMarketOnly && personalPages.includes(target)) target = 'market-customers';
+    goTo(target);
   } catch(e) {
     console.error('initApp error:', e);
   } finally {
@@ -620,6 +625,11 @@ const PAGE_TITLES = {
 };
 
 function goTo(page) {
+  // Guard: market_owner without personal features cannot navigate to user-only pages
+  if (S.user?.role === 'market_owner' && !S.user?.show_personal_features) {
+    const personalPages = ['dashboard','expenses','add-expense','categories','wallets','voice-assistant','statistics'];
+    if (personalPages.includes(page)) page = 'market-customers';
+  }
   closeReferralDropdown();
   document.querySelectorAll('.pg').forEach(el => el.style.display = 'none');
   const pg = document.getElementById(`pg-${page}`);
