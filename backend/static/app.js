@@ -3813,13 +3813,16 @@ function checkoutFileSelected(ev) {
 
   visionCompressImage(file, 800, 0.72).then(blob => {
     const fd = new FormData();
-    fd.append('file', blob, 'checkout.jpg');
+    fd.append('image', blob, 'checkout.jpg');
     fetch(API + '/market/vision/analyze', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + S.token },
       body: fd,
     })
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) return r.json().then(e => { throw new Error(e.detail || 'HTTP ' + r.status); });
+        return r.json();
+      })
       .then(data => {
         if (data.items && data.items.length) {
           const newItems = data.items.map(it => ({
@@ -3837,8 +3840,8 @@ function checkoutFileSelected(ev) {
           statusEl.innerHTML = '<div class="alert alert-warning py-1 small">⚠️ لم يُتعرف على منتجات، أضف يدوياً</div>';
         }
       })
-      .catch(() => {
-        statusEl.innerHTML = '<div class="alert alert-danger py-1 small">خطأ في تحليل الصورة</div>';
+      .catch(e => {
+        statusEl.innerHTML = `<div class="alert alert-danger py-1 small">خطأ في تحليل الصورة: ${e.message || ''}</div>`;
       });
   });
   ev.target.value = '';
