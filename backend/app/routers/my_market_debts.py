@@ -1,6 +1,6 @@
 """My Market Debts router — regular user sees debts/purchases recorded against their phone."""
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, or_, and_, update as sa_update
+from sqlalchemy import select, or_, update as sa_update
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,29 +15,21 @@ from app.utils.dependencies import get_current_user
 
 
 async def _find_my_customers(current_user: User, db: AsyncSession) -> list[MarketCustomer]:
-    """Find all MarketCustomer records for this user by linked_user_id OR phone number match.
-
-    Also heals missing linked_user_id on the fly so future calls are faster.
-    """
+    """Find all MarketCustomer records for this user by linked_user_id OR phone number match."""
     conditions = [MarketCustomer.linked_user_id == current_user.id]
     if current_user.phone_number:
-        conditions.append(
-            and_(
-                MarketCustomer.phone == current_user.phone_number,
-                MarketCustomer.linked_user_id.is_(None),
-            )
-        )
+        # Match by phone regardless of existing link status
+        conditions.append(MarketCustomer.phone == current_user.phone_number)
 
     result = await db.execute(select(MarketCustomer).where(or_(*conditions)))
     customers = result.scalars().all()
 
-    # Heal: set linked_user_id for any customer matched only by phone
-    unlinked = [c for c in customers if c.linked_user_id is None]
-    if unlinked:
-        unlinked_ids = [c.id for c in unlinked]
+    # Heal: ensure linked_user_id is set for all matched customers
+    to_fix = [c.id for c in customers if c.linked_user_id != current_user.id]
+    if to_fix:
         await db.execute(
             sa_update(MarketCustomer)
-            .where(MarketCustomer.id.in_(unlinked_ids))
+            .where(MarketCustomer.id.in_(to_fix))
             .values(linked_user_id=current_user.id)
         )
         await db.commit()
@@ -45,6 +37,39 @@ async def _find_my_customers(current_user: User, db: AsyncSession) -> list[Marke
     return customers
 
 router = APIRouter()
+
+
+@router.get("/debug")
+async def my_debts_debug(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Diagnostic endpoint — shows what the server sees for this user."""
+    phone = current_user.phone_number
+
+    by_link = (await db.execute(
+        select(MarketCustomer).where(MarketCustomer.linked_user_id == current_user.id)
+    )).scalars().all()
+
+    by_phone = []
+    if phone:
+        by_phone = (await db.execute(
+            select(MarketCustomer).where(MarketCustomer.phone == phone)
+        )).scalars().all()
+
+    return {
+        "user_id": str(current_user.id),
+        "user_email": current_user.email,
+        "user_phone": phone,
+        "customers_by_linked_id": [
+            {"id": str(c.id), "name": c.name, "phone": c.phone, "linked_user_id": str(c.linked_user_id)}
+            for c in by_link
+        ],
+        "customers_by_phone": [
+            {"id": str(c.id), "name": c.name, "phone": c.phone, "linked_user_id": str(c.linked_user_id)}
+            for c in by_phone
+        ],
+    }
 
 
 @router.get("/", response_model=list[MyMarketDebtOut])
