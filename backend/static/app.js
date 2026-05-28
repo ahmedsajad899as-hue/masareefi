@@ -3491,7 +3491,16 @@ async function toggleSaleHistory(saleId) {
 // ── Sale row renderer (used inside customer detail modal) ─────
 function _renderSaleRow(s, isPaid) {
   const itemsArr = Array.isArray(s.items) ? s.items : [];
-  const items = itemsArr.map(i => `${esc(i.product_name)} (${i.quantity}×${fmt(i.unit_price)})`).join('، ');
+  // Each item on its own line, aligned: name | qty | price
+  const itemsHtml = itemsArr.length ? `
+    <div class="sale-items-list mt-1">
+      ${itemsArr.map(i => `
+        <div class="sale-item-row">
+          <span class="sii-name">${esc(i.product_name || '')}</span>
+          <span class="sii-qty">×${i.quantity}</span>
+          <span class="sii-price">${fmt(i.unit_price)}</span>
+        </div>`).join('')}
+    </div>` : '';
   // Avoid duplicate display: if the notes match the items text or the only item's name, hide notes
   const itemNames = itemsArr.map(i => String(i.product_name || '').trim().toLowerCase());
   const notesNorm = String(s.notes || '').trim().toLowerCase();
@@ -3507,7 +3516,7 @@ function _renderSaleRow(s, isPaid) {
         <div class="flex-grow-1">
           <div class="fw-bold ${isPaid ? 'text-success' : 'text-danger'}">${fmt(s.total_amount)}</div>
           ${metaParts.length ? `<div class="small text-muted">${metaParts.join(' · ')}</div>` : ''}
-          ${items ? `<div class="small text-info mt-1"><i class="fas fa-box me-1"></i>${items}</div>` : ''}
+          ${itemsHtml}
         </div>
         <div class="d-flex flex-column gap-1 ms-2">
           ${isPaid ? '<span class="badge bg-success">مدفوع</span>' : `<button class="btn btn-success btn-sm" onclick="markSalePaid('${s.id}')"><i class="fas fa-check me-1"></i>دفع</button>`}
