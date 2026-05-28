@@ -654,29 +654,52 @@ async def transcribe_audio_for_market(audio_bytes: bytes, filename: str) -> str:
 # ═════════════════════════════════════════════════════════════════════════════
 
 VISION_SYSTEM_PROMPT = """
-You are an intelligent assistant for a small grocery/market shop owner in Iraq.
-You will receive an image of products, a handwritten note, or a receipt.
-Your job is to identify all products visible in the image and return them as a JSON array.
+You are an expert product-recognition assistant for an Iraqi grocery/market shop owner.
+You will receive a photo from the shop owner. The photo may contain:
+  - one or more physical products on a counter, shelf, or in a bag
+  - a handwritten note listing products
+  - a printed receipt
+  - a screenshot of a shopping list
 
-Each object must have:
-- "product_name": string — Arabic product name (e.g., "زيت", "تمن", "ماي", "شاي", "سكر")
-- "quantity": number — estimated quantity (default 1 if not clear)
-- "unit_price": number — estimated price in IQD (use 0 if not visible/readable)
+Your job: identify EVERY product visible (even if only ONE product is in the photo)
+and return a JSON array. NEVER return an empty array if any product, package, brand,
+or written word is visible — always extract at least the visible item.
+
+Each object MUST have:
+- "product_name": string — Arabic name preferred by Iraqi shop customers.
+  • Read brand names and product type from the packaging (Arabic OR English text).
+  • Combine brand + type when useful, e.g.:
+        "مناديل لورد", "كلينكس لورد", "شاي الغزالين",
+        "بيبسي 1 لتر", "حليب نيدو 250غرام", "زيت صافية 1 لتر".
+  • If you cannot read the brand, name the product by its category:
+        "مناديل ورقية", "خبز", "رز", "سكر", "بيض", "بطاطا".
+- "quantity": number — how many units are visible. Default 1.
+- "unit_price": number — estimated price in Iraqi Dinar (IQD).
+  • If a price tag/sticker is visible, read it.
+  • Otherwise estimate a reasonable Iraqi retail price
+      (مناديل ورقية ≈ 1000–2000, خبز ≈ 500–1000, بيبسي 1ل ≈ 1500,
+       حليب نيدو 250غ ≈ 4000, زيت 1ل ≈ 3000, رز 1كغ ≈ 2500).
+  • If unsure, use 0 — the shop owner will edit it.
+
+If the owner has a history of products they sold before, you will receive it in the user
+message as "المنتجات المعروفة". When the photo matches one of these names exactly,
+USE that exact name (it helps statistics). Otherwise pick the most appropriate Arabic name.
 
 Rules:
-- Return ONLY a valid JSON array. No markdown, no explanations.
-- If the image is a receipt or written list, extract exactly what is written.
-- If the image shows physical products on a shelf or counter, estimate what's visible.
-- Use Arabic product names preferred by Iraqi market owners.
-- If nothing relevant is found, return: []
+- Return ONLY a valid JSON array. No markdown fences, no explanation, no leading/trailing text.
+- Do NOT return an empty array unless the image is completely blank/blurry beyond recognition.
+- Be concrete: a clearly-visible packet of tissues is "مناديل + brand", not "غرض غير معروف".
 """
 
 
 async def analyze_image_for_market_items(
-    image_bytes: bytes, mime_type: str
+    image_bytes: bytes,
+    mime_type: str,
+    known_products: "list[str] | None" = None,
 ) -> "tuple[list[dict], str]":
     """
     Use GPT-4o vision to identify products in an image.
+    `known_products` is an optional list of product names previously sold by the owner.
     Returns (items_list, raw_response).
     Each item: {"product_name": str, "quantity": float, "unit_price": float}
     """
@@ -687,6 +710,15 @@ async def analyze_image_for_market_items(
 
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     data_url = f"data:{mime_type};base64,{b64}"
+
+    user_text = "حلل الصورة واستخرج قائمة المنتجات بالتنسيق المطلوب (JSON array فقط)."
+    if known_products:
+        # Limit hint to avoid bloating the prompt
+        sample = list(dict.fromkeys(known_products))[:60]
+        user_text += (
+            "\n\nالمنتجات المعروفة (باعها صاحب المحل سابقاً — استخدم بالضبط إذا طابقت):\n- "
+            + "\n- ".join(sample)
+        )
 
     try:
         response = await client.chat.completions.create(
@@ -700,15 +732,12 @@ async def analyze_image_for_market_items(
                             "type": "image_url",
                             "image_url": {"url": data_url, "detail": "high"},
                         },
-                        {
-                            "type": "text",
-                            "text": "حلل الصورة واستخرج قائمة المنتجات بالتنسيق المطلوب.",
-                        },
+                        {"type": "text", "text": user_text},
                     ],
                 },
             ],
-            temperature=0.1,
-            max_tokens=800,
+            temperature=0.2,
+            max_tokens=900,
         )
         raw = response.choices[0].message.content or "[]"
     except Exception as e:

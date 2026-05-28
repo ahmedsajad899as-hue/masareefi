@@ -3063,7 +3063,14 @@ async function visionAnalyze(file) {
     }));
     if (_visionItems.length === 0) {
       _visionItems.push({ product_name: '', quantity: 1, unit_price: 0 });
-      status.innerHTML = '<div class="alert alert-warning py-2 small">لم يتم استخراج منتجات تلقائياً. أضفها يدوياً.</div>';
+      const rawHint = (data.raw_response || '').toString();
+      let hint = 'لم يتم استخراج منتجات تلقائياً. أضفها يدوياً.';
+      if (rawHint === 'no-api-key') {
+        hint = 'مفتاح OpenAI غير مفعّل على السيرفر — خاصية الكاميرا لا تعمل بدونه. أضف المنتجات يدوياً.';
+      } else if (rawHint.startsWith('error:')) {
+        hint = 'خطأ في الذكاء الاصطناعي: ' + rawHint.slice(6, 200);
+      }
+      status.innerHTML = `<div class="alert alert-warning py-2 small">${hint}</div>`;
     } else {
       status.innerHTML = `<div class="alert alert-success py-2 small">تم استخراج ${_visionItems.length} منتج. عدّل القيم إذا احتجت.</div>`;
     }
