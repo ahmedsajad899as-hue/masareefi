@@ -2925,11 +2925,7 @@ function renderCustomerList(list) {
       </div>
       <div class="d-flex gap-2 mt-2 justify-content-end">
         <button class="btn btn-sm btn-outline-primary" title="تعديل الزبون" onclick="event.stopPropagation(); openEditCustomerModalById('${c.id}')"><i class="fas fa-edit"></i></button>
-        <button class="btn btn-sm btn-outline-info" title="سجل التعديلات" onclick="event.stopPropagation(); toggleCustomerHistory('${c.id}', this)">
-          <i class="fas fa-history me-1"></i>السجل <i class="fas fa-chevron-down ms-1"></i>
-        </button>
       </div>
-      <div class="customer-history-panel mt-2" id="ch-${c.id}" style="display:none"></div>
     </div>
   `).join('');
 }
@@ -3093,16 +3089,7 @@ function _renderHistoryList(logs) {
   return logs.map(log => {
     const when = log.created_at ? new Date(log.created_at).toLocaleString('ar-IQ') : '';
     const typeLbl = log.entity_type === 'sale' ? 'تعديل بيع' : 'تعديل بيانات الزبون';
-    const rows = (log.changes || []).map(ch => {
-      const lbl = _FIELD_LABELS_AR[ch.field] || ch.field;
-      return `
-        <div class="small mb-1">
-          <span class="fw-bold">${esc(lbl)}:</span>
-          <span class="text-muted">${_fmtAuditValue(ch.field, ch.old)}</span>
-          <i class="fas fa-arrow-left mx-1 text-warning"></i>
-          <span>${_fmtAuditValue(ch.field, ch.new)}</span>
-        </div>`;
-    }).join('');
+    const rows = (log.changes || []).map(ch => _renderChangeRow(ch)).filter(Boolean).join('');
     return `
       <div class="glass-card p-2 mb-2" style="border-right:3px solid #f59e0b">
         <div class="d-flex justify-content-between align-items-center mb-1">
@@ -3112,6 +3099,58 @@ function _renderHistoryList(logs) {
         ${rows || '<div class="small text-muted">لا تغييرات</div>'}
       </div>`;
   }).join('');
+}
+
+function _itemKey(it) { return String(it && it.product_name || '').trim().toLowerCase(); }
+
+function _itemLine(it) {
+  if (!it) return '';
+  return `${esc(it.product_name || '')} × ${it.quantity} @ ${fmt(it.unit_price)}`;
+}
+
+function _diffItems(oldList, newList) {
+  const oldArr = Array.isArray(oldList) ? oldList : [];
+  const newArr = Array.isArray(newList) ? newList : [];
+  const oldMap = new Map();
+  oldArr.forEach(it => { oldMap.set(_itemKey(it), it); });
+  const newMap = new Map();
+  newArr.forEach(it => { newMap.set(_itemKey(it), it); });
+
+  const added = [];
+  const removed = [];
+  const changed = []; // {old, new}
+  newMap.forEach((it, k) => {
+    if (!oldMap.has(k)) { added.push(it); return; }
+    const o = oldMap.get(k);
+    if (Number(o.quantity) !== Number(it.quantity) || Number(o.unit_price) !== Number(it.unit_price)) {
+      changed.push({ old: o, new: it });
+    }
+  });
+  oldMap.forEach((it, k) => { if (!newMap.has(k)) removed.push(it); });
+  return { added, removed, changed };
+}
+
+function _renderChangeRow(ch) {
+  if (!ch || !ch.field) return '';
+  const lbl = _FIELD_LABELS_AR[ch.field] || ch.field;
+
+  if (ch.field === 'items') {
+    const { added, removed, changed } = _diffItems(ch.old, ch.new);
+    const parts = [];
+    added.forEach(it => parts.push(`<div class="small text-success"><i class="fas fa-plus-circle me-1"></i>إضافة: ${_itemLine(it)}</div>`));
+    removed.forEach(it => parts.push(`<div class="small text-danger"><i class="fas fa-minus-circle me-1"></i>حذف: ${_itemLine(it)}</div>`));
+    changed.forEach(p => parts.push(`<div class="small text-warning"><i class="fas fa-pen me-1"></i>تعديل: ${_itemLine(p.old)} <i class="fas fa-arrow-left mx-1"></i> ${_itemLine(p.new)}</div>`));
+    if (!parts.length) return '';
+    return `<div class="mb-1"><span class="fw-bold small">${esc(lbl)}:</span>${parts.join('')}</div>`;
+  }
+
+  return `
+    <div class="small mb-1">
+      <span class="fw-bold">${esc(lbl)}:</span>
+      <span class="text-muted">${_fmtAuditValue(ch.field, ch.old)}</span>
+      <i class="fas fa-arrow-left mx-1 text-warning"></i>
+      <span>${_fmtAuditValue(ch.field, ch.new)}</span>
+    </div>`;
 }
 
 async function toggleCustomerHistory(customerId, btn, targetId) {
