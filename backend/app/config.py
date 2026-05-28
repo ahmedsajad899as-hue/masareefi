@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str
 
+    # Gemini (optional fallback for vision / text)
+    GEMINI_API_KEY: str | None = None
+
     # SMTP — optional. If not set, reset code is returned in API response only.
     SMTP_HOST: str | None = None
     SMTP_PORT: int = 587

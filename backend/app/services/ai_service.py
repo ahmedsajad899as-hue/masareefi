@@ -698,50 +698,96 @@ async def analyze_image_for_market_items(
     known_products: "list[str] | None" = None,
 ) -> "tuple[list[dict], str]":
     """
-    Use GPT-4o vision to identify products in an image.
+    Use GPT-4o vision (preferred) or Gemini 1.5 Flash (fallback) to identify products.
     `known_products` is an optional list of product names previously sold by the owner.
     Returns (items_list, raw_response).
     Each item: {"product_name": str, "quantity": float, "unit_price": float}
     """
     import base64
 
-    if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY.startswith("sk-placeholder"):
+    has_openai = settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-placeholder")
+    has_gemini = bool(getattr(settings, "GEMINI_API_KEY", None))
+
+    if not has_openai and not has_gemini:
         return [], "no-api-key"
 
     b64 = base64.b64encode(image_bytes).decode("utf-8")
-    data_url = f"data:{mime_type};base64,{b64}"
 
     user_text = "حلل الصورة واستخرج قائمة المنتجات بالتنسيق المطلوب (JSON array فقط)."
     if known_products:
-        # Limit hint to avoid bloating the prompt
         sample = list(dict.fromkeys(known_products))[:60]
         user_text += (
             "\n\nالمنتجات المعروفة (باعها صاحب المحل سابقاً — استخدم بالضبط إذا طابقت):\n- "
             + "\n- ".join(sample)
         )
 
-    try:
-        response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": VISION_SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": data_url, "detail": "high"},
-                        },
-                        {"type": "text", "text": user_text},
-                    ],
+    raw = ""
+    # ── Try OpenAI first ──
+    if has_openai:
+        data_url = f"data:{mime_type};base64,{b64}"
+        try:
+            response = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": VISION_SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}},
+                            {"type": "text", "text": user_text},
+                        ],
+                    },
+                ],
+                temperature=0.2,
+                max_tokens=900,
+            )
+            raw = response.choices[0].message.content or "[]"
+        except Exception as e:
+            raw = f"openai-error: {str(e)[:200]}"
+            if not has_gemini:
+                return [], raw
+
+    # ── Fallback to Gemini if OpenAI failed or absent ──
+    if (not raw or raw.startswith("openai-error")) and has_gemini:
+        try:
+            import httpx
+            gem_url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                "gemini-1.5-flash:generateContent?key=" + settings.GEMINI_API_KEY
+            )
+            payload = {
+                "systemInstruction": {"parts": [{"text": VISION_SYSTEM_PROMPT}]},
+                "contents": [
+                    {
+                        "parts": [
+                            {"inline_data": {"mime_type": mime_type, "data": b64}},
+                            {"text": user_text},
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.2,
+                    "maxOutputTokens": 900,
+                    "responseMimeType": "application/json",
                 },
-            ],
-            temperature=0.2,
-            max_tokens=900,
-        )
-        raw = response.choices[0].message.content or "[]"
-    except Exception as e:
-        return [], f"error: {str(e)[:200]}"
+            }
+            async with httpx.AsyncClient(timeout=60.0) as http:
+                r = await http.post(gem_url, json=payload)
+                r.raise_for_status()
+                gem_data = r.json()
+            parts = (
+                gem_data.get("candidates", [{}])[0]
+                .get("content", {})
+                .get("parts", [])
+            )
+            raw = "".join(p.get("text", "") for p in parts) or "[]"
+        except Exception as e:
+            return [], f"gemini-error: {str(e)[:200]}"
+
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
 
     cleaned = raw.strip()
     if cleaned.startswith("```"):

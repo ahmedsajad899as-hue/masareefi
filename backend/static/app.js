@@ -3066,9 +3066,9 @@ async function visionAnalyze(file) {
       const rawHint = (data.raw_response || '').toString();
       let hint = 'لم يتم استخراج منتجات تلقائياً. أضفها يدوياً.';
       if (rawHint === 'no-api-key') {
-        hint = 'مفتاح OpenAI غير مفعّل على السيرفر — خاصية الكاميرا لا تعمل بدونه. أضف المنتجات يدوياً.';
-      } else if (rawHint.startsWith('error:')) {
-        hint = 'خطأ في الذكاء الاصطناعي: ' + rawHint.slice(6, 200);
+        hint = 'لم يتم إعداد أي مفتاح ذكاء اصطناعي على السيرفر (OpenAI أو Gemini). أضف المنتجات يدوياً.';
+      } else if (rawHint.startsWith('openai-error') || rawHint.startsWith('gemini-error') || rawHint.startsWith('error:')) {
+        hint = 'خطأ في الذكاء الاصطناعي: ' + rawHint.slice(0, 200);
       }
       status.innerHTML = `<div class="alert alert-warning py-2 small">${hint}</div>`;
     } else {
