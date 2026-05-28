@@ -3096,7 +3096,7 @@ async function visionFileSelected(ev) {
 async function visionCompressImage(file, maxDim, quality) {
   try {
     if (!file || !file.type || !file.type.startsWith('image/')) return file;
-    if (file.size < 350 * 1024) return file; // already small enough
+    if (file.size < 200 * 1024) return file; // already small enough
     let w, h, source;
     if (window.createImageBitmap) {
       const bitmap = await createImageBitmap(file).catch(() => null);
@@ -3134,8 +3134,8 @@ async function visionAnalyze(file) {
   document.getElementById('vision-save-btn').disabled = true;
   try {
     // Compress + downscale image client-side to speed up upload & analysis.
-    // Vision models don't gain accuracy past ~1024px for shop photos.
-    const compressed = await visionCompressImage(file, 1024, 0.78);
+    // Vision models don't gain accuracy past ~800px for shop photos.
+    const compressed = await visionCompressImage(file, 800, 0.72);
     const fd = new FormData();
     fd.append('image', compressed, 'photo.jpg');
     const token = localStorage.getItem('access_token');

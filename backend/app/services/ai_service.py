@@ -1,6 +1,7 @@
 """
 AI Service — Whisper (speech-to-text) + GPT-4o (expense extraction) + local fallback parser.
 """
+import asyncio
 import json
 import re
 from datetime import date, datetime, timezone
@@ -11,6 +12,11 @@ from app.config import settings
 from app.schemas.voice import ParsedExpenseItem
 
 client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+
+# Limit concurrent Gemini calls per process.
+# Free-tier flash-lite allows 30 RPM → 3 concurrent is safe even with multiple users.
+# This prevents thundering-herd 429s when several users upload images at once.
+_GEMINI_SEM = asyncio.Semaphore(3)
 
 # ─── Arabic number words ─────────────────────────────────────
 _AR_NUMS = {
@@ -1139,11 +1145,15 @@ async def analyze_image_for_market_items(
     # ── Fallback to Gemini if OpenAI failed or absent ──
     if (not raw or raw.startswith("openai-error")) and has_gemini:
         import httpx
-        # Try multiple model names — Google rotates availability.
-        # Order: fastest flash-lite → flash → pro. 1.5 family was retired Sept 2025.
+        # Model order: highest free-tier RPM first.
+        # gemini-2.0-flash-lite: 30 RPM free  ← fastest / most quota
+        # gemini-2.5-flash-lite: ~30 RPM free
+        # gemini-2.5-flash:      10 RPM free
+        # gemini-2.0-flash:      15 RPM free
+        # pro models last (lowest quota / slowest)
         gemini_models = [
-            "gemini-2.5-flash-lite",
             "gemini-2.0-flash-lite",
+            "gemini-2.5-flash-lite",
             "gemini-2.5-flash",
             "gemini-2.0-flash",
             "gemini-2.0-flash-001",
@@ -1168,37 +1178,35 @@ async def analyze_image_for_market_items(
             },
         }
         last_err = ""
-        rate_limited = False
+        rate_limit_count = 0
         gem_data = None
-        async with httpx.AsyncClient(timeout=30.0) as http:
-            for model in gemini_models:
-                url = (
-                    f"https://generativelanguage.googleapis.com/v1beta/models/"
-                    f"{model}:generateContent?key={gemini_key}"
-                )
-                try:
-                    r = await http.post(url, json=payload)
-                    if r.status_code == 404:
-                        last_err = f"404 on {model}"
-                        continue
-                    if r.status_code == 429:
-                        rate_limited = True
-                        last_err = f"429 on {model}"
-                        # Retry once after a short delay on the same model
-                        import asyncio
-                        await asyncio.sleep(2.0)
+        async with _GEMINI_SEM:  # cap concurrency across all users
+            async with httpx.AsyncClient(timeout=30.0) as http:
+                for model in gemini_models:
+                    url = (
+                        f"https://generativelanguage.googleapis.com/v1beta/models/"
+                        f"{model}:generateContent?key={gemini_key}"
+                    )
+                    try:
                         r = await http.post(url, json=payload)
-                        if r.status_code == 429:
+                        if r.status_code == 404:
+                            last_err = f"404 on {model}"
                             continue
-                    r.raise_for_status()
-                    gem_data = r.json()
-                    rate_limited = False
-                    break
-                except Exception as e:
-                    last_err = f"{model}: {str(e)[:100]}"
-                    continue
+                        if r.status_code == 429:
+                            # No sleep — just skip to next model immediately.
+                            # The semaphore already limits concurrency so
+                            # the next model is unlikely to 429 too.
+                            rate_limit_count += 1
+                            last_err = f"429 on {model}"
+                            continue
+                        r.raise_for_status()
+                        gem_data = r.json()
+                        break
+                    except Exception as e:
+                        last_err = f"{model}: {str(e)[:100]}"
+                        continue
         if gem_data is None:
-            if rate_limited:
+            if rate_limit_count == len(gemini_models):
                 return [], (
                     "gemini-rate-limit: تم تجاوز الحد المسموح للطلبات على Gemini "
                     "(الحساب المجاني محدود). انتظر دقيقة وحاول مجدداً، أو أضف منتجاً يدوياً."
