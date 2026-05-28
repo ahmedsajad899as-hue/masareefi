@@ -72,7 +72,7 @@ async def create_customer(
     # Auto-link if phone matches a registered user
     if body.phone:
         user_result = await db.execute(
-            select(User).where(User.phone_number == body.phone, User.is_active == True)
+            select(User).where(User.phone_number == body.phone, User.is_active == True).limit(1)
         )
         linked = user_result.scalar_one_or_none()
         if linked:
@@ -160,7 +160,7 @@ async def update_customer(
         customer.phone = body.phone
         # Re-link if phone changed
         user_result = await db.execute(
-            select(User).where(User.phone_number == body.phone, User.is_active == True)
+            select(User).where(User.phone_number == body.phone, User.is_active == True).limit(1)
         )
         linked = user_result.scalar_one_or_none()
         customer.linked_user_id = linked.id if linked else None
