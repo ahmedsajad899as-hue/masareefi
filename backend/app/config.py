@@ -39,6 +39,7 @@ class Settings(BaseSettings):
 
     # Gemini (optional fallback for vision / text)
     GEMINI_API_KEY: str | None = None
+    GOOGLE_API_KEY: str | None = None  # alias accepted for Gemini
 
     # SMTP — optional. If not set, reset code is returned in API response only.
     SMTP_HOST: str | None = None

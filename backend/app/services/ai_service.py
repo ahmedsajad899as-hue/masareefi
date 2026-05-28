@@ -706,7 +706,11 @@ async def analyze_image_for_market_items(
     import base64
 
     has_openai = settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-placeholder")
-    has_gemini = bool(getattr(settings, "GEMINI_API_KEY", None))
+    gemini_key = (
+        getattr(settings, "GEMINI_API_KEY", None)
+        or getattr(settings, "GOOGLE_API_KEY", None)
+    )
+    has_gemini = bool(gemini_key)
 
     if not has_openai and not has_gemini:
         return [], "no-api-key"
@@ -753,7 +757,7 @@ async def analyze_image_for_market_items(
             import httpx
             gem_url = (
                 "https://generativelanguage.googleapis.com/v1beta/models/"
-                "gemini-1.5-flash:generateContent?key=" + settings.GEMINI_API_KEY
+                "gemini-1.5-flash:generateContent?key=" + gemini_key
             )
             payload = {
                 "systemInstruction": {"parts": [{"text": VISION_SYSTEM_PROMPT}]},
