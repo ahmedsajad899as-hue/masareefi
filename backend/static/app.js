@@ -3142,10 +3142,10 @@ function visionRenderItems() {
   const tbody = document.getElementById('vision-items');
   tbody.innerHTML = _visionItems.map((it, i) => `
     <tr>
-      <td><input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" value="${(it.product_name || '').replace(/"/g, '&quot;')}" onchange="visionUpdate(${i}, 'product_name', this.value)"></td>
-      <td style="width:80px"><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" value="${it.quantity}" min="0" step="0.5" onchange="visionUpdate(${i}, 'quantity', this.value)"></td>
-      <td style="width:110px"><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" value="${it.unit_price}" min="0" step="250" onchange="visionUpdate(${i}, 'unit_price', this.value)"></td>
-      <td style="width:40px"><button class="btn btn-sm btn-outline-danger" onclick="visionRemoveItem(${i})"><i class="fas fa-times"></i></button></td>
+      <td style="min-width:140px"><input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" style="width:100%;font-size:14px" value="${(it.product_name || '').replace(/"/g, '&quot;')}" onchange="visionUpdate(${i}, 'product_name', this.value)"></td>
+      <td style="width:60px"><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary text-center" style="padding:4px 2px;font-size:12px" value="${it.quantity}" min="0" step="0.5" onchange="visionUpdate(${i}, 'quantity', this.value)"></td>
+      <td style="width:85px"><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary text-center" style="padding:4px 2px;font-size:12px" value="${it.unit_price}" min="0" step="250" onchange="visionUpdate(${i}, 'unit_price', this.value)"></td>
+      <td style="width:34px"><button class="btn btn-sm btn-outline-danger" style="padding:2px 6px" onclick="visionRemoveItem(${i})"><i class="fas fa-times"></i></button></td>
     </tr>
   `).join('');
   visionRecalcTotal();
