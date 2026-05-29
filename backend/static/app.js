@@ -4259,6 +4259,7 @@ function catalogScanPhoto(mode) {
   document.getElementById('catalog-scan-table-wrap').style.display = 'none';
   document.getElementById('catalog-scan-status').textContent = 'اختر صورة قائمة الأسعار…';
   document.getElementById('catalog-scan-tbody').innerHTML = '';
+  document.getElementById('catalog-scan-img-wrap').style.display = 'none';
   _catalogScanItems = [];
   const inp = document.getElementById('catalog-file-input');
   if (mode === 'camera') {
@@ -4273,6 +4274,14 @@ async function catalogFileSelected(ev) {
   const file = ev.target.files[0];
   ev.target.value = '';
   if (!file) return;
+  // Show image preview immediately
+  const prevImg  = document.getElementById('catalog-scan-preview');
+  const prevWrap = document.getElementById('catalog-scan-img-wrap');
+  if (prevImg._prevUrl) URL.revokeObjectURL(prevImg._prevUrl);
+  prevImg._prevUrl = URL.createObjectURL(file);
+  prevImg.src = prevImg._prevUrl;
+  prevImg.style.maxHeight = '220px';
+  prevWrap.style.display = '';
   const statusEl = document.getElementById('catalog-scan-status');
   statusEl.textContent = 'جاري تحليل الصورة بالذكاء الاصطناعي…';
   document.getElementById('catalog-scan-table-wrap').style.display = 'none';
