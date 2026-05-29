@@ -4254,13 +4254,19 @@ async function catalogDelete(id) {
 // ── Catalog: import from photo ────────────────────────────────
 let _catalogScanItems = [];   // preview items from scan
 
-function catalogScanPhoto() {
+function catalogScanPhoto(mode) {
   document.getElementById('catalog-scan-section').style.display = '';
   document.getElementById('catalog-scan-table-wrap').style.display = 'none';
   document.getElementById('catalog-scan-status').textContent = 'اختر صورة قائمة الأسعار…';
   document.getElementById('catalog-scan-tbody').innerHTML = '';
   _catalogScanItems = [];
-  document.getElementById('catalog-file-input').click();
+  const inp = document.getElementById('catalog-file-input');
+  if (mode === 'camera') {
+    inp.setAttribute('capture', 'environment');
+  } else {
+    inp.removeAttribute('capture');
+  }
+  inp.click();
 }
 
 async function catalogFileSelected(ev) {
@@ -4274,7 +4280,7 @@ async function catalogFileSelected(ev) {
     const compressed = await visionCompressImage(file, 800, 0.72);
     const fd = new FormData();
     fd.append('image', compressed, file.name);
-    const resp = await fetch(BASE_URL + '/market/products/scan', {
+    const resp = await fetch((window.API_BASE || '/api/v1') + '/market/products/scan', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + S.token },
       body: fd,
