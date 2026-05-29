@@ -4280,6 +4280,7 @@ async function catalogFileSelected(ev) {
   if (prevImg._prevUrl) URL.revokeObjectURL(prevImg._prevUrl);
   prevImg._prevUrl = URL.createObjectURL(file);
   prevImg.src = prevImg._prevUrl;
+  prevImg.style.transform = '';       // reset zoom
   prevImg.style.maxHeight = '220px';
   prevWrap.style.display = '';
   const statusEl = document.getElementById('catalog-scan-status');
@@ -4345,6 +4346,64 @@ async function catalogConfirmScan() {
     _renderCatalogList(_catalogProducts);
     toast(`تم حفظ ${saved.length} منتج في الكتالوج ✅`);
   } catch(e) { toast(e.message, 'err'); }
+}
+
+// ── Catalog image pinch-zoom ────────────────────────────────
+function initCatalogPreviewZoom() {
+  const img = document.getElementById('catalog-scan-preview');
+  if (!img) return;
+  let scale = 1, lastTap = 0, pinching = false, startDist = 0, startScale = 1;
+
+  function applyScale(s) {
+    scale = Math.min(Math.max(s, 1), 4);
+    img.style.transform = scale === 1 ? '' : `scale(${scale})`;
+    img.style.maxHeight  = scale === 1 ? '220px' : 'none';
+    img.style.cursor     = scale > 1 ? 'zoom-out' : 'zoom-in';
+  }
+
+  img.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 2) {
+      pinching = true;
+      startDist  = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      startScale = scale;
+      img.style.transition = 'none';
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  img.addEventListener('touchmove', function(e) {
+    if (pinching && e.touches.length === 2) {
+      const d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      applyScale(startScale * (d / startDist));
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  img.addEventListener('touchend', function(e) {
+    if (pinching) {
+      pinching = false;
+      img.style.transition = 'transform .2s ease';
+      return;
+    }
+    const now = Date.now();
+    if (now - lastTap < 300) {
+      applyScale(1); // double-tap → reset
+    } else {
+      applyScale(scale > 1 ? 1 : 2.5); // single-tap → toggle
+    }
+    lastTap = now;
+  }, { passive: true });
+
+  // mouse click for desktop
+  img.addEventListener('click', function() {
+    applyScale(scale > 1 ? 1 : 2.5);
+  });
 }
 
 // ── Referral ─────────────────────────────────────────────────
@@ -4450,6 +4509,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sw = document.getElementById('dark-toggle');
     if (sw) sw.checked = false;
   }
+
+  initCatalogPreviewZoom();
 
   // Close referral dropdown when clicking outside it
   document.addEventListener('click', function(e) {

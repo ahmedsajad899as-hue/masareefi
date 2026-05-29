@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>مصاريفي 💰</title>
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#6C63FF">
@@ -1380,9 +1380,9 @@
         <div id="catalog-scan-status" class="text-muted small mb-2"></div>
         <!-- Image preview -->
         <div id="catalog-scan-img-wrap" style="display:none" class="text-center mb-3">
-          <img id="catalog-scan-preview" style="max-width:100%;max-height:220px;border-radius:10px;border:1px solid #444;cursor:pointer"
-               alt="" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'220px':'none'" title="اضغط للتكبير">
-          <div class="text-muted" style="font-size:.78rem;margin-top:4px">اضغط على الصورة للتكبير</div>
+          <img id="catalog-scan-preview" style="max-width:100%;max-height:220px;border-radius:10px;border:1px solid #444;cursor:zoom-in;touch-action:none;transform-origin:center center;transition:transform .2s ease"
+               alt="">
+          <div class="text-muted" style="font-size:.78rem;margin-top:4px">اضغط مرتين أو قرّب الإصبعين للتكبير — اضغط مرتين للإعادة</div>
         </div>
         <div id="catalog-scan-table-wrap" style="display:none">
           <div class="table-responsive mb-3">
