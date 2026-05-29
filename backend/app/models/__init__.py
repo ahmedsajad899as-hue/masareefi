@@ -4,7 +4,7 @@ from app.models.expense import Expense, RecurringType
 from app.models.budget import Budget
 from app.models.goal import Goal
 from app.models.wallet import Wallet, WalletTransfer
-from app.models.market import MarketCustomer, MarketSale, MarketSaleItem, SupplierInvoice, SupplierInvoiceItem, MarketAuditLog
+from app.models.market import MarketCustomer, MarketSale, MarketSaleItem, SupplierInvoice, SupplierInvoiceItem, MarketAuditLog, MarketProduct
 
 __all__ = [
     "User", "RefreshToken", "UserActivity",
@@ -13,5 +13,5 @@ __all__ = [
     "Wallet", "WalletTransfer",
     "MarketCustomer", "MarketSale", "MarketSaleItem",
     "SupplierInvoice", "SupplierInvoiceItem",
-    "MarketAuditLog",
+    "MarketAuditLog", "MarketProduct",
 ]
