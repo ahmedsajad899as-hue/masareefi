@@ -1029,7 +1029,164 @@ def _normalize_product_key(name: str) -> str:
     return s
 
 
-async def analyze_image_for_market_items(
+async def extract_price_list_from_image(
+    image_bytes: bytes,
+    mime_type: str,
+) -> "tuple[list[dict], str]":
+    """Extract product catalog entries (name + price) from a price-list / shelf photo.
+
+    Returns (items, raw_response) where items is a list of {name, unit_price}.
+    Used by the product-catalog import endpoint — completely separate from the
+    customer-invoice analysis flow.
+    """
+    import base64
+    import io as _io
+
+    has_openai = settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-placeholder")
+    gemini_key = (
+        getattr(settings, "GEMINI_API_KEY", None)
+        or getattr(settings, "GOOGLE_API_KEY", None)
+    )
+    has_gemini = bool(gemini_key)
+
+    if not has_openai and not has_gemini:
+        return [], "no-api-key"
+
+    # Resize to 1600px max to save tokens
+    try:
+        from PIL import Image as _PILImage
+        _img = _PILImage.open(_io.BytesIO(image_bytes))
+        if _img.mode in ("RGBA", "P"):
+            _img = _img.convert("RGB")
+        _max_side = max(_img.size)
+        if _max_side > 1600:
+            _scale = 1600 / _max_side
+            _img = _img.resize(
+                (max(1, int(_img.size[0] * _scale)), max(1, int(_img.size[1] * _scale))),
+                _PILImage.LANCZOS,
+            )
+        _buf = _io.BytesIO()
+        _fmt = "PNG" if mime_type == "image/png" else "JPEG"
+        _img.save(_buf, format=_fmt, quality=85)
+        image_bytes = _buf.getvalue()
+        if _fmt == "JPEG":
+            mime_type = "image/jpeg"
+    except Exception:
+        pass
+
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    PROMPT = (
+        "You are a price-list extraction assistant for an Iraqi market app.\n"
+        "Look at the image and extract EVERY product name + price you can see.\n"
+        "Prices are in Iraqi Dinar (IQD). Return ONLY a JSON array like:\n"
+        '[{"name":"...", "unit_price":...}, ...]\n'
+        "Rules:\n"
+        "- Include ALL products visible, even partial text.\n"
+        "- name: clean Arabic/English product name.\n"
+        "- unit_price: numeric only (no currency symbol). Use 0 if price not visible.\n"
+        "- Return ONLY the JSON array, no explanation."
+    )
+
+    raw = ""
+
+    # ── Try GPT-4o-mini ─────────────────────────────────────────────────────
+    if has_openai:
+        try:
+            data_url = f"data:{mime_type};base64,{b64}"
+            resp = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                max_tokens=1200,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": PROMPT},
+                        {"type": "image_url", "image_url": {"url": data_url, "detail": "low"}},
+                    ],
+                }],
+            )
+            raw = (resp.choices[0].message.content or "").strip()
+            items = _parse_catalog_json(raw)
+            if items:
+                return items, raw
+        except Exception:
+            pass
+
+    # ── Gemini fallback ─────────────────────────────────────────────────────
+    if has_gemini:
+        GEMINI_MODELS = [
+            "gemini-2.0-flash-lite",
+            "gemini-2.5-flash-lite",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+        ]
+        import httpx
+        async with _GEMINI_SEM:
+            for model in GEMINI_MODELS:
+                try:
+                    url = (
+                        f"https://generativelanguage.googleapis.com/v1beta/models/"
+                        f"{model}:generateContent?key={gemini_key}"
+                    )
+                    payload = {
+                        "contents": [{"parts": [
+                            {"text": PROMPT},
+                            {"inline_data": {"mime_type": mime_type, "data": b64}},
+                        ]}],
+                        "generationConfig": {"maxOutputTokens": 1200, "temperature": 0.1},
+                    }
+                    async with httpx.AsyncClient(timeout=30) as hc:
+                        r = await hc.post(url, json=payload)
+                    if r.status_code == 429:
+                        continue
+                    r.raise_for_status()
+                    raw = (
+                        r.json()
+                        .get("candidates", [{}])[0]
+                        .get("content", {})
+                        .get("parts", [{}])[0]
+                        .get("text", "")
+                        .strip()
+                    )
+                    items = _parse_catalog_json(raw)
+                    if items:
+                        return items, raw
+                except Exception:
+                    continue
+
+    return [], raw or "parse-error"
+
+
+def _parse_catalog_json(raw: str) -> list[dict]:
+    """Extract [{name, unit_price}] from a raw AI response string."""
+    text = raw.strip()
+    # Strip markdown fences
+    text = re.sub(r"^```[a-z]*\n?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\n?```$", "", text, flags=re.MULTILINE)
+    text = text.strip()
+    # Find the JSON array
+    start = text.find("[")
+    end = text.rfind("]")
+    if start == -1 or end == -1:
+        return []
+    try:
+        data = json.loads(text[start:end + 1])
+    except json.JSONDecodeError:
+        return []
+    out = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("product_name") or "").strip()
+        if not name:
+            continue
+        try:
+            price = float(item.get("unit_price") or item.get("price") or 0)
+        except (TypeError, ValueError):
+            price = 0.0
+        out.append({"name": name, "unit_price": round(price, 2)})
+    return out
+
     image_bytes: bytes,
     mime_type: str,
     known_products: "list[str] | list[dict] | None" = None,

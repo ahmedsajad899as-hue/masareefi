@@ -5,9 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.market import MarketSale, MarketSaleItem
+from app.models.market import MarketSale, MarketSaleItem, MarketProduct
 from app.models.user import User
-from app.services.ai_service import analyze_image_for_market_items
+from app.services.ai_service import analyze_image_for_market_items, _normalize_product_key
 from app.utils.dependencies import get_current_market_owner
 
 router = APIRouter()
@@ -111,5 +111,24 @@ async def analyze_image(
     items_data, raw = await analyze_image_for_market_items(
         image_bytes, content_type, known_products=known
     )
+
+    # ── Catalog price override (kill switch: only when use_product_catalog is ON) ──
+    # When OFF: zero code-path change — items_data is returned as-is (identical
+    # to pre-catalog behavior).  Owner can toggle in market settings at any time.
+    if current_user.use_product_catalog:
+        catalog_result = await db.execute(
+            select(MarketProduct).where(MarketProduct.market_owner_id == current_user.id)
+        )
+        catalog: dict[str, float] = {
+            _normalize_product_key(p.name): float(p.unit_price)
+            for p in catalog_result.scalars().all()
+            if p.name
+        }
+        if catalog:
+            for item in items_data:
+                key = _normalize_product_key(item.get("product_name", ""))
+                if key and key in catalog:
+                    item["unit_price"] = catalog[key]
+
     items = [VisionItem(**d) for d in items_data]
     return VisionAnalyzeResponse(items=items, raw_response=raw)

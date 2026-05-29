@@ -630,6 +630,7 @@ const PAGE_TITLES = {
   'market-customers': '🏪 الزبائن والديون',
   'market-overdue':   '⚠️ الديون المتأخرة',
   'market-suppliers': '🚚 فواتير الموردين',
+  'market-catalog':   '📦 كتالوج المنتجات',
   'market-settings':  '⚙️ إعدادات المحل',
   'market-checkout':  '🛒 الكاشير السريع',
   'my-purchases':     '🛒 مشترياتي من المحلات',
@@ -680,6 +681,7 @@ function goTo(page) {
     case 'market-customers': loadMarketCustomers(); break;
     case 'market-overdue':   loadOverdueCustomers(); break;
     case 'market-suppliers': loadMarketSuppliers(); break;
+    case 'market-catalog':   loadMarketCatalog(); break;
     case 'market-settings':  loadMarketSettings(); break;
     case 'market-checkout':  loadCheckout(); break;
     case 'my-purchases':     loadMyPurchases(); break;
@@ -4099,6 +4101,7 @@ async function loadMarketSettings() {
     const data = await api('GET', '/market/settings/');
     document.getElementById('mset-store-name').value = data.store_name || '';
     document.getElementById('mset-overdue-days').value = data.market_overdue_days ?? 30;
+    document.getElementById('mset-use-catalog').checked = data.use_product_catalog ?? false;
   } catch(e) {
     // Fallback to user data
     document.getElementById('mset-store-name').value = S.user?.store_name || '';
@@ -4110,13 +4113,223 @@ async function loadMarketSettings() {
 async function saveMarketSettings() {
   const storeName = document.getElementById('mset-store-name').value.trim();
   const overdueDays = parseInt(document.getElementById('mset-overdue-days').value, 10) || 30;
+  const useCatalog = document.getElementById('mset-use-catalog').checked;
   if (!storeName) { toast('أدخل اسم المحل', 'err'); return; }
   loading(true);
   try {
-    await api('PATCH', '/market/settings/', { store_name: storeName, market_overdue_days: overdueDays });
-    toast('تم حفظ الإعدادات ✅');
+    await api('PATCH', '/market/settings/', {
+      store_name: storeName,
+      market_overdue_days: overdueDays,
+      use_product_catalog: useCatalog,
+    });
+    toast(useCatalog ? 'تم الحفظ — كتالوج المنتجات مفعّل ✅' : 'تم الحفظ — كتالوج المنتجات مطفأ');
   } catch(e) { toast(e.message, 'err'); }
   finally { loading(false); }
+}
+
+// ── Market Product Catalog ────────────────────────────────────
+let _catalogProducts = [];   // full list for in-page filtering
+
+async function loadMarketCatalog() {
+  _catalogProducts = [];
+  _renderCatalogList([]);
+  document.getElementById('catalog-loading').style.display = '';
+  document.getElementById('catalog-empty').style.display = 'none';
+  document.getElementById('catalog-items').innerHTML = '';
+  document.getElementById('catalog-search').value = '';
+  // Show banner if catalog feature is OFF
+  try {
+    const settings = await api('GET', '/market/settings/');
+    const banner = document.getElementById('catalog-info-banner');
+    if (banner) banner.style.display = settings.use_product_catalog ? 'none' : '';
+  } catch(e) {}
+  try {
+    _catalogProducts = await api('GET', '/market/products/');
+  } catch(e) {
+    toast('فشل تحميل الكتالوج: ' + e.message, 'err');
+  } finally {
+    document.getElementById('catalog-loading').style.display = 'none';
+  }
+  _renderCatalogList(_catalogProducts);
+}
+
+function filterCatalogList() {
+  const q = (document.getElementById('catalog-search').value || '').trim().toLowerCase();
+  const filtered = q ? _catalogProducts.filter(p => p.name.toLowerCase().includes(q)) : _catalogProducts;
+  _renderCatalogList(filtered);
+}
+
+function _renderCatalogList(items) {
+  const empty = document.getElementById('catalog-empty');
+  const wrap  = document.getElementById('catalog-items');
+  if (!items.length) {
+    empty.style.display = '';
+    wrap.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+  wrap.innerHTML = items.map(p => `
+    <div class="d-flex align-items-center justify-content-between py-2 px-3 mb-1 rounded"
+         style="background:rgba(255,255,255,0.05)" id="catalog-row-${p.id}">
+      <div id="catalog-view-${p.id}" class="d-flex align-items-center gap-3 flex-grow-1">
+        <span style="flex:1">${esc(p.name)}</span>
+        <span class="badge bg-success" style="min-width:90px;text-align:center">
+          ${Number(p.unit_price).toLocaleString('ar-IQ')} IQD
+        </span>
+      </div>
+      <div id="catalog-edit-${p.id}" class="d-none d-flex align-items-center gap-2 flex-grow-1">
+        <input type="text" class="form-control form-control-sm" id="cedit-name-${p.id}"
+               value="${esc(p.name)}" style="flex:1">
+        <input type="number" class="form-control form-control-sm" id="cedit-price-${p.id}"
+               value="${p.unit_price}" style="width:110px" min="0">
+        <button class="btn btn-sm btn-success" onclick="catalogSaveEdit('${p.id}')">✔</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="catalogCancelEdit('${p.id}')">✕</button>
+      </div>
+      <div class="ms-2 d-flex gap-1" id="catalog-actions-${p.id}">
+        <button class="btn btn-sm btn-outline-warning" onclick="catalogStartEdit('${p.id}')">
+          <i class="fas fa-pen"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-danger" onclick="catalogDelete('${p.id}')">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function catalogAddManual() {
+  document.getElementById('catalog-add-row').style.display = '';
+  document.getElementById('catalog-add-name').value = '';
+  document.getElementById('catalog-add-price').value = '';
+  document.getElementById('catalog-add-name').focus();
+}
+
+async function catalogSaveManual() {
+  const name = document.getElementById('catalog-add-name').value.trim();
+  const price = parseFloat(document.getElementById('catalog-add-price').value) || 0;
+  if (!name) { toast('أدخل اسم المنتج', 'err'); return; }
+  try {
+    const p = await api('POST', '/market/products/', { name, unit_price: price });
+    _catalogProducts.unshift(p);
+    document.getElementById('catalog-add-row').style.display = 'none';
+    _renderCatalogList(_catalogProducts);
+    toast('تمت الإضافة ✅');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+function catalogStartEdit(id) {
+  document.getElementById(`catalog-view-${id}`).classList.add('d-none');
+  document.getElementById(`catalog-edit-${id}`).classList.remove('d-none');
+  document.getElementById(`catalog-actions-${id}`).style.display = 'none';
+}
+
+function catalogCancelEdit(id) {
+  document.getElementById(`catalog-view-${id}`).classList.remove('d-none');
+  document.getElementById(`catalog-edit-${id}`).classList.add('d-none');
+  document.getElementById(`catalog-actions-${id}`).style.display = '';
+}
+
+async function catalogSaveEdit(id) {
+  const name  = document.getElementById(`cedit-name-${id}`).value.trim();
+  const price = parseFloat(document.getElementById(`cedit-price-${id}`).value) || 0;
+  if (!name) { toast('أدخل اسم المنتج', 'err'); return; }
+  try {
+    const updated = await api('PATCH', `/market/products/${id}`, { name, unit_price: price });
+    const idx = _catalogProducts.findIndex(p => p.id === id);
+    if (idx !== -1) _catalogProducts[idx] = updated;
+    _renderCatalogList(_catalogProducts);
+    toast('تم التحديث ✅');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function catalogDelete(id) {
+  if (!confirm('حذف المنتج من الكتالوج؟')) return;
+  try {
+    await api('DELETE', `/market/products/${id}`);
+    _catalogProducts = _catalogProducts.filter(p => p.id !== id);
+    _renderCatalogList(_catalogProducts);
+    toast('تم الحذف');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+// ── Catalog: import from photo ────────────────────────────────
+let _catalogScanItems = [];   // preview items from scan
+
+function catalogScanPhoto() {
+  document.getElementById('catalog-scan-section').style.display = '';
+  document.getElementById('catalog-scan-table-wrap').style.display = 'none';
+  document.getElementById('catalog-scan-status').textContent = 'اختر صورة قائمة الأسعار…';
+  document.getElementById('catalog-scan-tbody').innerHTML = '';
+  _catalogScanItems = [];
+  document.getElementById('catalog-file-input').click();
+}
+
+async function catalogFileSelected(ev) {
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  const statusEl = document.getElementById('catalog-scan-status');
+  statusEl.textContent = 'جاري تحليل الصورة بالذكاء الاصطناعي…';
+  document.getElementById('catalog-scan-table-wrap').style.display = 'none';
+  try {
+    const compressed = await visionCompressImage(file, 800, 0.72);
+    const fd = new FormData();
+    fd.append('image', compressed, file.name);
+    const resp = await fetch(BASE_URL + '/market/products/scan', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + S.token },
+      body: fd,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || 'فشل التحليل');
+    }
+    const data = await resp.json();
+    _catalogScanItems = data.items || [];
+    if (!_catalogScanItems.length) {
+      statusEl.textContent = 'لم يُعثر على منتجات في الصورة. حاول بصورة أوضح.';
+      return;
+    }
+    statusEl.textContent = `تم استخراج ${_catalogScanItems.length} منتج — راجع وعدّل الأسعار ثم احفظ:`;
+    const tbody = document.getElementById('catalog-scan-tbody');
+    tbody.innerHTML = _catalogScanItems.map((item, i) => `
+      <tr>
+        <td><input type="text" class="form-control form-control-sm" id="scan-name-${i}"
+                   value="${esc(item.name)}"></td>
+        <td><input type="number" class="form-control form-control-sm" id="scan-price-${i}"
+                   value="${item.unit_price}" min="0"></td>
+        <td><button class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">✕</button></td>
+      </tr>`).join('');
+    document.getElementById('catalog-scan-table-wrap').style.display = '';
+  } catch(e) {
+    statusEl.textContent = 'خطأ: ' + e.message;
+    toast(e.message, 'err');
+  }
+}
+
+async function catalogConfirmScan() {
+  const rows = document.getElementById('catalog-scan-tbody').querySelectorAll('tr');
+  const items = [];
+  rows.forEach((_, i) => {
+    const nameEl  = document.getElementById(`scan-name-${i}`);
+    const priceEl = document.getElementById(`scan-price-${i}`);
+    if (!nameEl) return;
+    const name = nameEl.value.trim();
+    const price = parseFloat(priceEl?.value) || 0;
+    if (name) items.push({ name, unit_price: price });
+  });
+  if (!items.length) { toast('لا توجد منتجات للحفظ', 'err'); return; }
+  try {
+    const saved = await api('POST', '/market/products/bulk-save', items);
+    // Merge with existing catalog (upsert by name)
+    for (const p of saved) {
+      const idx = _catalogProducts.findIndex(x => x.name.toLowerCase() === p.name.toLowerCase());
+      if (idx !== -1) _catalogProducts[idx] = p;
+      else _catalogProducts.unshift(p);
+    }
+    document.getElementById('catalog-scan-section').style.display = 'none';
+    _renderCatalogList(_catalogProducts);
+    toast(`تم حفظ ${saved.length} منتج في الكتالوج ✅`);
+  } catch(e) { toast(e.message, 'err'); }
 }
 
 // ── Referral ─────────────────────────────────────────────────

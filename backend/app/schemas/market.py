@@ -159,6 +159,7 @@ class SupplierInvoiceOut(BaseModel):
 class MarketSettingsOut(BaseModel):
     store_name: str | None
     market_overdue_days: int
+    use_product_catalog: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -166,6 +167,41 @@ class MarketSettingsOut(BaseModel):
 class MarketSettingsUpdate(BaseModel):
     store_name: str | None = None
     market_overdue_days: int | None = None
+    use_product_catalog: bool | None = None
+
+
+# ─────────────────────────── Market Products ───────────────────────────
+
+class MarketProductCreate(BaseModel):
+    name: str
+    unit_price: float
+
+
+class MarketProductUpdate(BaseModel):
+    name: str | None = None
+    unit_price: float | None = None
+
+
+class MarketProductOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    unit_price: float
+    updated_at: datetime
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CatalogScanItem(BaseModel):
+    """One product extracted from a photo scan — returned as preview before save."""
+    name: str
+    unit_price: float
+
+
+class CatalogScanOut(BaseModel):
+    """Preview list returned by the image-scan endpoint. User confirms to save."""
+    items: list[CatalogScanItem]
+    raw_response: str
 
 
 # ─────────────────────────── My Market Debts (regular user) ───────────────────────────

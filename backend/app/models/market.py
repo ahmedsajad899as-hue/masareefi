@@ -131,3 +131,28 @@ class MarketAuditLog(Base):
     action: Mapped[str] = mapped_column(String(20), nullable=False, default="update")
     changes: Mapped[list | dict] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class MarketProduct(Base):
+    """Owner's personal product catalog — name + price.
+
+    Populated by photographing price lists. When ``use_product_catalog`` is
+    enabled on the owner's account, vision analysis overrides GPT price
+    estimates with these authoritative prices.
+    Disable the feature: set ``use_product_catalog = False`` on the user —
+    zero code-path change, identical to pre-catalog behavior.
+    """
+    __tablename__ = "market_products"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
+    market_owner_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(300), nullable=False)
+    unit_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    market_owner: Mapped["User"] = relationship("User", foreign_keys=[market_owner_id])

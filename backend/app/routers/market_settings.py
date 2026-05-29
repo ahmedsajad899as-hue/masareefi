@@ -17,6 +17,7 @@ async def get_market_settings(
     return MarketSettingsOut(
         store_name=current_user.store_name,
         market_overdue_days=current_user.market_overdue_days,
+        use_product_catalog=current_user.use_product_catalog,
     )
 
 
@@ -32,9 +33,12 @@ async def update_market_settings(
         if body.market_overdue_days < 1:
             body.market_overdue_days = 1
         current_user.market_overdue_days = body.market_overdue_days
+    if body.use_product_catalog is not None:
+        current_user.use_product_catalog = body.use_product_catalog
     await db.commit()
     await db.refresh(current_user)
     return MarketSettingsOut(
         store_name=current_user.store_name,
         market_overdue_days=current_user.market_overdue_days,
+        use_product_catalog=current_user.use_product_catalog,
     )

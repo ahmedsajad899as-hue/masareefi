@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import create_all_tables, _is_sqlite
 from app.routers import auth, expenses, categories, statistics, budgets, voice, wallets, admin
-from app.routers import market_customers, market_sales, supplier_invoices, market_settings, my_market_debts, market_voice, market_vision
+from app.routers import market_customers, market_sales, supplier_invoices, market_settings, my_market_debts, market_voice, market_vision, market_products
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 
@@ -146,6 +146,7 @@ app.include_router(supplier_invoices.router, prefix="/api/v1/market/suppliers", 
 app.include_router(market_settings.router, prefix="/api/v1/market/settings", tags=["Market - Settings"])
 app.include_router(market_voice.router, prefix="/api/v1/market/voice", tags=["Market - Voice"])
 app.include_router(market_vision.router, prefix="/api/v1/market/vision", tags=["Market - Vision"])
+app.include_router(market_products.router, prefix="/api/v1/market/products", tags=["Market - Products Catalog"])
 # Regular user: view own debts from markets
 app.include_router(my_market_debts.router, prefix="/api/v1/my-debts", tags=["My Market Debts"])
 

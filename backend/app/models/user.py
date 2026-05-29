@@ -47,6 +47,10 @@ class User(Base):
     # (categories/budgets, wallets, voice assistant, statistics). Defaults to
     # False so the sidebar stays focused on store management.
     show_personal_features: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # Product catalog feature — when True, vision analysis overrides AI price
+    # estimates with prices from the owner's MarketProduct catalog.
+    # Default False = kill switch engaged; identical to pre-catalog behavior.
+    use_product_catalog: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     # Password reset
     reset_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reset_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

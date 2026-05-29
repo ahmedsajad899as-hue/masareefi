@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=36">
+  <link rel="stylesheet" href="/static/style.css?v=37">
   <script>
     // Early auth check — runs before app.js loads.
     // If no token stored, immediately hide spinner & show login screen.
@@ -415,6 +415,7 @@
         <a class="s-link" data-page="market-customers" onclick="goTo('market-customers')"><i class="fas fa-users"></i> الزبائن والديون</a>
         <a class="s-link" data-page="market-overdue" onclick="goTo('market-overdue')"><i class="fas fa-exclamation-triangle"></i> الديون المتأخرة</a>
         <a class="s-link" data-page="market-suppliers" onclick="goTo('market-suppliers')"><i class="fas fa-truck"></i> فواتير الموردين</a>
+        <a class="s-link" data-page="market-catalog" onclick="goTo('market-catalog')"><i class="fas fa-box-open"></i> كتالوج المنتجات</a>
         <a class="s-link" data-page="market-settings" onclick="goTo('market-settings')"><i class="fas fa-store"></i> إعدادات المحل</a>
         <a class="s-link" data-page="market-checkout" onclick="goTo('market-checkout')"><i class="fas fa-cash-register"></i> الكاشير السريع</a>
       </div>
@@ -1321,12 +1322,114 @@
           <label class="form-label fw-bold">اسم المحل</label>
           <input type="text" id="mset-store-name" class="form-control" placeholder="اسم المحل">
         </div>
-        <div class="mb-4">
+        <div class="mb-3">
           <label class="form-label fw-bold">أيام السماح قبل التأخير</label>
           <input type="number" id="mset-overdue-days" class="form-control" min="1" max="365" placeholder="30">
           <div class="form-text text-muted">بعد هذا العدد من الأيام تُعتبر الديون متأخرة</div>
         </div>
+        <!-- ── كتالوج المنتجات — kill switch ── -->
+        <div class="mb-4 p-3 rounded" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12)">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="fw-bold">📦 كتالوج المنتجات في تحليل الصور</div>
+              <div class="form-text text-muted mt-1">
+                عند التشغيل: الأسعار المحفوظة في الكتالوج تُطغى على أسعار الذكاء الاصطناعي.
+                عند الإيقاف: يعود التطبيق لسلوكه الأصلي كما كان قبل هذه الخاصية.
+              </div>
+            </div>
+            <div class="form-check form-switch ms-3">
+              <input class="form-check-input" type="checkbox" role="switch"
+                     id="mset-use-catalog" style="width:2.5rem;height:1.3rem;cursor:pointer">
+            </div>
+          </div>
+        </div>
         <button class="btn btn-success w-100" onclick="saveMarketSettings()"><i class="fas fa-save me-2"></i>حفظ الإعدادات</button>
+      </div>
+    </section>
+
+    <!-- ── Market Product Catalog ── -->
+    <section id="pg-market-catalog" class="pg" style="display:none">
+      <div class="pg-head">
+        <h2><i class="fas fa-box-open me-2 text-success"></i>كتالوج المنتجات</h2>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-info btn-sm" onclick="catalogScanPhoto()">
+            <i class="fas fa-camera me-1"></i>استيراد من صورة
+          </button>
+          <button class="btn btn-outline-success btn-sm" onclick="catalogAddManual()">
+            <i class="fas fa-plus me-1"></i>إضافة يدوية
+          </button>
+        </div>
+      </div>
+
+      <!-- Info banner -->
+      <div id="catalog-info-banner" class="alert mb-3" style="display:none;font-size:.88rem;background:rgba(255,193,7,0.12);border:1px solid rgba(255,193,7,0.35);color:#ffc107">
+        <i class="fas fa-info-circle me-2"></i>
+        الكتالوج مبني لكنه <strong>غير مفعّل</strong> في تحليل الصور.
+        فعّله من <a href="#" onclick="goTo('market-settings');return false" style="color:#ffc107">إعدادات المحل</a> عند الجهوزية.
+      </div>
+
+      <!-- Photo scan preview modal-style section -->
+      <div id="catalog-scan-section" style="display:none" class="glass-card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <strong>معاينة المنتجات المستخرجة من الصورة</strong>
+          <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('catalog-scan-section').style.display='none'">✕</button>
+        </div>
+        <div id="catalog-scan-status" class="text-muted small mb-2"></div>
+        <div id="catalog-scan-table-wrap" style="display:none">
+          <div class="table-responsive mb-3">
+            <table class="table table-sm table-dark table-borderless mb-1">
+              <thead><tr>
+                <th>اسم المنتج</th>
+                <th style="width:130px">السعر (IQD)</th>
+                <th style="width:40px"></th>
+              </tr></thead>
+              <tbody id="catalog-scan-tbody"></tbody>
+            </table>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-success flex-grow-1" onclick="catalogConfirmScan()">
+              <i class="fas fa-save me-1"></i>حفظ المنتجات المحددة
+            </button>
+            <button class="btn btn-outline-secondary" onclick="document.getElementById('catalog-scan-section').style.display='none'">إلغاء</button>
+          </div>
+        </div>
+        <input type="file" id="catalog-file-input" accept="image/*" style="display:none" onchange="catalogFileSelected(event)">
+      </div>
+
+      <!-- Add / edit row -->
+      <div id="catalog-add-row" style="display:none" class="glass-card p-3 mb-3">
+        <div class="row g-2 align-items-end">
+          <div class="col">
+            <label class="form-label small">اسم المنتج</label>
+            <input type="text" id="catalog-add-name" class="form-control" placeholder="مثال: رز بسمتي">
+          </div>
+          <div class="col-auto" style="width:140px">
+            <label class="form-label small">السعر (IQD)</label>
+            <input type="number" id="catalog-add-price" class="form-control" min="0" placeholder="0">
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-success" onclick="catalogSaveManual()"><i class="fas fa-check"></i></button>
+            <button class="btn btn-outline-secondary ms-1" onclick="document.getElementById('catalog-add-row').style.display='none'">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search -->
+      <div class="mb-3">
+        <input type="text" id="catalog-search" class="form-control" placeholder="🔍 بحث في الكتالوج..."
+               oninput="filterCatalogList()">
+      </div>
+
+      <!-- Products list -->
+      <div id="catalog-list-wrap">
+        <div id="catalog-loading" class="text-center text-muted py-4" style="display:none">
+          <div class="spinner-border spinner-border-sm me-2"></div>جاري التحميل...
+        </div>
+        <div id="catalog-empty" class="text-center text-muted py-5" style="display:none">
+          <i class="fas fa-box-open fa-2x mb-2 d-block"></i>
+          الكتالوج فارغ — أضف منتجاتك يدوياً أو استورد من صورة
+        </div>
+        <div id="catalog-items"></div>
       </div>
     </section>
 
@@ -1880,7 +1983,7 @@
 </div><!-- #app-screen -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/app.js?v=78"></script>
+<script src="/static/app.js?v=79"></script>
 
 <script>
 // ═══ FAB Voice Assistant - Standalone ═══
