@@ -2544,13 +2544,15 @@
     fabRecog.interimResults = marketMode;   // show partial in market mode for pause tolerance
     fabRecog.continuous = marketMode;       // keep listening across short pauses for shop dictation
     var marketFinal = '';
+    var marketProcessedIndex = 0;  // track last processed result index to avoid duplicates
 
     fabRecog.onresult = function(ev) {
       if (marketMode) {
-        // Accumulate finalized chunks; keep listening through pauses
+        // Only process results we haven't seen yet (from ev.resultIndex onward)
         for (var k = ev.resultIndex; k < ev.results.length; k++) {
-          if (ev.results[k].isFinal) {
+          if (ev.results[k].isFinal && k >= marketProcessedIndex) {
             marketFinal += (marketFinal ? ' ' : '') + ev.results[k][0].transcript;
+            marketProcessedIndex = k + 1;
             gotResult = true;
           }
         }

@@ -18,6 +18,39 @@ client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 # This prevents thundering-herd 429s when several users upload images at once.
 _GEMINI_SEM = asyncio.Semaphore(3)
 
+
+def _dedup_transcript(text: str) -> str:
+    """Remove Whisper-style hallucinated repetitions from a transcript.
+
+    Whisper sometimes loops a phrase when there is silence or noise, producing
+    output like "محمود اشترى محمود اشترى زيت". This function collapses repeated
+    consecutive word-sequences back to a single occurrence.
+    """
+    if not text:
+        return text
+    words = text.split()
+    if len(words) < 2:
+        return text
+    result: list[str] = []
+    i = 0
+    while i < len(words):
+        # Try to find the longest repeating window starting at i
+        found_repeat = False
+        for wlen in range(min(8, (len(words) - i) // 2), 0, -1):
+            window = words[i:i + wlen]
+            if words[i + wlen:i + wlen * 2] == window:
+                result.extend(window)
+                i += wlen * 2
+                # Skip any further consecutive repetitions of the same window
+                while words[i:i + wlen] == window:
+                    i += wlen
+                found_repeat = True
+                break
+        if not found_repeat:
+            result.append(words[i])
+            i += 1
+    return ' '.join(result)
+
 # ─── Arabic number words ─────────────────────────────────────
 _AR_NUMS = {
     "صفر": 0, "واحد": 1, "وحدة": 1, "اثنين": 2, "ثنتين": 2, "ثلاث": 3, "ثلاثة": 3,
@@ -326,7 +359,7 @@ async def transcribe_audio(audio_bytes: bytes, filename: str) -> str:
         file=audio_file,
         language=None,  # Auto-detect Arabic/English
     )
-    return response.text
+    return _dedup_transcript(response.text)
 
 
 async def parse_expenses_from_text(text: str) -> tuple[list[ParsedExpenseItem], str]:
@@ -533,6 +566,11 @@ def _parse_market_local(text: str, customers: list) -> list:
         if not s:
             return None
 
+        # Strip trailing non-price Arabic words (product names that follow a price)
+        # e.g. "4000 تمن" → "4000", "5000 زيت" → "5000"
+        # Only strip if there's a digit prefix (to avoid stripping word-number prices)
+        s = re.sub(r'^([\d,٫٬]+(?:[:.]\d+)?(?:\s*(?:الف|الاف|الفين))?(?:\s*ونص|\s*وربع)?)\s+[ا-ي]+$', r'\1', s).strip()
+
         # Normalize once for all comparison operations
         sn = _normalize_arabic(s)
 
@@ -638,13 +676,42 @@ def _parse_market_local(text: str, customers: list) -> list:
     def _item_price(seg: str) -> "tuple[str, float | None]":
         """Return (item_name, price_or_None) for one item segment.
         Tries in order:
+          0. Strip leading purchase verb (e.g. "اشترا ب 5000 زيت" → "ب 5000 زيت")
+          0b. "ب price item" — reversed Iraqi pattern (ب 5000 زيت → item=زيت, price=5000)
           1. name + \" ب \" + price  (explicit ب with spaces)
           2. name + \" بWORD\"        (ب attached to word: بثلاثه, بالف, بخمسه ونص)
           3. name + PRICE_AT_END     (price words at segment end, no ب marker)
         All matching done on normalized Arabic forms.
         """
         seg = seg.strip()
+
+        # 0. Strip leading purchase verb so subsequent patterns work on the rest
+        seg = re.sub(
+            r'^(?:اشترى|اشتره|اشترت|اشترا|اخذ|أخذ|اخذت|كتبلي|حاسبلي|ديهنه|ديهنها|اكتبلي|اكتب)\s*',
+            '', seg).strip()
+
         seg_n = _normalize_arabic(seg)  # normalized version for matching
+
+        # 0b. Reversed pattern: "ب price item" (common Iraqi: "ب 5000 زيت")
+        # Matches: ب + digits/word-number + optional الف/ونص + item_name
+        m = re.match(
+            r'^ب\s+([\d,٫٬]+(?:[:.]\d+)?(?:\s*(?:الف|الاف|الفين))?(?:\s*ونص|\s*وربع)?)\s+(.+)$',
+            seg)
+        if m:
+            p = _price(m.group(1))
+            if p:
+                return m.group(2).strip(), p
+        # Also handle "ب word-price item" (e.g., "ب عشرين الف زيت")
+        m = re.match(
+            r'^ب\s+(' + _PRICE_WORD_NORM_ALT + r'(?:\s+(?:الف|الاف|الفين))?(?:\s*ونص|\s*وربع)?)\s+(.+)$',
+            seg_n)
+        if m:
+            p = _price(m.group(1))
+            if p:
+                # item name: take the original seg text after the price portion
+                price_end = seg_n.index(m.group(2)) if m.group(2) in seg_n else None
+                if price_end:
+                    return seg[price_end:].strip(), p
 
         # 1. Explicit "name ب price" — space on both sides of ب
         m = re.match(r'^(.+?)\s+ب\s+(.+)$', seg)
@@ -919,7 +986,7 @@ async def transcribe_audio_for_market(audio_bytes: bytes, filename: str) -> str:
         ),
         temperature=0.0,
     )
-    return response.text
+    return _dedup_transcript(response.text)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
