@@ -166,6 +166,17 @@ async def create_all_tables() -> None:
             "CREATE INDEX IF NOT EXISTS ix_market_audit_logs_entity ON market_audit_logs(entity_type, entity_id)",
             "CREATE INDEX IF NOT EXISTS ix_market_audit_logs_customer ON market_audit_logs(customer_id)",
             "CREATE INDEX IF NOT EXISTS ix_market_audit_logs_created ON market_audit_logs(created_at)",
+            # Product catalog (migration 0012/0013)
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS use_product_catalog BOOLEAN NOT NULL DEFAULT false",
+            """CREATE TABLE IF NOT EXISTS market_products (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                market_owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                name VARCHAR(300) NOT NULL,
+                unit_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_market_products_market_owner_id ON market_products(market_owner_id)",
         ]
         # Each statement in its own transaction — prevents PostgreSQL "tx aborted" cascade
         for stmt in _GUARD_STMTS:
