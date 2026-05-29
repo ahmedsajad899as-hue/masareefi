@@ -4169,28 +4169,41 @@ function _renderCatalogList(items) {
   }
   empty.style.display = 'none';
   wrap.innerHTML = items.map(p => `
-    <div class="d-flex align-items-center justify-content-between py-2 px-3 mb-1 rounded"
-         style="background:rgba(255,255,255,0.05)" id="catalog-row-${p.id}">
-      <div id="catalog-view-${p.id}" class="d-flex align-items-center gap-3 flex-grow-1">
-        <span style="flex:1">${esc(p.name)}</span>
-        <span class="badge bg-success" style="min-width:90px;text-align:center">
-          ${Number(p.unit_price).toLocaleString('ar-IQ')} IQD
-        </span>
+    <div class="mb-1 rounded" style="background:rgba(255,255,255,0.05)" id="catalog-row-${p.id}">
+      <div class="d-flex align-items-center justify-content-between py-2 px-3">
+        <div id="catalog-view-${p.id}" class="d-flex align-items-center gap-3 flex-grow-1">
+          <span style="flex:1">${esc(p.name)}</span>
+          <span class="badge bg-success" style="min-width:90px;text-align:center">
+            ${Number(p.unit_price).toLocaleString('ar-IQ')} IQD
+          </span>
+        </div>
+        <div id="catalog-edit-${p.id}" class="d-none d-flex align-items-center gap-2 flex-grow-1">
+          <input type="text" class="form-control form-control-sm" id="cedit-name-${p.id}"
+                 value="${esc(p.name)}" style="flex:1">
+          <input type="number" class="form-control form-control-sm" id="cedit-price-${p.id}"
+                 value="${p.unit_price}" style="width:110px" min="0">
+          <button class="btn btn-sm btn-success" onclick="catalogSaveEdit('${p.id}')">✔</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="catalogCancelEdit('${p.id}')">✕</button>
+        </div>
+        <div class="ms-2 d-flex gap-1" id="catalog-actions-${p.id}">
+          <button class="btn btn-sm btn-outline-info" onclick="catalogToggleImages('${p.id}')" title="صور المرجعية">
+            <i class="fas fa-images"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-warning" onclick="catalogStartEdit('${p.id}')">
+            <i class="fas fa-pen"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-danger" onclick="catalogDelete('${p.id}')">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
       </div>
-      <div id="catalog-edit-${p.id}" class="d-none d-flex align-items-center gap-2 flex-grow-1">
-        <input type="text" class="form-control form-control-sm" id="cedit-name-${p.id}"
-               value="${esc(p.name)}" style="flex:1">
-        <input type="number" class="form-control form-control-sm" id="cedit-price-${p.id}"
-               value="${p.unit_price}" style="width:110px" min="0">
-        <button class="btn btn-sm btn-success" onclick="catalogSaveEdit('${p.id}')">✔</button>
-        <button class="btn btn-sm btn-outline-secondary" onclick="catalogCancelEdit('${p.id}')">✕</button>
-      </div>
-      <div class="ms-2 d-flex gap-1" id="catalog-actions-${p.id}">
-        <button class="btn btn-sm btn-outline-warning" onclick="catalogStartEdit('${p.id}')">
-          <i class="fas fa-pen"></i>
-        </button>
-        <button class="btn btn-sm btn-outline-danger" onclick="catalogDelete('${p.id}')">
-          <i class="fas fa-trash"></i>
+      <!-- Reference images panel (hidden by default) -->
+      <div id="catalog-imgs-${p.id}" style="display:none" class="px-3 pb-3">
+        <div class="d-flex flex-wrap gap-2 align-items-center" id="catalog-imgs-wrap-${p.id}">
+          <div class="text-muted small"><i class="fas fa-spinner fa-spin"></i></div>
+        </div>
+        <button class="btn btn-sm btn-outline-info mt-2" onclick="catalogAddProdImg('${p.id}')">
+          <i class="fas fa-camera me-1"></i>إضافة صورة مرجعية
         </button>
       </div>
     </div>`).join('');
@@ -4247,6 +4260,131 @@ async function catalogDelete(id) {
     await api('DELETE', `/market/products/${id}`);
     _catalogProducts = _catalogProducts.filter(p => p.id !== id);
     _renderCatalogList(_catalogProducts);
+    toast('تم الحذف');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+// ── Catalog: reference images per product ─────────────────────
+let _catalogImgTarget = null;   // product id currently being targeted for upload
+const _catalogImgsLoaded = {};  // set of product ids whose images were already fetched
+
+async function catalogToggleImages(productId) {
+  const panel = document.getElementById(`catalog-imgs-${productId}`);
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : '';
+  if (!isOpen && !_catalogImgsLoaded[productId]) {
+    await _loadProductImages(productId);
+  }
+}
+
+async function _loadProductImages(productId) {
+  const wrap = document.getElementById(`catalog-imgs-wrap-${productId}`);
+  if (!wrap) return;
+  try {
+    const imgs = await api('GET', `/market/products/${productId}/images`);
+    _catalogImgsLoaded[productId] = true;
+    _renderProductImages(productId, imgs);
+  } catch(e) {
+    wrap.innerHTML = `<span class="text-danger small">${esc(e.message)}</span>`;
+  }
+}
+
+function _renderProductImages(productId, imgs) {
+  const wrap = document.getElementById(`catalog-imgs-wrap-${productId}`);
+  if (!wrap) return;
+  if (!imgs.length) {
+    wrap.innerHTML = '<span class="text-muted small">لا توجد صور مرجعية بعد</span>';
+    return;
+  }
+  wrap.innerHTML = imgs.map(img => `
+    <div style="position:relative;display:inline-block">
+      <img src="${img.data_url}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #444;cursor:pointer"
+           onclick="_previewProdImg('${img.data_url}')" title="اضغط للمعاينة">
+      <button class="btn btn-sm btn-danger"
+              style="position:absolute;top:-6px;right:-6px;padding:0 4px;font-size:.7rem;line-height:1.4;border-radius:50%"
+              onclick="catalogDeleteProdImg('${productId}','${img.id}')">✕</button>
+    </div>`).join('');
+}
+
+function _previewProdImg(dataUrl) {
+  // Reuse catalog scan preview mechanism: open a lightbox
+  let modal = document.getElementById('_prod-img-lightbox');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = '_prod-img-lightbox';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center';
+    modal.onclick = () => modal.remove();
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `<img src="${dataUrl}" style="max-width:92vw;max-height:88vh;border-radius:10px;touch-action:none">`;
+  document.body.appendChild(modal);
+  initProdImgLightboxZoom(modal.querySelector('img'));
+}
+
+function initProdImgLightboxZoom(img) {
+  let scale = 1, pinching = false, startDist = 0, startScale = 1;
+  img.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      pinching = true;
+      startDist  = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      startScale = scale; img.style.transition='none'; e.preventDefault();
+    }
+  }, {passive:false});
+  img.addEventListener('touchmove', e => {
+    if (pinching && e.touches.length === 2) {
+      const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      scale = Math.min(Math.max(startScale*(d/startDist), 1), 5);
+      img.style.transform = `scale(${scale})`; e.preventDefault();
+    }
+  }, {passive:false});
+  img.addEventListener('touchend', () => { pinching = false; img.style.transition='transform .2s'; });
+}
+
+function catalogAddProdImg(productId) {
+  _catalogImgTarget = productId;
+  const inp = document.getElementById('catalog-prod-img-input');
+  inp.removeAttribute('capture');
+  inp.click();
+}
+
+async function _catalogProdImgSelected(ev) {
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file || !_catalogImgTarget) return;
+  const productId = _catalogImgTarget;
+  _catalogImgTarget = null;
+  const wrap = document.getElementById(`catalog-imgs-wrap-${productId}`);
+  const origHTML = wrap ? wrap.innerHTML : '';
+  if (wrap) wrap.innerHTML = '<div class="text-muted small"><i class="fas fa-spinner fa-spin me-1"></i>جاري الرفع…</div>';
+  try {
+    const fd = new FormData();
+    fd.append('image', file, file.name);
+    const resp = await fetch((window.API_BASE || '/api/v1') + `/market/products/${productId}/images`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + S.token },
+      body: fd,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || 'فشل الرفع');
+    }
+    // Reload images for this product
+    delete _catalogImgsLoaded[productId];
+    await _loadProductImages(productId);
+    toast('تمت إضافة الصورة المرجعية ✅');
+  } catch(e) {
+    if (wrap) wrap.innerHTML = origHTML;
+    toast(e.message, 'err');
+  }
+}
+
+async function catalogDeleteProdImg(productId, imgId) {
+  if (!confirm('حذف هذه الصورة المرجعية؟')) return;
+  try {
+    await api('DELETE', `/market/products/${productId}/images/${imgId}`);
+    delete _catalogImgsLoaded[productId];
+    await _loadProductImages(productId);
     toast('تم الحذف');
   } catch(e) { toast(e.message, 'err'); }
 }

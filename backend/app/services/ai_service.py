@@ -1099,12 +1099,16 @@ def _normalize_product_key(name: str) -> str:
 async def extract_price_list_from_image(
     image_bytes: bytes,
     mime_type: str,
+    known_products: list[str] | None = None,
 ) -> "tuple[list[dict], str]":
     """Extract product catalog entries (name + price) from a price-list / shelf photo.
 
     Returns (items, raw_response) where items is a list of {name, unit_price}.
     Used by the product-catalog import endpoint — completely separate from the
     customer-invoice analysis flow.
+
+    ``known_products``: existing catalog product names — included in the AI
+    prompt so the model can match names exactly instead of guessing spelling.
     """
     import base64
     import io as _io
@@ -1143,6 +1147,15 @@ async def extract_price_list_from_image(
 
     b64 = base64.b64encode(image_bytes).decode("utf-8")
 
+    # Build catalog hint section
+    catalog_hint = ""
+    if known_products:
+        names_str = "، ".join(known_products[:100])  # cap at 100 to avoid token bloat
+        catalog_hint = (
+            "\n\nKnown products already in this store's catalog (use the EXACT same spelling "
+            "if you recognise them in the image):\n" + names_str
+        )
+
     PROMPT = (
         "You are a price-list extraction assistant for an Iraqi market app.\n"
         "Look at the image and extract EVERY product name + price you can see.\n"
@@ -1153,6 +1166,7 @@ async def extract_price_list_from_image(
         "- name: clean Arabic/English product name.\n"
         "- unit_price: numeric only (no currency symbol). Use 0 if price not visible.\n"
         "- Return ONLY the JSON array, no explanation."
+        + catalog_hint
     )
 
     raw = ""

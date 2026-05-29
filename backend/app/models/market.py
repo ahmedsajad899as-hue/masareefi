@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, Integer, Numeric, Text, ForeignKey, func, Uuid, JSON
+from sqlalchemy import String, Boolean, DateTime, Integer, Numeric, Text, ForeignKey, func, Uuid, JSON, LargeBinary
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -155,4 +155,29 @@ class MarketProduct(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    market_owner: Mapped["User"] = relationship("User", foreign_keys=[market_owner_id])
+    images: Mapped[list["ProductImage"]] = relationship(
+        "ProductImage", back_populates="product", cascade="all, delete-orphan"
+    )
+
+
+class ProductImage(Base):
+    """Reference photos for a catalog product — used for visual identification.
+
+    Images are compressed to ≤512 px JPEG at quality 65 before storage.
+    Each product may hold up to 5 reference images.
+    """
+    __tablename__ = "product_images"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(), ForeignKey("market_products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    market_owner_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    image_data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    product: Mapped["MarketProduct"] = relationship("MarketProduct", back_populates="images")
     market_owner: Mapped["User"] = relationship("User", foreign_keys=[market_owner_id])

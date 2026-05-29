@@ -192,6 +192,16 @@ class MarketProductOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ProductImageOut(BaseModel):
+    """One reference image for a catalog product."""
+    id: uuid.UUID
+    product_id: uuid.UUID
+    data_url: str          # data:image/jpeg;base64,...
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class CatalogScanItem(BaseModel):
     """One product extracted from a photo scan — returned as preview before save."""
     name: str
