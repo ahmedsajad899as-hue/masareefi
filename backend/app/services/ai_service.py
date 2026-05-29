@@ -1187,6 +1187,8 @@ def _parse_catalog_json(raw: str) -> list[dict]:
         out.append({"name": name, "unit_price": round(price, 2)})
     return out
 
+
+async def analyze_image_for_market_items(
     image_bytes: bytes,
     mime_type: str,
     known_products: "list[str] | list[dict] | None" = None,
