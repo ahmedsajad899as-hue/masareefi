@@ -4554,17 +4554,16 @@ function customCamCapture() {
   const video   = document.getElementById('custom-cam-video');
   const shutter = document.getElementById('custom-cam-shutter');
   shutter.disabled = true;
+  // Save callback BEFORE closing (customCamClose nulls _customCamCallback)
+  const cb = _customCamCallback;
+  _customCamCallback = null;
   const canvas  = document.createElement('canvas');
   canvas.width  = video.videoWidth  || 1280;
   canvas.height = video.videoHeight || 720;
   canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
   canvas.toBlob(blob => {
     customCamClose();
-    if (_customCamCallback && blob) {
-      const cb = _customCamCallback;
-      _customCamCallback = null;
-      cb(new File([blob], 'camera.jpg', { type: 'image/jpeg' }));
-    }
+    if (cb && blob) cb(new File([blob], 'camera.jpg', { type: 'image/jpeg' }));
   }, 'image/jpeg', 0.9);
 }
 
