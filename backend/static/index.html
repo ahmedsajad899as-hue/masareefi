@@ -1455,7 +1455,7 @@
       <div class="glass-card p-3 mb-3">
         <input type="file" id="checkout-file" accept="image/*" capture="environment" style="display:none" onchange="checkoutFileSelected(event)">
         <div class="d-flex gap-2 mb-3">
-          <button class="btn btn-success flex-grow-1" onclick="document.getElementById('checkout-file').click()">
+          <button class="btn btn-success flex-grow-1" onclick="checkoutOpenCamera()">
             <i class="fas fa-camera me-2"></i>صور الأغراض بالكاميرا (AI)
           </button>
           <button class="btn btn-outline-warning" onclick="checkoutAddItem()" title="إضافة سطر يدوياً">
@@ -2633,6 +2633,19 @@
   });
 })();
 </script>
+
+<!-- ── Custom In-Browser Camera (bypass native "Use Photo" dialog) ── -->
+<div id="custom-cam-wrap" style="display:none;position:fixed;inset:0;z-index:9980;background:#000;flex-direction:column">
+  <video id="custom-cam-video" autoplay playsinline muted
+         style="flex:1;width:100%;height:100%;object-fit:cover;display:block"></video>
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:20px 0 36px;display:flex;flex-direction:column;align-items:center;gap:14px;background:linear-gradient(transparent,rgba(0,0,0,.6))">
+    <div id="custom-cam-label" style="color:#fff;font-size:.88rem;background:rgba(0,0,0,.45);padding:3px 18px;border-radius:20px"></div>
+    <button id="custom-cam-shutter" onclick="customCamCapture()"
+            style="width:70px;height:70px;border-radius:50%;background:#fff;border:5px solid rgba(255,255,255,.55);box-shadow:0 0 0 4px rgba(0,0,0,.35);cursor:pointer;outline:none;-webkit-tap-highlight-color:transparent;flex-shrink:0"></button>
+    <button onclick="customCamClose()"
+            style="color:#fff;background:transparent;border:1px solid rgba(255,255,255,.4);border-radius:20px;padding:7px 28px;font-size:.9rem;cursor:pointer">إلغاء</button>
+  </div>
+</div>
 
 </body>
 </html>

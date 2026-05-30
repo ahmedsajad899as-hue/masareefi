@@ -3046,8 +3046,10 @@ function openVisionModal(customerId) {
       visionLoadCustomers();
     }
   }
-  // Open camera directly
-  document.getElementById('vision-file').click();
+  // Open camera — use in-browser camera to bypass native "Use Photo" confirmation
+  openCustomCamera('تصوير الفاتورة', 'vision-file', file => {
+    if (file) visionFileSelectedDirect(file);
+  });
 }
 
 async function visionLoadCustomers() {
@@ -3091,7 +3093,12 @@ function visionPickFile() { document.getElementById('vision-file').click(); }
 
 async function visionFileSelected(ev) {
   const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
   if (!file) return;
+  await visionFileSelectedDirect(file);
+}
+
+async function visionFileSelectedDirect(file) {
   if (!/^image\//.test(file.type)) { toast('يرجى اختيار صورة', 'err'); return; }
   if (file.size > 20 * 1024 * 1024) { toast('حجم الصورة كبير (الحد 20MB)', 'err'); return; }
   // Show modal now that we have a photo
@@ -3807,6 +3814,18 @@ function checkoutToggleWalkin() {
 
 function checkoutFileSelected(ev) {
   const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  checkoutFileSelectedDirect(file);
+}
+
+function checkoutOpenCamera() {
+  openCustomCamera('تصوير الفاتورة', 'checkout-file', file => {
+    if (file) checkoutFileSelectedDirect(file);
+  });
+}
+
+function checkoutFileSelectedDirect(file) {
   if (!file) return;
   document.getElementById('checkout-preview').src = URL.createObjectURL(file);
   document.getElementById('checkout-img-wrap').style.display = '';
@@ -3846,7 +3865,6 @@ function checkoutFileSelected(ev) {
         statusEl.innerHTML = `<div class="alert alert-danger py-1 small">خطأ في تحليل الصورة: ${e.message || ''}</div>`;
       });
   });
-  ev.target.value = '';
 }
 
 function checkoutRenderItems() {
@@ -4401,17 +4419,24 @@ function catalogScanPhoto(mode) {
   _catalogScanItems = [];
   const inp = document.getElementById('catalog-file-input');
   if (mode === 'camera') {
-    inp.setAttribute('capture', 'environment');
+    // Use in-browser camera to bypass native "Use Photo" dialog
+    openCustomCamera('مسح قائمة الأسعار', 'catalog-file-input', file => {
+      if (file) catalogFileSelectedDirect(file);
+    });
   } else {
     inp.removeAttribute('capture');
+    inp.click();
   }
-  inp.click();
 }
 
 async function catalogFileSelected(ev) {
   const file = ev.target.files[0];
   ev.target.value = '';
   if (!file) return;
+  await catalogFileSelectedDirect(file);
+}
+
+async function catalogFileSelectedDirect(file) {
   // Show image preview immediately
   const prevImg  = document.getElementById('catalog-scan-preview');
   const prevWrap = document.getElementById('catalog-scan-img-wrap');
@@ -4484,6 +4509,72 @@ async function catalogConfirmScan() {
     _renderCatalogList(_catalogProducts);
     toast(`تم حفظ ${saved.length} منتج في الكتالوج ✅`);
   } catch(e) { toast(e.message, 'err'); }
+}
+
+// ── Custom In-Browser Camera ─────────────────────────────────────────────────
+// Uses getUserMedia so the user never sees the native "Use Photo / Retake" dialog.
+// Falls back to native <input capture> if getUserMedia is unavailable.
+let _customCamStream   = null;
+let _customCamCallback = null;
+
+async function openCustomCamera(label, fallbackInputId, callback) {
+  _customCamCallback = callback;
+  const wrap    = document.getElementById('custom-cam-wrap');
+  const video   = document.getElementById('custom-cam-video');
+  const labelEl = document.getElementById('custom-cam-label');
+  if (labelEl) labelEl.textContent = label || '';
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return _customCamFallback(fallbackInputId);
+  }
+  try {
+    _customCamStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false,
+    });
+    video.srcObject = _customCamStream;
+    wrap.style.display = 'flex';
+    document.getElementById('custom-cam-shutter').disabled = false;
+  } catch(e) {
+    _customCamStream   = null;
+    _customCamCallback = null;
+    _customCamFallback(fallbackInputId);
+  }
+}
+
+function _customCamFallback(inputId) {
+  const inp = inputId && document.getElementById(inputId);
+  if (inp) {
+    inp.setAttribute('capture', 'environment');
+    inp.click();
+  }
+}
+
+function customCamCapture() {
+  const video   = document.getElementById('custom-cam-video');
+  const shutter = document.getElementById('custom-cam-shutter');
+  shutter.disabled = true;
+  const canvas  = document.createElement('canvas');
+  canvas.width  = video.videoWidth  || 1280;
+  canvas.height = video.videoHeight || 720;
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  canvas.toBlob(blob => {
+    customCamClose();
+    if (_customCamCallback && blob) {
+      const cb = _customCamCallback;
+      _customCamCallback = null;
+      cb(new File([blob], 'camera.jpg', { type: 'image/jpeg' }));
+    }
+  }, 'image/jpeg', 0.9);
+}
+
+function customCamClose() {
+  if (_customCamStream) {
+    _customCamStream.getTracks().forEach(t => t.stop());
+    _customCamStream = null;
+  }
+  document.getElementById('custom-cam-wrap').style.display = 'none';
+  _customCamCallback = null;
 }
 
 // ── Catalog image pinch-zoom ────────────────────────────────
