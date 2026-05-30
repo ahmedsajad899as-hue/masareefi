@@ -3101,11 +3101,10 @@ async function visionFileSelected(ev) {
 async function visionFileSelectedDirect(file) {
   if (!/^image\//.test(file.type)) { toast('يرجى اختيار صورة', 'err'); return; }
   if (file.size > 20 * 1024 * 1024) { toast('حجم الصورة كبير (الحد 20MB)', 'err'); return; }
-  // Show modal now that we have a photo
+  // Show modal now that we have a photo — always call show() to handle re-opens
   const modalEl = document.getElementById('visionModal');
-  if (!bootstrap.Modal.getInstance(modalEl)) {
-    new bootstrap.Modal(modalEl).show();
-  }
+  const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+  modal.show();
   const reader = new FileReader();
   reader.onload = e => {
     const img = document.getElementById('vision-preview');
