@@ -3047,7 +3047,7 @@ function openVisionModal(customerId) {
     }
   }
   // Open camera — use in-browser camera to bypass native "Use Photo" confirmation
-  openCustomCamera('تصوير الفاتورة', 'vision-file', file => {
+  openCustomCamera('صوّر المنتجات لاستخراج الأسماء والسعر', 'vision-file', file => {
     if (file) visionFileSelectedDirect(file);
   });
 }
@@ -3820,7 +3820,7 @@ function checkoutFileSelected(ev) {
 }
 
 function checkoutOpenCamera() {
-  openCustomCamera('تصوير الفاتورة', 'checkout-file', file => {
+  openCustomCamera('صوّر المنتجات لتعبئة الفاتورة', 'checkout-file', file => {
     if (file) checkoutFileSelectedDirect(file);
   });
 }
