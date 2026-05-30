@@ -3,7 +3,7 @@ import base64
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -127,21 +127,42 @@ async def analyze_image(
             for p in catalog_products
             if p.name
         }
-        # Load one reference image per product (most recent), cap at 10 total
-        for prod in catalog_products:
-            if len(catalog_ref_images) >= 10:
-                break
-            img_row = (await db.execute(
+
+        # Load ONE reference image per product in a SINGLE query (avoids N+1).
+        # Use a subquery to get only the most-recent image per product.
+        # Cap at 5 products to keep AI payload small and analysis fast.
+        REF_IMAGE_CAP = 5
+        product_ids = [p.id for p in catalog_products]
+        if product_ids:
+            # Subquery: latest created_at per product_id
+            latest_sub = (
+                select(
+                    ProductImage.product_id,
+                    func.max(ProductImage.created_at).label("max_ts"),
+                )
+                .where(ProductImage.product_id.in_(product_ids))
+                .group_by(ProductImage.product_id)
+                .subquery()
+            )
+            imgs_result = await db.execute(
                 select(ProductImage)
-                .where(ProductImage.product_id == prod.id)
-                .order_by(ProductImage.created_at.desc())
-                .limit(1)
-            )).scalar_one_or_none()
-            if img_row:
-                catalog_ref_images.append({
-                    "name": prod.name,
-                    "b64": base64.b64encode(img_row.image_data).decode(),
-                })
+                .join(
+                    latest_sub,
+                    (ProductImage.product_id == latest_sub.c.product_id)
+                    & (ProductImage.created_at == latest_sub.c.max_ts),
+                )
+                .limit(REF_IMAGE_CAP)
+            )
+            img_by_product = {row.product_id: row for row in imgs_result.scalars().all()}
+
+            prod_by_id = {p.id: p for p in catalog_products}
+            for pid, img_row in img_by_product.items():
+                prod = prod_by_id.get(pid)
+                if prod and prod.name:
+                    catalog_ref_images.append({
+                        "name": prod.name,
+                        "b64": base64.b64encode(img_row.image_data).decode(),
+                    })
 
     items_data, raw = await analyze_image_for_market_items(
         image_bytes,
