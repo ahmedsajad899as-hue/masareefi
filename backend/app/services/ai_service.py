@@ -1290,7 +1290,7 @@ async def analyze_image_for_market_items(
     image_bytes: bytes,
     mime_type: str,
     known_products: "list[str] | list[dict] | None" = None,
-    catalog_ref_images: "list[dict] | None" = None,
+    catalog_ref_images: "list[dict] | None" = None,  # kept for API compat, no longer used
 ) -> "tuple[list[dict], str]":
     """
     Use GPT-4o vision (preferred) or Gemini 1.5 Flash (fallback) to identify products.
@@ -1299,9 +1299,8 @@ async def analyze_image_for_market_items(
       - a list of strings (legacy)  — just product names previously sold, OR
       - a list of dicts             — {name, last_price, avg_price, count}.
 
-    `catalog_ref_images`: optional list of {name: str, b64: str} — compressed
-    reference photos of catalog products to help the AI identify them visually.
-    Capped at 10 images to manage token cost.
+    Catalog product names are included as a text hint so the AI can match them
+    without the overhead of transmitting reference images.
 
     When the dict form is supplied, the function will:
       1. Tell the model the owner's previously-charged price (so it learns).
@@ -1383,24 +1382,14 @@ async def analyze_image_for_market_items(
     if has_openai:
         data_url = f"data:{mime_type};base64,{b64}"
         try:
-            # Build message content: main photo first, then optional reference images
-            msg_content: list[dict] = [
-                {"type": "image_url", "image_url": {"url": data_url, "detail": "low"}},
-            ]
-            if catalog_ref_images:
-                msg_content.append({"type": "text", "text": "صور مرجعية لمنتجات معروفة في هذا المحل (استخدمها للمطابقة البصرية):"})
-                for ref in catalog_ref_images[:10]:
-                    msg_content.append({
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{ref['b64']}", "detail": "low"},
-                    })
-                    msg_content.append({"type": "text", "text": f"↑ المنتج: {ref['name']}"})
-            msg_content.append({"type": "text", "text": user_text})
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",  # faster + cheaper, plenty good for shop photos
                 messages=[
                     {"role": "system", "content": VISION_SYSTEM_PROMPT},
-                    {"role": "user", "content": msg_content},
+                    {"role": "user", "content": [
+                        {"type": "image_url", "image_url": {"url": data_url, "detail": "low"}},
+                        {"type": "text", "text": user_text},
+                    ]},
                 ],
                 temperature=0.1,
                 max_tokens=900,
@@ -1434,9 +1423,10 @@ async def analyze_image_for_market_items(
             "systemInstruction": {"parts": [{"text": VISION_SYSTEM_PROMPT}]},
             "contents": [
                 {
-                    "parts": _build_gemini_parts(
-                        mime_type, b64, user_text, catalog_ref_images
-                    )
+                    "parts": [
+                        {"inline_data": {"mime_type": mime_type, "data": b64}},
+                        {"text": user_text},
+                    ]
                 }
             ],
             "generationConfig": {

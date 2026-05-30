@@ -1,13 +1,11 @@
 """Market vision router — analyze product images via GPT-4o vision."""
-import base64
-
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.market import MarketSale, MarketSaleItem, MarketProduct, ProductImage
+from app.models.market import MarketSale, MarketSaleItem, MarketProduct
 from app.models.user import User
 from app.services.ai_service import analyze_image_for_market_items, _normalize_product_key
 from app.utils.dependencies import get_current_market_owner
@@ -111,10 +109,11 @@ async def analyze_image(
 
     known = await _load_owner_product_history(db, current_user.id)
 
-    # ── Catalog price override + visual reference images ──────────────────────
-    # Kill switch: only active when use_product_catalog is ON.
-    # When OFF: zero code-path change — identical to pre-catalog behavior.
-    catalog_ref_images: list[dict] = []
+    # ── Catalog price override ────────────────────────────────────────────────
+    # When use_product_catalog is ON: load catalog products, inject their names
+    # as text hints into known_products (AI uses them for name matching), and
+    # override prices after analysis. No images sent to AI — text hints are
+    # equally effective and much faster.
     catalog_price_map: dict[str, float] = {}
 
     if current_user.use_product_catalog:
@@ -127,51 +126,23 @@ async def analyze_image(
             for p in catalog_products
             if p.name
         }
-
-        # Load ONE reference image per product in a SINGLE query (avoids N+1).
-        # Use a subquery to get only the most-recent image per product.
-        # Cap at 5 products to keep AI payload small and analysis fast.
-        REF_IMAGE_CAP = 5
-        product_ids = [p.id for p in catalog_products]
-        if product_ids:
-            # Subquery: latest created_at per product_id
-            latest_sub = (
-                select(
-                    ProductImage.product_id,
-                    func.max(ProductImage.created_at).label("max_ts"),
-                )
-                .where(ProductImage.product_id.in_(product_ids))
-                .group_by(ProductImage.product_id)
-                .subquery()
-            )
-            imgs_result = await db.execute(
-                select(ProductImage)
-                .join(
-                    latest_sub,
-                    (ProductImage.product_id == latest_sub.c.product_id)
-                    & (ProductImage.created_at == latest_sub.c.max_ts),
-                )
-                .limit(REF_IMAGE_CAP)
-            )
-            img_by_product = {row.product_id: row for row in imgs_result.scalars().all()}
-
-            prod_by_id = {p.id: p for p in catalog_products}
-            for pid, img_row in img_by_product.items():
-                prod = prod_by_id.get(pid)
-                if prod and prod.name:
-                    catalog_ref_images.append({
-                        "name": prod.name,
-                        "b64": base64.b64encode(img_row.image_data).decode(),
-                    })
+        # Merge catalog names+prices into known_products as dict entries so the
+        # AI sees them as authoritative prices (catalog price takes priority).
+        catalog_known = [
+            {"name": p.name, "last_price": float(p.unit_price), "avg_price": float(p.unit_price), "count": 1}
+            for p in catalog_products
+            if p.name
+        ]
+        # Prepend catalog entries so they appear first in the AI prompt
+        known = catalog_known + [k for k in known if _normalize_product_key(k.get("name","")) not in catalog_price_map]
 
     items_data, raw = await analyze_image_for_market_items(
         image_bytes,
         content_type,
         known_products=known,
-        catalog_ref_images=catalog_ref_images or None,
     )
 
-    # Apply catalog price overrides
+    # Apply catalog price overrides (belt-and-suspenders after AI name match)
     if catalog_price_map:
         for item in items_data:
             key = _normalize_product_key(item.get("product_name", ""))
