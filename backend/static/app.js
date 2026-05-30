@@ -4576,23 +4576,37 @@ let _customCamStream   = null;
 let _customCamCallback = null;
 
 async function openCustomCamera(label, fallbackInputId, callback) {
-  _customCamCallback = callback;
+  // Always clean up any previous stream before starting a new one
+  _customCamCallback = null;
+  if (_customCamStream) {
+    _customCamStream.getTracks().forEach(t => t.stop());
+    _customCamStream = null;
+  }
+
   const wrap    = document.getElementById('custom-cam-wrap');
   const video   = document.getElementById('custom-cam-video');
   const labelEl = document.getElementById('custom-cam-label');
+
+  // Reset video element so stale stream doesn't persist
+  video.srcObject = null;
+  wrap.style.display = 'none';
+
   if (labelEl) labelEl.textContent = label || '';
 
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     return _customCamFallback(fallbackInputId);
   }
   try {
-    _customCamStream = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
       audio: false,
     });
-    video.srcObject = _customCamStream;
-    wrap.style.display = 'flex';
+    _customCamStream   = stream;
+    _customCamCallback = callback;   // set AFTER stream acquired
+    video.srcObject    = stream;
+    await video.play().catch(() => {}); // ensure playback starts
     document.getElementById('custom-cam-shutter').disabled = false;
+    wrap.style.display = 'flex';
   } catch(e) {
     _customCamStream   = null;
     _customCamCallback = null;
