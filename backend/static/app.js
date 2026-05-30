@@ -4220,8 +4220,11 @@ function _renderCatalogList(items) {
         <div class="d-flex flex-wrap gap-2 align-items-center" id="catalog-imgs-wrap-${p.id}">
           <div class="text-muted small"><i class="fas fa-spinner fa-spin"></i></div>
         </div>
-        <button class="btn btn-sm btn-outline-info mt-2" onclick="catalogAddProdImg('${p.id}')">
-          <i class="fas fa-camera me-1"></i>إضافة صورة مرجعية
+        <button class="btn btn-sm btn-outline-info mt-2 me-1" onclick="catalogAddProdImgCamera('${p.id}')">
+          <i class="fas fa-camera me-1"></i>التقاط صورة
+        </button>
+        <button class="btn btn-sm btn-outline-secondary mt-2" onclick="catalogAddProdImgGallery('${p.id}')">
+          <i class="fas fa-images me-1"></i>من الاستوديو
         </button>
       </div>
     </div>`).join('');
@@ -4359,42 +4362,85 @@ function initProdImgLightboxZoom(img) {
   img.addEventListener('touchend', () => { pinching = false; img.style.transition='transform .2s'; });
 }
 
-function catalogAddProdImg(productId) {
+// ── Upload helper: upload multiple files as reference images for a product ──
+async function _uploadRefImages(productId, files) {
+  if (!files || !files.length) return;
+  const wrap    = document.getElementById(`catalog-imgs-wrap-${productId}`);
+  const origHTML = wrap ? wrap.innerHTML : '';
+  if (wrap) wrap.innerHTML = '<div class="text-muted small"><i class="fas fa-spinner fa-spin me-1"></i>جاري رفع الصور…</div>';
+  let uploaded = 0, failed = 0;
+  for (const file of Array.from(files)) {
+    try {
+      const fd = new FormData();
+      fd.append('image', file, file.name || 'ref.jpg');
+      const resp = await fetch((window.API_BASE || '/api/v1') + `/market/products/${productId}/images`, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + S.token },
+        body: fd,
+      });
+      if (!resp.ok) { failed++; continue; }
+      uploaded++;
+    } catch { failed++; }
+  }
+  delete _catalogImgsLoaded[productId];
+  await _loadProductImages(productId);
+  if (failed) toast(`تم رفع ${uploaded} صورة، فشل ${failed}`, 'err');
+  else toast(`تمت إضافة ${uploaded} صورة مرجعية ✅`);
+}
+
+// ── Camera: loop mode — keep camera open, add each capture to queue, then upload all ──
+let _catalogCamImgTarget = null;
+let _catalogCamQueue = [];
+
+function catalogAddProdImgCamera(productId) {
+  _catalogCamImgTarget = productId;
+  _catalogCamQueue     = [];
+  _startCatalogCamLoop();
+}
+
+function _startCatalogCamLoop() {
+  const count = _catalogCamQueue.length;
+  const label = count === 0
+    ? 'التقط صورة مرجعية (اضغط الكاميرا لصورة أخرى، إلغاء للرفع)'
+    : `تمت ${count} صورة — التقط المزيد أو اضغط إلغاء للرفع`;
+  // Use custom camera but intercept "cancel" to trigger upload
+  openCustomCamera(label, null, async file => {
+    if (!file) {
+      // getUserMedia unavailable — fallback to gallery multi-select
+      catalogAddProdImgGallery(_catalogCamImgTarget);
+      return;
+    }
+    _catalogCamQueue.push(file);
+    // Re-open for another shot
+    _startCatalogCamLoop();
+  });
+  // Register close/cancel hook: upload queued images
+  window._customCamOnClose = () => {
+    const pid = _catalogCamImgTarget;
+    const q   = _catalogCamQueue.slice();
+    _catalogCamImgTarget = null;
+    _catalogCamQueue     = [];
+    if (q.length && pid) _uploadRefImages(pid, q);
+  };
+}
+
+function catalogAddProdImgGallery(productId) {
   _catalogImgTarget = productId;
   const inp = document.getElementById('catalog-prod-img-input');
   inp.removeAttribute('capture');
   inp.click();
 }
 
+// legacy alias kept for any inline HTML that may still call it
+function catalogAddProdImg(productId) { catalogAddProdImgGallery(productId); }
+
 async function _catalogProdImgSelected(ev) {
-  const file = ev.target.files[0];
+  const files = ev.target.files;
   ev.target.value = '';
-  if (!file || !_catalogImgTarget) return;
+  if (!files || !files.length || !_catalogImgTarget) return;
   const productId = _catalogImgTarget;
   _catalogImgTarget = null;
-  const wrap = document.getElementById(`catalog-imgs-wrap-${productId}`);
-  const origHTML = wrap ? wrap.innerHTML : '';
-  if (wrap) wrap.innerHTML = '<div class="text-muted small"><i class="fas fa-spinner fa-spin me-1"></i>جاري الرفع…</div>';
-  try {
-    const fd = new FormData();
-    fd.append('image', file, file.name);
-    const resp = await fetch((window.API_BASE || '/api/v1') + `/market/products/${productId}/images`, {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + S.token },
-      body: fd,
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.detail || 'فشل الرفع');
-    }
-    // Reload images for this product
-    delete _catalogImgsLoaded[productId];
-    await _loadProductImages(productId);
-    toast('تمت إضافة الصورة المرجعية ✅');
-  } catch(e) {
-    if (wrap) wrap.innerHTML = origHTML;
-    toast(e.message, 'err');
-  }
+  await _uploadRefImages(productId, files);
 }
 
 async function catalogDeleteProdImg(productId, imgId) {
@@ -4508,6 +4554,18 @@ async function catalogConfirmScan() {
     document.getElementById('catalog-scan-section').style.display = 'none';
     _renderCatalogList(_catalogProducts);
     toast(`تم حفظ ${saved.length} منتج في الكتالوج ✅`);
+
+    // Auto-save the scan image as reference for all saved products
+    const prevImg = document.getElementById('catalog-scan-preview');
+    if (prevImg && prevImg.src && prevImg.src !== window.location.href) {
+      try {
+        const blob = await fetch(prevImg.src).then(r => r.blob());
+        const scanFile = new File([blob], 'scan-ref.jpg', { type: blob.type || 'image/jpeg' });
+        for (const p of saved) {
+          await _uploadRefImages(p.id, [scanFile]).catch(() => {});
+        }
+      } catch { /* non-critical */ }
+    }
   } catch(e) { toast(e.message, 'err'); }
 }
 
@@ -4557,6 +4615,8 @@ function customCamCapture() {
   // Save callback BEFORE closing (customCamClose nulls _customCamCallback)
   const cb = _customCamCallback;
   _customCamCallback = null;
+  // Clear the close hook — capture is intentional, not a cancel
+  window._customCamOnClose = null;
   const canvas  = document.createElement('canvas');
   canvas.width  = video.videoWidth  || 1280;
   canvas.height = video.videoHeight || 720;
@@ -4574,6 +4634,12 @@ function customCamClose() {
   }
   document.getElementById('custom-cam-wrap').style.display = 'none';
   _customCamCallback = null;
+  // Run any registered close hook (e.g. catalog camera loop → upload queue)
+  if (typeof window._customCamOnClose === 'function') {
+    const hook = window._customCamOnClose;
+    window._customCamOnClose = null;
+    hook();
+  }
 }
 
 // ── Catalog image pinch-zoom ────────────────────────────────
