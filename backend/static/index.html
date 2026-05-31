@@ -1276,6 +1276,7 @@
       <div class="pg-head">
         <h2><i class="fas fa-users me-2 text-warning"></i>الزبائن والديون</h2>
         <div class="d-flex gap-2">
+          <button class="btn btn-purple btn-sm" onclick="openLiveVisionModal()" title="كاميرا مباشرة - تحليل مستمر" style="background:#7c3aed;border-color:#7c3aed"><i class="fas fa-video me-1"></i>لايف</button>
           <button class="btn btn-success btn-sm" onclick="openVisionModal(null)" title="فاتورة بالكاميرا"><i class="fas fa-camera me-1"></i>كاميرا</button>
           <button class="btn btn-warning btn-sm text-dark" onclick="openAddCustomerModal()"><i class="fas fa-user-plus me-1"></i>زبون جديد</button>
         </div>
@@ -1641,6 +1642,69 @@
     </div>
 
     <!-- ── Vision (Camera + AI) Modal ── -->
+    <!-- ── Live Vision Modal ── -->
+    <div class="modal fade" id="liveVisionModal" tabindex="-1" data-bs-backdrop="static">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background:#1e1e2e;color:#fff;border:1px solid #333">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title"><i class="fas fa-video me-2" style="color:#a78bfa"></i>كاميرا مباشرة (لايف)</h5>
+            <button type="button" class="btn-close btn-close-white" onclick="closeLiveVisionModal()"></button>
+          </div>
+          <div class="modal-body">
+            <!-- Camera preview -->
+            <div class="text-center mb-3 position-relative">
+              <video id="lv-video" autoplay playsinline muted style="width:100%;max-height:240px;border-radius:10px;border:1px solid #444;background:#000;display:none"></video>
+              <canvas id="lv-canvas" style="display:none"></canvas>
+              <div id="lv-cam-placeholder" class="d-flex align-items-center justify-content-center" style="height:180px;background:#111;border-radius:10px;border:1px solid #333">
+                <div class="text-center text-muted">
+                  <i class="fas fa-video fa-2x mb-2 d-block" style="color:#7c3aed"></i>
+                  <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="lvStartCamera()"><i class="fas fa-play me-1"></i>تشغيل الكاميرا</button>
+                </div>
+              </div>
+              <div id="lv-status-bar" style="display:none;position:absolute;bottom:8px;left:8px;right:8px;background:rgba(0,0,0,0.7);border-radius:20px;padding:6px 14px;font-size:12px">
+                <span id="lv-status-txt">جاهز...</span>
+                <span class="float-start text-muted" id="lv-counts"></span>
+              </div>
+            </div>
+            <!-- Customer picker -->
+            <div class="mb-3" id="lv-cust-row">
+              <label class="form-label small">الزبون <span class="text-danger">*</span></label>
+              <input type="text" id="lv-cust-search" class="form-control form-control-sm bg-dark text-white border-secondary mb-1" placeholder="ابحث باسم الزبون..." oninput="lvFilterCustomers()">
+              <select id="lv-cust-select" class="form-select form-select-sm bg-dark text-white border-secondary" size="4" onchange="lvPickCustomer(this.value)"></select>
+              <div class="small text-muted mt-1" id="lv-cust-hint">اختر زبون قبل الحفظ.</div>
+            </div>
+            <!-- Items table -->
+            <div class="table-responsive" style="max-height:220px;overflow-y:auto">
+              <table class="table table-sm table-dark table-borderless" style="table-layout:fixed;width:100%">
+                <thead><tr>
+                  <th style="font-size:13px">المنتج</th>
+                  <th style="width:48px;font-size:11px;text-align:center">كمية</th>
+                  <th style="width:80px;font-size:11px;text-align:center">السعر</th>
+                  <th style="width:28px"></th>
+                </tr></thead>
+                <tbody id="lv-items"></tbody>
+              </table>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2 mt-1">
+              <div class="small text-muted" id="lv-empty-hint">وجّه الكاميرا نحو المنتجات — سيُضاف تلقائياً</div>
+              <div>الإجمالي: <strong class="text-warning" id="lv-total">0</strong> د.ع</div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small">ملاحظة (اختياري)</label>
+              <input type="text" id="lv-notes" class="form-control bg-dark text-white border-secondary" placeholder="...">
+            </div>
+          </div>
+          <div class="modal-footer border-secondary">
+            <button class="btn btn-secondary" onclick="closeLiveVisionModal()">إغلاق</button>
+            <button class="btn btn-outline-danger btn-sm me-auto" onclick="lvClearItems()" id="lv-clear-btn" style="display:none">مسح الكل</button>
+            <button class="btn btn-success" id="lv-save-btn" onclick="lvSaveSale()" disabled>
+              <i class="fas fa-save me-1"></i>حفظ الفاتورة
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal fade" id="visionModal" tabindex="-1">
       <div class="modal-dialog modal-lg">
         <div class="modal-content" style="background:#1e1e2e;color:#fff;border:1px solid #333">

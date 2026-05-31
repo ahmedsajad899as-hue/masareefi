@@ -3274,9 +3274,254 @@ async function visionSaveSale() {
   finally { loading(false); }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ── Live Vision (continuous camera analysis) ─────────────────
+// ═══════════════════════════════════════════════════════════════
+let _lvStream = null;
+let _lvInterval = null;
+let _lvSessionId = null;
+let _lvItems = [];
+let _lvCustomerId = null;
+let _lvCustomers = [];
+let _lvNewCount = 0;
+let _lvDupCount = 0;
+let _lvBusy = false;
+
+function _lvGenUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+async function openLiveVisionModal() {
+  _lvItems = [];
+  _lvCustomerId = null;
+  _lvNewCount = 0;
+  _lvDupCount = 0;
+  _lvBusy = false;
+  _lvSessionId = _lvGenUUID();
+
+  document.getElementById('lv-items').innerHTML = '';
+  document.getElementById('lv-total').textContent = '0';
+  document.getElementById('lv-notes').value = '';
+  document.getElementById('lv-save-btn').disabled = true;
+  document.getElementById('lv-clear-btn').style.display = 'none';
+  document.getElementById('lv-empty-hint').style.display = '';
+  document.getElementById('lv-status-bar').style.display = 'none';
+  document.getElementById('lv-video').style.display = 'none';
+  document.getElementById('lv-cam-placeholder').style.display = '';
+  document.getElementById('lv-status-txt').textContent = 'جاهز...';
+  document.getElementById('lv-counts').textContent = '';
+  document.getElementById('lv-cust-hint').textContent = 'اختر زبون قبل الحفظ.';
+  document.getElementById('lv-cust-search').value = '';
+
+  // Load customers
+  try {
+    if (!_lvCustomers || _lvCustomers.length === 0) {
+      _lvCustomers = await api('GET', '/market/customers/');
+    }
+    _lvRenderCustomerOptions(_lvCustomers);
+  } catch(e) {
+    document.getElementById('lv-cust-hint').textContent = 'تعذّر تحميل الزبائن';
+  }
+
+  const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('liveVisionModal'));
+  modal.show();
+}
+
+function _lvRenderCustomerOptions(list) {
+  const sel = document.getElementById('lv-cust-select');
+  if (!sel) return;
+  sel.innerHTML = list.map(c =>
+    `<option value="${c.id}">${(c.name||'').replace(/</g,'&lt;')}${c.phone?' — '+c.phone:''}</option>`
+  ).join('');
+}
+
+function lvFilterCustomers() {
+  const q = (document.getElementById('lv-cust-search').value || '').trim().toLowerCase();
+  const filtered = !q ? _lvCustomers : _lvCustomers.filter(c =>
+    (c.name||'').toLowerCase().includes(q) || (c.phone||'').toLowerCase().includes(q)
+  );
+  _lvRenderCustomerOptions(filtered);
+}
+
+function lvPickCustomer(id) {
+  _lvCustomerId = id || null;
+  const picked = _lvCustomers.find(c => String(c.id) === String(id));
+  const hint = document.getElementById('lv-cust-hint');
+  if (hint) hint.textContent = picked ? ('الزبون: ' + picked.name) : 'اختر زبون قبل الحفظ.';
+  _lvUpdateSaveBtn();
+}
+
+function _lvUpdateSaveBtn() {
+  document.getElementById('lv-save-btn').disabled = !(_lvCustomerId && _lvItems.length > 0);
+}
+
+async function lvStartCamera() {
+  try {
+    _lvStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    const video = document.getElementById('lv-video');
+    video.srcObject = _lvStream;
+    video.style.display = '';
+    document.getElementById('lv-cam-placeholder').style.display = 'none';
+    document.getElementById('lv-status-bar').style.display = '';
+    _lvStartInterval();
+  } catch(e) {
+    toast('تعذّر فتح الكاميرا: ' + e.message, 'err');
+  }
+}
+
+function _lvStartInterval() {
+  if (_lvInterval) clearInterval(_lvInterval);
+  _lvInterval = setInterval(_lvCaptureFrame, 1500);
+}
+
+async function _lvCaptureFrame() {
+  if (_lvBusy) return;
+  const video = document.getElementById('lv-video');
+  if (!video || video.readyState < 2) return;
+  _lvBusy = true;
+  try {
+    const canvas = document.getElementById('lv-canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
+    if (!blob) { _lvBusy = false; return; }
+
+    const form = new FormData();
+    form.append('session_id', _lvSessionId);
+    form.append('image', blob, 'frame.jpg');
+
+    const token = S.token;
+    const res = await fetch(API + '/market/vision/analyze-stream', {
+      method: 'POST',
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+      body: form,
+    });
+    if (!res.ok) { _lvBusy = false; return; }
+    const data = await res.json();
+    const status = data.status || 'empty';
+
+    if (status === 'duplicate') {
+      _lvDupCount++;
+      document.getElementById('lv-status-txt').textContent = 'نفس الإطار — تجاهل';
+    } else if (status === 'new') {
+      const items = data.items || [];
+      let added = 0;
+      for (const it of items) {
+        const name = (it.product_name || '').trim();
+        if (!name) continue;
+        const qty = Number(it.quantity) || 1;
+        const price = Number(it.unit_price) || 0;
+        const idx = _lvItems.findIndex(x => x.product_name === name);
+        if (idx >= 0) {
+          _lvItems[idx].quantity += qty;
+        } else {
+          _lvItems.push({ product_name: name, quantity: qty, unit_price: price });
+          added++;
+        }
+      }
+      _lvNewCount += added;
+      document.getElementById('lv-status-txt').textContent =
+        added > 0 ? `أُضيف ${added} منتج جديد` : 'لم يُكتشف منتج جديد';
+      _lvRenderItems();
+    } else {
+      document.getElementById('lv-status-txt').textContent = 'لم يتم التعرف على منتج';
+    }
+    document.getElementById('lv-counts').textContent = `جديد:${_lvNewCount} · مكرر:${_lvDupCount}`;
+  } catch(e) {
+    document.getElementById('lv-status-txt').textContent = 'خطأ: ' + e.message;
+  } finally {
+    _lvBusy = false;
+  }
+}
+
+function _lvRenderItems() {
+  const tbody = document.getElementById('lv-items');
+  if (!tbody) return;
+  let total = 0;
+  tbody.innerHTML = _lvItems.map((it, i) => {
+    const sub = it.quantity * it.unit_price;
+    total += sub;
+    return `<tr>
+      <td style="font-size:13px">${(it.product_name||'').replace(/</g,'&lt;')}</td>
+      <td style="text-align:center"><input type="number" min="0.1" step="0.1" value="${it.quantity}" onchange="_lvUpdateItem(${i},'quantity',this.value)" style="width:44px;background:#2a2a3e;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;padding:1px 2px;font-size:12px"></td>
+      <td style="text-align:center"><input type="number" min="0" step="250" value="${it.unit_price}" onchange="_lvUpdateItem(${i},'unit_price',this.value)" style="width:74px;background:#2a2a3e;color:#fff;border:1px solid #555;border-radius:4px;text-align:center;padding:1px 2px;font-size:12px"></td>
+      <td><button class="btn btn-sm btn-link text-danger p-0" onclick="_lvRemoveItem(${i})"><i class="fas fa-times"></i></button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('lv-total').textContent = fmt(total);
+  const hasItems = _lvItems.length > 0;
+  document.getElementById('lv-empty-hint').style.display = hasItems ? 'none' : '';
+  document.getElementById('lv-clear-btn').style.display = hasItems ? '' : 'none';
+  _lvUpdateSaveBtn();
+}
+
+function _lvUpdateItem(i, field, val) {
+  if (_lvItems[i]) {
+    _lvItems[i][field] = parseFloat(val) || 0;
+    _lvRenderItems();
+  }
+}
+
+function _lvRemoveItem(i) {
+  _lvItems.splice(i, 1);
+  _lvRenderItems();
+}
+
+function lvClearItems() {
+  _lvItems = [];
+  _lvRenderItems();
+}
+
+async function closeLiveVisionModal() {
+  if (_lvInterval) { clearInterval(_lvInterval); _lvInterval = null; }
+  if (_lvStream) { _lvStream.getTracks().forEach(t => t.stop()); _lvStream = null; }
+  // End session on backend
+  if (_lvSessionId) {
+    try {
+      const form = new FormData();
+      form.append('session_id', _lvSessionId);
+      const token = S.token;
+      await fetch(API + '/market/vision/stream-end', {
+        method: 'POST',
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+        body: form,
+      });
+    } catch(_) {}
+    _lvSessionId = null;
+  }
+  bootstrap.Modal.getInstance(document.getElementById('liveVisionModal'))?.hide();
+}
+
+async function lvSaveSale() {
+  if (!_lvCustomerId) { toast('اختر الزبون قبل الحفظ', 'err'); return; }
+  const items = _lvItems.filter(it => (it.product_name||'').trim()).map(it => ({
+    product_name: it.product_name.trim(),
+    quantity: Number(it.quantity) || 1,
+    unit_price: Number(it.unit_price) || 0,
+  }));
+  if (items.length === 0) { toast('لا توجد منتجات', 'err'); return; }
+  const notes = document.getElementById('lv-notes').value.trim() || null;
+  loading(true);
+  try {
+    await api('POST', '/market/sales/', {
+      customer_id: _lvCustomerId,
+      sale_date: new Date().toISOString(),
+      notes,
+      items,
+    });
+    await closeLiveVisionModal();
+    toast('تم حفظ الفاتورة ✅');
+    await loadMarketCustomers();
+  } catch(e) { toast(e.message, 'err'); }
+  finally { loading(false); }
+}
+// ═══════════════════════════════════════════════════════════════
+
 async function saveSale() {
-  const customerId = document.getElementById('sale-customer-id').value;
-  const amount = parseFloat(document.getElementById('sale-amount').value);
   const desc = document.getElementById('sale-desc').value.trim() || null;
   const isPaid = document.getElementById('sale-paid').checked;
   if (!amount || amount <= 0) { toast('أدخل المبلغ', 'err'); return; }

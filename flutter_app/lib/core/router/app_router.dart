@@ -113,6 +113,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             customerId: state.pathParameters['customerId']!),
       ),
       GoRoute(
+        path: '/market/live-vision',
+        builder: (_, __) => const LiveVisionSaleScreen(),
+      ),
+      GoRoute(
         path: '/market/live-vision-sale/:customerId',
         builder: (_, state) => LiveVisionSaleScreen(
             customerId: state.pathParameters['customerId']!),

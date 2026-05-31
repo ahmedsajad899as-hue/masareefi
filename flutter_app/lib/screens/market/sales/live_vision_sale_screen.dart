@@ -24,8 +24,8 @@ class _LiveItem {
 }
 
 class LiveVisionSaleScreen extends ConsumerStatefulWidget {
-  const LiveVisionSaleScreen({super.key, required this.customerId});
-  final String customerId;
+  const LiveVisionSaleScreen({super.key, this.customerId});
+  final String? customerId;
 
   @override
   ConsumerState<LiveVisionSaleScreen> createState() =>
@@ -37,6 +37,8 @@ class _LiveVisionSaleScreenState extends ConsumerState<LiveVisionSaleScreen> {
   final String _sessionId = const Uuid().v4();
   final List<_LiveItem> _items = [];
   Timer? _captureTimer;
+
+  String? _selectedCustomerId;
 
   bool _busy = false;
   bool _saving = false;
@@ -50,6 +52,7 @@ class _LiveVisionSaleScreenState extends ConsumerState<LiveVisionSaleScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedCustomerId = widget.customerId;
     if (!kIsWeb) {
       _initCamera();
     }
@@ -160,6 +163,49 @@ class _LiveVisionSaleScreenState extends ConsumerState<LiveVisionSaleScreen> {
     }
   }
 
+  Future<void> _showCustomerPickerDialog() async {
+    final customers =
+        ref.read(marketCustomersProvider).customers;
+    if (customers.isEmpty) {
+      await ref.read(marketCustomersProvider.notifier).load();
+    }
+    if (!mounted) return;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final list = ref.read(marketCustomersProvider).customers;
+        return AlertDialog(
+          title: const Text('اختر الزبون'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: list.isEmpty
+                ? const Text('لا يوجد زبائن')
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: list.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) => ListTile(
+                      title: Text(list[i].name),
+                      subtitle: list[i].phone != null
+                          ? Text(list[i].phone!)
+                          : null,
+                      onTap: () => Navigator.pop(ctx, list[i].id.toString()),
+                    ),
+                  ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('إلغاء')),
+          ],
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _selectedCustomerId = picked);
+    }
+  }
+
   Future<void> _endSession() async {
     try {
       await ApiService.instance.postFormData(
@@ -171,6 +217,13 @@ class _LiveVisionSaleScreenState extends ConsumerState<LiveVisionSaleScreen> {
 
   Future<void> _save() async {
     if (_items.isEmpty) return;
+
+    // If no customer pre-selected, show picker dialog first
+    if (_selectedCustomerId == null) {
+      await _showCustomerPickerDialog();
+      if (_selectedCustomerId == null) return; // user dismissed
+    }
+
     setState(() {
       _saving = true;
       _streaming = false;
@@ -186,7 +239,7 @@ class _LiveVisionSaleScreenState extends ConsumerState<LiveVisionSaleScreen> {
         .toList();
 
     final sale = await ref.read(marketSalesProvider.notifier).createSale(
-          customerId: widget.customerId,
+          customerId: _selectedCustomerId!,
           saleDate: DateTime.now(),
           notes: null,
           items: payload,

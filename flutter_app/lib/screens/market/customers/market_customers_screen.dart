@@ -136,10 +136,25 @@ class _MarketCustomersScreenState
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddDialog,
-        icon: const Icon(Icons.person_add_rounded),
-        label: const Text('زبون جديد'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            heroTag: 'live_vision_fab',
+            onPressed: () => context.push('/market/live-vision'),
+            backgroundColor: Colors.deepPurple,
+            tooltip: 'كاميرا مباشرة (لايف)',
+            child: const Icon(Icons.videocam_rounded),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+            heroTag: 'add_customer_fab',
+            onPressed: _showAddDialog,
+            icon: const Icon(Icons.person_add_rounded),
+            label: const Text('زبون جديد'),
+          ),
+        ],
       ),
       body: state.isLoading
           ? const Center(child: CircularProgressIndicator())
