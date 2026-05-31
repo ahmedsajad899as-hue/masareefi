@@ -630,7 +630,7 @@ const PAGE_TITLES = {
   'market-customers': '🏪 الزبائن والديون',
   'market-overdue':   '⚠️ الديون المتأخرة',
   'market-suppliers': '🚚 فواتير الموردين',
-  'market-catalog':   '📦 كتالوج المنتجات',
+  'market-catalog':   '📦 كتلوك المنتجات',
   'market-settings':  '⚙️ إعدادات المحل',
   'market-checkout':  '🛒 الكاشير السريع',
   'my-purchases':     '🛒 مشترياتي من المحلات',
@@ -4139,7 +4139,7 @@ async function saveMarketSettings() {
       market_overdue_days: overdueDays,
       use_product_catalog: useCatalog,
     });
-    toast(useCatalog ? 'تم الحفظ — كتالوج المنتجات مفعّل ✅' : 'تم الحفظ — كتالوج المنتجات مطفأ');
+    toast(useCatalog ? 'تم الحفظ — كتلوك المنتجات مفعّل ✅' : 'تم الحفظ — كتلوك المنتجات مطفأ');
   } catch(e) { toast(e.message, 'err'); }
   finally { loading(false); }
 }
