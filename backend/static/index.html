@@ -1666,13 +1666,6 @@
                 <span class="float-start text-muted" id="lv-counts"></span>
               </div>
             </div>
-            <!-- Customer picker -->
-            <div class="mb-3" id="lv-cust-row">
-              <label class="form-label small">الزبون <span class="text-danger">*</span></label>
-              <input type="text" id="lv-cust-search" class="form-control form-control-sm bg-dark text-white border-secondary mb-1" placeholder="ابحث باسم الزبون..." oninput="lvFilterCustomers()">
-              <select id="lv-cust-select" class="form-select form-select-sm bg-dark text-white border-secondary" size="4" onchange="lvPickCustomer(this.value)"></select>
-              <div class="small text-muted mt-1" id="lv-cust-hint">اختر زبون قبل الحفظ.</div>
-            </div>
             <!-- Items table -->
             <div class="table-responsive" style="max-height:220px;overflow-y:auto">
               <table class="table table-sm table-dark table-borderless" style="table-layout:fixed;width:100%">
@@ -1685,9 +1678,16 @@
                 <tbody id="lv-items"></tbody>
               </table>
             </div>
-            <div class="d-flex justify-content-between align-items-center mb-2 mt-1">
+            <div class="d-flex justify-content-between align-items-center mb-3 mt-1">
               <div class="small text-muted" id="lv-empty-hint">وجّه الكاميرا نحو المنتجات — سيُضاف تلقائياً</div>
               <div>الإجمالي: <strong class="text-warning" id="lv-total">0</strong> د.ع</div>
+            </div>
+            <!-- Customer picker -->
+            <div class="mb-3" id="lv-cust-row">
+              <label class="form-label small">الزبون <span class="text-danger">*</span></label>
+              <input type="text" id="lv-cust-search" class="form-control form-control-sm bg-dark text-white border-secondary mb-1" placeholder="ابحث باسم الزبون..." oninput="lvFilterCustomers()">
+              <select id="lv-cust-select" class="form-select form-select-sm bg-dark text-white border-secondary" size="4" onchange="lvPickCustomer(this.value)"></select>
+              <div class="small text-muted mt-1" id="lv-cust-hint">اختر زبون قبل الحفظ.</div>
             </div>
             <div class="mb-2">
               <label class="form-label small">ملاحظة (اختياري)</label>

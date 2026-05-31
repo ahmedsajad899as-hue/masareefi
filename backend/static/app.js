@@ -3373,22 +3373,29 @@ async function lvStartCamera() {
 }
 
 function _lvStartInterval() {
-  if (_lvInterval) clearInterval(_lvInterval);
-  _lvInterval = setInterval(_lvCaptureFrame, 1500);
+  if (_lvInterval) clearTimeout(_lvInterval);
+  _lvInterval = setTimeout(_lvCaptureLoop, 400);
+}
+
+async function _lvCaptureLoop() {
+  _lvInterval = null;
+  await _lvCaptureFrame();
+  // Schedule next capture immediately after response (min 400ms gap)
+  if (_lvStream && _lvStream.active) {
+    _lvInterval = setTimeout(_lvCaptureLoop, 400);
+  }
 }
 
 async function _lvCaptureFrame() {
-  if (_lvBusy) return;
   const video = document.getElementById('lv-video');
   if (!video || video.readyState < 2) return;
-  _lvBusy = true;
   try {
     const canvas = document.getElementById('lv-canvas');
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
-    if (!blob) { _lvBusy = false; return; }
+    if (!blob) { return; }
 
     const form = new FormData();
     form.append('session_id', _lvSessionId);
@@ -3400,7 +3407,7 @@ async function _lvCaptureFrame() {
       headers: token ? { 'Authorization': 'Bearer ' + token } : {},
       body: form,
     });
-    if (!res.ok) { _lvBusy = false; return; }
+    if (!res.ok) { return; }
     const data = await res.json();
     const status = data.status || 'empty';
 
@@ -3433,8 +3440,6 @@ async function _lvCaptureFrame() {
     document.getElementById('lv-counts').textContent = `جديد:${_lvNewCount} · مكرر:${_lvDupCount}`;
   } catch(e) {
     document.getElementById('lv-status-txt').textContent = 'خطأ: ' + e.message;
-  } finally {
-    _lvBusy = false;
   }
 }
 
@@ -3477,7 +3482,7 @@ function lvClearItems() {
 }
 
 async function closeLiveVisionModal() {
-  if (_lvInterval) { clearInterval(_lvInterval); _lvInterval = null; }
+  if (_lvInterval) { clearTimeout(_lvInterval); _lvInterval = null; }
   if (_lvStream) { _lvStream.getTracks().forEach(t => t.stop()); _lvStream = null; }
   // End session on backend
   if (_lvSessionId) {
