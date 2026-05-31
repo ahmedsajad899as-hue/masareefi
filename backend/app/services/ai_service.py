@@ -442,6 +442,14 @@ Rules:
   • "احمد اخذ خبز و حليب ب 8 الاف"                  → name=احمد, amount=8000, notes="- خبز\n- حليب"
   • "اكتبلي على علي 10 الاف سكر و شاي و رز"          → name=علي, amount=10000, notes="- سكر\n- شاي\n- رز"
   • "محمد اخذ زيت ب 10 الاف وتمن ب 5 الاف وماي ب 3 الاف" → name=محمد, amount=18000, notes="- زيت: 10000\n- تمن: 5000\n- ماي: 3000"
+  • "احمد اشترى ب 5000 دهن وب 10000 زيت"               → name=احمد, amount=15000, notes="- دهن: 5000\n- زيت: 10000"
+  • "علي ب 3000 رز وب 7000 سكر وب 2000 شاي"           → name=علي,  amount=12000, notes="- رز: 3000\n- سكر: 7000\n- شاي: 2000"
+- CRITICAL — "ب" / "وب" patterns:
+  • "ب price item" means: item was bought FOR that price. "ب" is ONLY a price connector, NEVER an item name.
+  • "وب" = "و" (and) + "ب" (price connector). It introduces ANOTHER item+price pair, not an item named "ب".
+  • So "ب 5000 دهن وب 10000 زيت" = دهن costs 5000 AND زيت costs 10000 → total = 15000. NOT 5010.
+  • Never put "ب" in notes as an item. It is invisible punctuation.
+  • Bare numbers like "10,000" or "10000" both mean ten thousand IQD. A comma is a thousands separator, not decimal.
 - Other Iraqi colloquial wording examples you MUST understand:
   • "اكتبلي على محمد عشرين الف خبز وحليب"
   • "احمد ابو علي اخذ بضاعة ب 25000"
@@ -1350,7 +1358,13 @@ async def analyze_image_for_market_items(
     learned_lookup: dict[str, dict] = {}
     known_section_lines: list[str] = []
     if known_products:
-        for entry in known_products[:80]:
+        # Sort by count desc so most-frequently-sold products appear first in the AI prompt
+        sorted_known = sorted(
+            known_products,
+            key=lambda x: (x.get("count", 0) if isinstance(x, dict) else 0),
+            reverse=True,
+        )
+        for entry in sorted_known[:80]:
             if isinstance(entry, str):
                 key = _normalize_product_key(entry)
                 if key and key not in learned_lookup:
@@ -1387,7 +1401,7 @@ async def analyze_image_for_market_items(
                 messages=[
                     {"role": "system", "content": VISION_SYSTEM_PROMPT},
                     {"role": "user", "content": [
-                        {"type": "image_url", "image_url": {"url": data_url, "detail": "low"}},
+                        {"type": "image_url", "image_url": {"url": data_url, "detail": "auto"}},
                         {"type": "text", "text": user_text},
                     ]},
                 ],
@@ -1512,11 +1526,18 @@ async def analyze_image_for_market_items(
             key = _normalize_product_key(name)
             learned = learned_lookup.get(key) if key else None
             if learned is None and key:
-                # Loose substring match (covers "بيبسي 1 لتر" vs "بيبسي")
-                for lk, lv in learned_lookup.items():
-                    if lk and (lk in key or key in lk) and min(len(lk), len(key)) >= 3:
-                        learned = lv
-                        break
+                # Fuzzy match: handles size suffixes & spelling variants (e.g. "ليز" vs "لايز")
+                from difflib import get_close_matches
+                candidates = [lk for lk in learned_lookup if lk]
+                fuzzy = get_close_matches(key, candidates, n=1, cutoff=0.72)
+                if fuzzy:
+                    learned = learned_lookup[fuzzy[0]]
+                else:
+                    # Substring fallback for short brand names inside longer strings
+                    for lk, lv in learned_lookup.items():
+                        if lk and (lk in key or key in lk) and min(len(lk), len(key)) >= 3:
+                            learned = lv
+                            break
             if learned:
                 name = learned.get("name") or name
                 lp = learned.get("last_price")

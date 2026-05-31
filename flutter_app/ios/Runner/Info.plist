@@ -29,6 +29,10 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>التطبيق يحتاج إلى الميكروفون لتسجيل مصاريفك صوتياً باستخدام الذكاء الاصطناعي</string>
 
+	<!-- Camera permission for live product vision -->
+	<key>NSCameraUsageDescription</key>
+	<string>للتحليل المباشر للمنتجات بالكاميرا</string>
+
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

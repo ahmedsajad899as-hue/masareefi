@@ -60,6 +60,8 @@ class ApiConstants {
 
   // Market Owner — Vision
   static const marketVisionAnalyze = '/market/vision/analyze';
+  static const marketVisionAnalyzeStream = '/market/vision/analyze-stream';
+  static const marketVisionStreamEnd = '/market/vision/stream-end';
 
   // Regular User — My Market Debts
   static const myMarketDebts = '/my-debts';

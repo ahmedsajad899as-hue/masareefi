@@ -7,6 +7,9 @@
     <!-- Microphone for AI voice input -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
+    <!-- Camera for live product vision -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+
     <!-- Storage for temporary audio files -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>

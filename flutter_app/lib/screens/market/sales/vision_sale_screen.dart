@@ -166,6 +166,12 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
       appBar: AppBar(
         title: const Text('فاتورة بالكاميرا'),
         actions: [
+          IconButton(
+            tooltip: 'وضع الكاميرا المباشر',
+            icon: const Icon(Icons.videocam_rounded),
+            onPressed: () => context
+                .push('/market/live-vision-sale/${widget.customerId}'),
+          ),
           if (!_saving && _items.isNotEmpty && !_analyzing)
             TextButton(
               onPressed: _submit,

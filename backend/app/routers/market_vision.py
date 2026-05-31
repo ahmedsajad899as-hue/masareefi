@@ -1,5 +1,9 @@
 """Market vision router — analyze product images via GPT-4o vision."""
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+import time
+from io import BytesIO
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from PIL import Image
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -133,8 +137,13 @@ async def analyze_image(
             for p in catalog_products
             if p.name
         ]
-        # Prepend catalog entries so they appear first in the AI prompt
-        known = catalog_known + [k for k in known if _normalize_product_key(k.get("name","")) not in catalog_price_map]
+        # Catalog first (authoritative prices), then history sorted by most-sold
+        history_known = sorted(
+            [k for k in known if _normalize_product_key(k.get("name", "")) not in catalog_price_map],
+            key=lambda x: x.get("count", 0),
+            reverse=True,
+        )
+        known = catalog_known + history_known
 
     items_data, raw = await analyze_image_for_market_items(
         image_bytes,
@@ -151,3 +160,146 @@ async def analyze_image(
 
     items = [VisionItem(**d) for d in items_data]
     return VisionAnalyzeResponse(items=items, raw_response=raw)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# ── Live streaming mode (continuous camera) ─────────────────────────────────
+# ════════════════════════════════════════════════════════════════════════════
+# Session-scoped in-memory pHash cache (per streaming session).
+# Auto-expires after 15 minutes of inactivity to avoid memory leaks.
+_STREAM_CACHE: "dict[str, dict]" = {}
+_STREAM_TTL = 900  # 15 minutes
+
+
+def _ahash(img_bytes: bytes, size: int = 16) -> int:
+    """Compute a 16×16 average-hash (256-bit). Pure PIL — no extra deps."""
+    try:
+        im = Image.open(BytesIO(img_bytes)).convert("L").resize(
+            (size, size), Image.LANCZOS
+        )
+    except Exception:
+        return 0
+    pixels = list(im.getdata())
+    if not pixels:
+        return 0
+    avg = sum(pixels) / len(pixels)
+    bits = 0
+    for i, p in enumerate(pixels):
+        if p >= avg:
+            bits |= 1 << i
+    return bits
+
+
+def _hamming(a: int, b: int) -> int:
+    return bin(a ^ b).count("1")
+
+
+def _cleanup_expired_sessions() -> None:
+    now = time.time()
+    for k in [k for k, v in _STREAM_CACHE.items() if now - v["ts"] > _STREAM_TTL]:
+        _STREAM_CACHE.pop(k, None)
+
+
+class StreamFrameResponse(BaseModel):
+    status: str  # "new" | "duplicate" | "empty"
+    items: list[VisionItem] = []
+    raw_response: str = ""
+
+
+@router.post("/analyze-stream", response_model=StreamFrameResponse)
+async def analyze_stream_frame(
+    session_id: str = Form(...),
+    image: UploadFile = File(...),
+    current_user: User = Depends(get_current_market_owner),
+    db: AsyncSession = Depends(get_db),
+):
+    """Continuous-camera variant of /analyze.
+
+    Same AI pipeline & same quality as /analyze. Adds a per-session perceptual-hash
+    dedup layer: if the current frame is visually identical (Hamming distance ≤ 10
+    on a 256-bit aHash) to a previously analyzed frame in the same session, returns
+    status=duplicate without calling the AI. The caller (Flutter) accumulates only
+    "new" items into its UI list — previously detected items are NEVER replaced.
+    """
+    _cleanup_expired_sessions()
+
+    content_type = (image.content_type or "").lower().split(";")[0].strip()
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(415, f"صيغة صورة غير مدعومة: {content_type}")
+
+    image_bytes = await image.read()
+    size_mb = len(image_bytes) / (1024 * 1024)
+    if size_mb > MAX_IMAGE_SIZE_MB:
+        raise HTTPException(413, f"حجم الصورة كبير. الحد الأقصى {MAX_IMAGE_SIZE_MB}MB")
+    if not image_bytes:
+        raise HTTPException(400, "ملف صورة فارغ")
+
+    # ── pHash dedup ───────────────────────────────────────────────────────
+    sess = _STREAM_CACHE.setdefault(
+        session_id,
+        {"ts": time.time(), "hashes": [], "owner": str(current_user.id)},
+    )
+    sess["ts"] = time.time()
+    if sess["owner"] != str(current_user.id):
+        raise HTTPException(403, "Session belongs to another user")
+
+    h = _ahash(image_bytes)
+    if h:
+        for prev in sess["hashes"]:
+            if _hamming(h, prev) <= 10:
+                return StreamFrameResponse(status="duplicate")
+        sess["hashes"].append(h)
+        if len(sess["hashes"]) > 50:
+            sess["hashes"] = sess["hashes"][-50:]
+
+    # ── Reuse the EXACT same analysis pipeline as /analyze ────────────────
+    known = await _load_owner_product_history(db, current_user.id)
+    catalog_price_map: dict[str, float] = {}
+    if current_user.use_product_catalog:
+        catalog_result = await db.execute(
+            select(MarketProduct).where(MarketProduct.market_owner_id == current_user.id)
+        )
+        catalog_products = catalog_result.scalars().all()
+        catalog_price_map = {
+            _normalize_product_key(p.name): float(p.unit_price)
+            for p in catalog_products if p.name
+        }
+        catalog_known = [
+            {"name": p.name, "last_price": float(p.unit_price),
+             "avg_price": float(p.unit_price), "count": 1}
+            for p in catalog_products if p.name
+        ]
+        history_known = sorted(
+            [k for k in known if _normalize_product_key(k.get("name", "")) not in catalog_price_map],
+            key=lambda x: x.get("count", 0),
+            reverse=True,
+        )
+        known = catalog_known + history_known
+
+    items_data, raw = await analyze_image_for_market_items(
+        image_bytes, content_type, known_products=known,
+    )
+    if catalog_price_map:
+        for item in items_data:
+            key = _normalize_product_key(item.get("product_name", ""))
+            if key and key in catalog_price_map:
+                item["unit_price"] = catalog_price_map[key]
+
+    if not items_data:
+        return StreamFrameResponse(status="empty", raw_response=raw)
+
+    return StreamFrameResponse(
+        status="new",
+        items=[VisionItem(**d) for d in items_data],
+        raw_response=raw,
+    )
+
+
+@router.post("/stream-end")
+async def end_stream_session(
+    session_id: str = Form(...),
+    current_user: User = Depends(get_current_market_owner),
+):
+    """Owner finished/cancelled the live session — free its cache."""
+    _STREAM_CACHE.pop(session_id, None)
+    return {"status": "ok"}
