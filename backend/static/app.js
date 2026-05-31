@@ -3429,6 +3429,7 @@ async function _lvCaptureFrame() {
     if (status === 'duplicate') {
       _lvDupCount++;
       document.getElementById('lv-status-txt').textContent = 'نفس الإطار — تجاهل';
+      const rb = document.getElementById('lv-retry-btn'); if (rb) rb.style.display = 'none';
     } else if (status === 'new') {
       const items = data.items || [];
       let added = 0;
@@ -3451,8 +3452,10 @@ async function _lvCaptureFrame() {
       // status='empty' — show what AI said (first 120 chars) to help debug
       const hint = data.raw_response ? data.raw_response.slice(0, 120) : 'لم يتم التعرف على منتج';
       document.getElementById('lv-status-txt').textContent = hint;
-      // If Gemini rate-limited, pause captures for 60 s
+      // If Gemini rate-limited, pause captures for 60 s and show retry button
       if (hint.includes('gemini-rate-limit') || hint.includes('يرجى الانتظار')) {
+        const retryBtn = document.getElementById('lv-retry-btn');
+        if (retryBtn) retryBtn.style.display = '';
         return 60000;
       }
     }
@@ -3523,6 +3526,15 @@ async function closeLiveVisionModal() {
     _lvSessionId = null;
   }
   bootstrap.Modal.getInstance(document.getElementById('liveVisionModal'))?.hide();
+}
+
+function lvRetryNow() {
+  // Hide retry button and immediately trigger a new capture
+  const retryBtn = document.getElementById('lv-retry-btn');
+  if (retryBtn) retryBtn.style.display = 'none';
+  if (_lvInterval) { clearTimeout(_lvInterval); _lvInterval = null; }
+  document.getElementById('lv-status-txt').textContent = 'جاري المحاولة...';
+  _lvCaptureLoop();
 }
 
 async function lvSaveSale() {
