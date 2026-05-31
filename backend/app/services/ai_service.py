@@ -4,6 +4,7 @@ AI Service — Whisper (speech-to-text) + GPT-4o (expense extraction) + local fa
 import asyncio
 import json
 import re
+import time
 from datetime import date, datetime, timezone
 
 from openai import AsyncOpenAI
@@ -17,6 +18,9 @@ client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 # Free-tier flash-lite allows 30 RPM → 3 concurrent is safe even with multiple users.
 # This prevents thundering-herd 429s when several users upload images at once.
 _GEMINI_SEM = asyncio.Semaphore(3)
+
+# When all Gemini models return 429, block further Gemini calls for 60 s.
+_GEMINI_RATE_LIMITED_UNTIL: float = 0.0
 
 
 def _dedup_transcript(text: str) -> str:
@@ -1416,6 +1420,13 @@ async def analyze_image_for_market_items(
 
     # ── Fallback to Gemini if OpenAI failed or absent ──
     if (not raw or raw.startswith("openai-error")) and has_gemini:
+        global _GEMINI_RATE_LIMITED_UNTIL
+        # If all models were 429'd recently, honour the cooldown
+        if time.time() < _GEMINI_RATE_LIMITED_UNTIL:
+            remaining = int(_GEMINI_RATE_LIMITED_UNTIL - time.time())
+            return [], (
+                f"gemini-rate-limit: يرجى الانتظار {remaining} ثانية قبل المحاولة مجدداً."
+            )
         import httpx
         # Model order: highest free-tier RPM first.
         # gemini-2.0-flash-lite: 30 RPM free  ← fastest / most quota
@@ -1478,6 +1489,9 @@ async def analyze_image_for_market_items(
                         last_err = f"{model}: {str(e)[:100]}"
                         continue
         if gem_data is None:
+            if rate_limit_count > 0:
+                # At least one model 429'd — set cooldown to avoid hammering
+                _GEMINI_RATE_LIMITED_UNTIL = time.time() + 60
             if rate_limit_count == len(gemini_models):
                 return [], (
                     "gemini-rate-limit: تم تجاوز الحد المسموح للطلبات على Gemini "

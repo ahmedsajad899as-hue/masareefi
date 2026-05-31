@@ -3376,15 +3376,15 @@ async function lvStartCamera() {
 
 function _lvStartInterval() {
   if (_lvInterval) clearTimeout(_lvInterval);
-  _lvInterval = setTimeout(_lvCaptureLoop, 400);
+  _lvInterval = setTimeout(_lvCaptureLoop, 3000);
 }
 
 async function _lvCaptureLoop() {
   _lvInterval = null;
-  await _lvCaptureFrame();
-  // Schedule next capture immediately after response (min 400ms gap)
+  const delay = await _lvCaptureFrame();
+  // Schedule next capture after response; use returned delay (e.g. rate-limit backoff)
   if (_lvStream && _lvStream.active) {
-    _lvInterval = setTimeout(_lvCaptureLoop, 400);
+    _lvInterval = setTimeout(_lvCaptureLoop, delay || 3000);
   }
 }
 
@@ -3451,11 +3451,17 @@ async function _lvCaptureFrame() {
       // status='empty' — show what AI said (first 120 chars) to help debug
       const hint = data.raw_response ? data.raw_response.slice(0, 120) : 'لم يتم التعرف على منتج';
       document.getElementById('lv-status-txt').textContent = hint;
+      // If Gemini rate-limited, pause captures for 60 s
+      if (hint.includes('gemini-rate-limit') || hint.includes('يرجى الانتظار')) {
+        return 60000;
+      }
     }
     document.getElementById('lv-counts').textContent = `جديد:${_lvNewCount} · مكرر:${_lvDupCount}`;
   } catch(e) {
     document.getElementById('lv-status-txt').textContent = 'خطأ: ' + e.message;
   }
+  // default: no special delay
+  return 0;
 }
 
 function _lvRenderItems() {
