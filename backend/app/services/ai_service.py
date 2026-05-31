@@ -19,8 +19,23 @@ client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 # This prevents thundering-herd 429s when several users upload images at once.
 _GEMINI_SEM = asyncio.Semaphore(3)
 
-# When all Gemini models return 429, block further Gemini calls for 60 s.
-_GEMINI_RATE_LIMITED_UNTIL: float = 0.0
+# Per-key cooldown: when a key returns 429, block it for 60 s before retry.
+# Allows rotation across multiple comma-separated API keys.
+_GEMINI_KEY_COOLDOWN: dict[str, float] = {}
+
+
+def _get_gemini_keys() -> list[str]:
+    """Parse comma-separated GEMINI_API_KEY / GOOGLE_API_KEY into a list."""
+    raw = (
+        getattr(settings, "GEMINI_API_KEY", None)
+        or getattr(settings, "GOOGLE_API_KEY", None)
+        or ""
+    )
+    keys = [k.strip() for k in str(raw).split(",") if k.strip()]
+    # Filter out keys currently in cooldown (unless ALL are cooled down)
+    now = time.time()
+    available = [k for k in keys if _GEMINI_KEY_COOLDOWN.get(k, 0) < now]
+    return available if available else keys
 
 
 def _dedup_transcript(text: str) -> str:
@@ -1126,11 +1141,8 @@ async def extract_price_list_from_image(
     import io as _io
 
     has_openai = settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-placeholder")
-    gemini_key = (
-        getattr(settings, "GEMINI_API_KEY", None)
-        or getattr(settings, "GOOGLE_API_KEY", None)
-    )
-    has_gemini = bool(gemini_key)
+    gemini_keys = _get_gemini_keys()
+    has_gemini = bool(gemini_keys)
 
     if not has_openai and not has_gemini:
         return [], "no-api-key"
@@ -1215,37 +1227,45 @@ async def extract_price_list_from_image(
         ]
         import httpx
         async with _GEMINI_SEM:
-            for model in GEMINI_MODELS:
-                try:
-                    url = (
-                        f"https://generativelanguage.googleapis.com/v1beta/models/"
-                        f"{model}:generateContent?key={gemini_key}"
-                    )
-                    payload = {
-                        "contents": [{"parts": [
-                            {"text": PROMPT},
-                            {"inline_data": {"mime_type": mime_type, "data": b64}},
-                        ]}],
-                        "generationConfig": {"maxOutputTokens": 1200, "temperature": 0.1},
-                    }
-                    async with httpx.AsyncClient(timeout=30) as hc:
-                        r = await hc.post(url, json=payload)
-                    if r.status_code == 429:
+            for key in gemini_keys:
+                key_429s = 0
+                done = False
+                for model in GEMINI_MODELS:
+                    try:
+                        url = (
+                            f"https://generativelanguage.googleapis.com/v1beta/models/"
+                            f"{model}:generateContent?key={key}"
+                        )
+                        payload = {
+                            "contents": [{"parts": [
+                                {"text": PROMPT},
+                                {"inline_data": {"mime_type": mime_type, "data": b64}},
+                            ]}],
+                            "generationConfig": {"maxOutputTokens": 1200, "temperature": 0.1},
+                        }
+                        async with httpx.AsyncClient(timeout=30) as hc:
+                            r = await hc.post(url, json=payload)
+                        if r.status_code == 429:
+                            key_429s += 1
+                            continue
+                        r.raise_for_status()
+                        raw = (
+                            r.json()
+                            .get("candidates", [{}])[0]
+                            .get("content", {})
+                            .get("parts", [{}])[0]
+                            .get("text", "")
+                            .strip()
+                        )
+                        items = _parse_catalog_json(raw)
+                        if items:
+                            return items, raw
+                    except Exception:
                         continue
-                    r.raise_for_status()
-                    raw = (
-                        r.json()
-                        .get("candidates", [{}])[0]
-                        .get("content", {})
-                        .get("parts", [{}])[0]
-                        .get("text", "")
-                        .strip()
-                    )
-                    items = _parse_catalog_json(raw)
-                    if items:
-                        return items, raw
-                except Exception:
-                    continue
+                if key_429s == len(GEMINI_MODELS):
+                    _GEMINI_KEY_COOLDOWN[key] = time.time() + 60
+                if done:
+                    break
 
     return [], raw or "parse-error"
 
@@ -1325,11 +1345,8 @@ async def analyze_image_for_market_items(
     import io as _io
 
     has_openai = settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-placeholder")
-    gemini_key = (
-        getattr(settings, "GEMINI_API_KEY", None)
-        or getattr(settings, "GOOGLE_API_KEY", None)
-    )
-    has_gemini = bool(gemini_key)
+    gemini_keys = _get_gemini_keys()
+    has_gemini = bool(gemini_keys)
 
     if not has_openai and not has_gemini:
         return [], "no-api-key"
@@ -1420,12 +1437,15 @@ async def analyze_image_for_market_items(
 
     # ── Fallback to Gemini if OpenAI failed or absent ──
     if (not raw or raw.startswith("openai-error")) and has_gemini:
-        global _GEMINI_RATE_LIMITED_UNTIL
-        # If all models were 429'd recently, honour the cooldown
-        if time.time() < _GEMINI_RATE_LIMITED_UNTIL:
-            remaining = int(_GEMINI_RATE_LIMITED_UNTIL - time.time())
+        # Check if all keys are in cooldown
+        now = time.time()
+        all_keys_raw = [k.strip() for k in str(
+            getattr(settings, "GEMINI_API_KEY", None) or getattr(settings, "GOOGLE_API_KEY", "") or ""
+        ).split(",") if k.strip()]
+        if all_keys_raw and all(_GEMINI_KEY_COOLDOWN.get(k, 0) >= now for k in all_keys_raw):
+            remaining = int(min(_GEMINI_KEY_COOLDOWN[k] for k in all_keys_raw) - now)
             return [], (
-                f"gemini-rate-limit: يرجى الانتظار {remaining} ثانية قبل المحاولة مجدداً."
+                f"gemini-rate-limit: جميع المفاتيح وصلت للحد، يرجى الانتظار {remaining} ثانية."
             )
         import httpx
         # Model order: highest free-tier RPM first.
@@ -1461,41 +1481,44 @@ async def analyze_image_for_market_items(
             },
         }
         last_err = ""
+        total_models = len(gemini_models) * len(gemini_keys)
         rate_limit_count = 0
         gem_data = None
         async with _GEMINI_SEM:  # cap concurrency across all users
             async with httpx.AsyncClient(timeout=30.0) as http:
-                for model in gemini_models:
-                    url = (
-                        f"https://generativelanguage.googleapis.com/v1beta/models/"
-                        f"{model}:generateContent?key={gemini_key}"
-                    )
-                    try:
-                        r = await http.post(url, json=payload)
-                        if r.status_code == 404:
-                            last_err = f"404 on {model}"
-                            continue
-                        if r.status_code == 429:
-                            # No sleep — just skip to next model immediately.
-                            # The semaphore already limits concurrency so
-                            # the next model is unlikely to 429 too.
-                            rate_limit_count += 1
-                            last_err = f"429 on {model}"
-                            continue
-                        r.raise_for_status()
-                        gem_data = r.json()
+                for key in gemini_keys:
+                    if gem_data is not None:
                         break
-                    except Exception as e:
-                        last_err = f"{model}: {str(e)[:100]}"
-                        continue
+                    key_429s = 0
+                    for model in gemini_models:
+                        url = (
+                            f"https://generativelanguage.googleapis.com/v1beta/models/"
+                            f"{model}:generateContent?key={key}"
+                        )
+                        try:
+                            r = await http.post(url, json=payload)
+                            if r.status_code == 404:
+                                last_err = f"404 on {model}"
+                                continue
+                            if r.status_code == 429:
+                                rate_limit_count += 1
+                                key_429s += 1
+                                last_err = f"429 on {model}"
+                                continue
+                            r.raise_for_status()
+                            gem_data = r.json()
+                            break
+                        except Exception as e:
+                            last_err = f"{model}: {str(e)[:100]}"
+                            continue
+                    # If this whole key 429'd on every model, cool it down 60 s
+                    if key_429s == len(gemini_models):
+                        _GEMINI_KEY_COOLDOWN[key] = time.time() + 60
         if gem_data is None:
-            if rate_limit_count > 0:
-                # At least one model 429'd — set cooldown to avoid hammering
-                _GEMINI_RATE_LIMITED_UNTIL = time.time() + 60
-            if rate_limit_count == len(gemini_models):
+            if rate_limit_count == total_models:
                 return [], (
-                    "gemini-rate-limit: تم تجاوز الحد المسموح للطلبات على Gemini "
-                    "(الحساب المجاني محدود). انتظر دقيقة وحاول مجدداً، أو أضف منتجاً يدوياً."
+                    "gemini-rate-limit: جميع المفاتيح وصلت للحد المسموح. "
+                    "انتظر دقيقة أو أضف مفتاح Gemini إضافي، أو أضف منتجاً يدوياً."
                 )
             return [], f"gemini-error: {last_err or 'all models failed'}"
         try:
