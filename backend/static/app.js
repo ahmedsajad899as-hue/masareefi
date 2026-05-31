@@ -3281,6 +3281,7 @@ let _lvStream = null;
 let _lvInterval = null;
 let _lvSessionId = null;
 let _lvItems = [];
+let _lvSeenItems = new Set();
 let _lvCustomerId = null;
 let _lvCustomers = [];
 let _lvNewCount = 0;
@@ -3296,6 +3297,7 @@ function _lvGenUUID() {
 
 async function openLiveVisionModal() {
   _lvItems = [];
+  _lvSeenItems = new Set();
   _lvCustomerId = null;
   _lvNewCount = 0;
   _lvDupCount = 0;
@@ -3363,7 +3365,7 @@ async function lvStartCamera() {
     _lvStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
     const video = document.getElementById('lv-video');
     video.srcObject = _lvStream;
-    video.style.display = '';
+    video.style.display = 'block';
     document.getElementById('lv-cam-placeholder').style.display = 'none';
     document.getElementById('lv-status-bar').style.display = '';
     _lvStartInterval();
@@ -3420,15 +3422,13 @@ async function _lvCaptureFrame() {
       for (const it of items) {
         const name = (it.product_name || '').trim();
         if (!name) continue;
+        // Skip if already seen (still in list) — only re-add if user manually removed it
+        if (_lvSeenItems.has(name)) continue;
         const qty = Number(it.quantity) || 1;
         const price = Number(it.unit_price) || 0;
-        const idx = _lvItems.findIndex(x => x.product_name === name);
-        if (idx >= 0) {
-          _lvItems[idx].quantity += qty;
-        } else {
-          _lvItems.push({ product_name: name, quantity: qty, unit_price: price });
-          added++;
-        }
+        _lvItems.push({ product_name: name, quantity: qty, unit_price: price });
+        _lvSeenItems.add(name);
+        added++;
       }
       _lvNewCount += added;
       document.getElementById('lv-status-txt').textContent =
@@ -3472,12 +3472,15 @@ function _lvUpdateItem(i, field, val) {
 }
 
 function _lvRemoveItem(i) {
+  const name = _lvItems[i]?.product_name;
+  if (name) _lvSeenItems.delete(name);
   _lvItems.splice(i, 1);
   _lvRenderItems();
 }
 
 function lvClearItems() {
   _lvItems = [];
+  _lvSeenItems = new Set();
   _lvRenderItems();
 }
 
