@@ -3409,7 +3409,11 @@ async function _lvCaptureFrame() {
       headers: token ? { 'Authorization': 'Bearer ' + token } : {},
       body: form,
     });
-    if (!res.ok) { return; }
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      document.getElementById('lv-status-txt').textContent = `خطأ ${res.status}: ${errText.slice(0, 100)}`;
+      return;
+    }
     const data = await res.json();
     const status = data.status || 'empty';
 

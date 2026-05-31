@@ -245,12 +245,9 @@ async def analyze_stream_frame(
 
     h = _ahash(image_bytes)
     if h:
-        for prev in sess["hashes"]:
+        for prev in sess["hashes"][-3:]:
             if _hamming(h, prev) <= 10:
                 return StreamFrameResponse(status="duplicate")
-        sess["hashes"].append(h)
-        if len(sess["hashes"]) > 50:
-            sess["hashes"] = sess["hashes"][-50:]
 
     # ── Reuse the EXACT same analysis pipeline as /analyze ────────────────
     known = await _load_owner_product_history(db, current_user.id)
@@ -287,6 +284,12 @@ async def analyze_stream_frame(
 
     if not items_data:
         return StreamFrameResponse(status="empty", raw_response=raw)
+
+    # Only store hash when AI actually found items (avoid blocking future product frames)
+    if h:
+        sess["hashes"].append(h)
+        if len(sess["hashes"]) > 20:
+            sess["hashes"] = sess["hashes"][-20:]
 
     return StreamFrameResponse(
         status="new",
