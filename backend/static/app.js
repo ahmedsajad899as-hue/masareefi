@@ -3395,7 +3395,16 @@ async function _lvCaptureFrame() {
     const canvas = document.getElementById('lv-canvas');
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Sanity-check: skip all-black frames (GPU texture not accessible on some mobile browsers)
+    const sample = ctx.getImageData(canvas.width >> 1, canvas.height >> 1, 4, 4).data;
+    const bright = Array.from(sample).some(v => v > 10);
+    if (!bright) {
+      document.getElementById('lv-status-txt').textContent = 'جاري تسخين الكاميرا...';
+      return;
+    }
     const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
     if (!blob) { return; }
 
@@ -3439,7 +3448,9 @@ async function _lvCaptureFrame() {
         added > 0 ? `أُضيف ${added} منتج جديد` : 'لم يُكتشف منتج جديد';
       _lvRenderItems();
     } else {
-      document.getElementById('lv-status-txt').textContent = 'لم يتم التعرف على منتج';
+      // status='empty' — show what AI said (first 120 chars) to help debug
+      const hint = data.raw_response ? data.raw_response.slice(0, 120) : 'لم يتم التعرف على منتج';
+      document.getElementById('lv-status-txt').textContent = hint;
     }
     document.getElementById('lv-counts').textContent = `جديد:${_lvNewCount} · مكرر:${_lvDupCount}`;
   } catch(e) {

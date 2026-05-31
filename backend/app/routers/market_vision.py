@@ -223,16 +223,25 @@ async def analyze_stream_frame(
     """
     _cleanup_expired_sessions()
 
-    content_type = (image.content_type or "").lower().split(";")[0].strip()
-    if content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(415, f"صيغة صورة غير مدعومة: {content_type}")
-
     image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(400, "ملف صورة فارغ")
+
     size_mb = len(image_bytes) / (1024 * 1024)
     if size_mb > MAX_IMAGE_SIZE_MB:
         raise HTTPException(413, f"حجم الصورة كبير. الحد الأقصى {MAX_IMAGE_SIZE_MB}MB")
-    if not image_bytes:
-        raise HTTPException(400, "ملف صورة فارغ")
+
+    # Auto-detect content-type from magic bytes (mobile browsers may send application/octet-stream)
+    content_type = (image.content_type or "").lower().split(";")[0].strip()
+    if content_type not in ALLOWED_IMAGE_TYPES or content_type == "application/octet-stream":
+        if image_bytes[:2] == b'\xff\xd8':
+            content_type = "image/jpeg"
+        elif image_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+            content_type = "image/png"
+        elif image_bytes[:4] in (b'RIFF', b'WEBP') or b'WEBP' in image_bytes[:12]:
+            content_type = "image/webp"
+        elif content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(415, f"صيغة صورة غير مدعومة: {content_type}")
 
     # ── pHash dedup ───────────────────────────────────────────────────────
     sess = _STREAM_CACHE.setdefault(
@@ -283,7 +292,7 @@ async def analyze_stream_frame(
                 item["unit_price"] = catalog_price_map[key]
 
     if not items_data:
-        return StreamFrameResponse(status="empty", raw_response=raw)
+        return StreamFrameResponse(status="empty", raw_response=raw[:300])
 
     # Only store hash when AI actually found items (avoid blocking future product frames)
     if h:
