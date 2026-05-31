@@ -65,6 +65,15 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           FloatingActionButton(
+            heroTag: 'live_vision_fab',
+            onPressed: () =>
+                context.push('/market/live-vision-sale/${widget.customerId}'),
+            backgroundColor: Colors.deepPurple,
+            tooltip: 'كاميرا مباشرة (لايف)',
+            child: const Icon(Icons.videocam_rounded),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
             heroTag: 'vision_fab',
             onPressed: () =>
                 context.push('/market/vision-sale/${widget.customerId}'),
