@@ -255,7 +255,7 @@ async def analyze_stream_frame(
     h = _ahash(image_bytes)
     if h:
         for prev in sess["hashes"][-3:]:
-            if _hamming(h, prev) <= 20:
+            if _hamming(h, prev) <= 8:
                 return StreamFrameResponse(status="duplicate")
 
     # ── Reuse the EXACT same analysis pipeline as /analyze ────────────────

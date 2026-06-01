@@ -3362,7 +3362,15 @@ function _lvUpdateSaveBtn() {
 
 async function lvStartCamera() {
   try {
-    _lvStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    // Request high-enough resolution so AI can read product labels
+    _lvStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1280, min: 640 },
+        height: { ideal: 720,  min: 480 },
+      },
+      audio: false,
+    });
     const video = document.getElementById('lv-video');
     video.srcObject = _lvStream;
     video.style.display = 'block';
@@ -3399,13 +3407,19 @@ async function _lvCaptureFrame() {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     // Sanity-check: skip all-black frames (GPU texture not accessible on some mobile browsers)
-    const sample = ctx.getImageData(canvas.width >> 1, canvas.height >> 1, 4, 4).data;
-    const bright = Array.from(sample).some(v => v > 10);
+    // Sample multiple points across the frame, not just center
+    const cx = canvas.width >> 1, cy = canvas.height >> 1;
+    const s1 = ctx.getImageData(cx, cy, 4, 4).data;
+    const s2 = ctx.getImageData(cx >> 1, cy >> 1, 4, 4).data;
+    const combined = [...Array.from(s1), ...Array.from(s2)];
+    // Only check R,G,B channels (skip alpha which is always 255)
+    const bright = combined.some((v, idx) => idx % 4 !== 3 && v > 15);
     if (!bright) {
       document.getElementById('lv-status-txt').textContent = 'جاري تسخين الكاميرا...';
       return;
     }
-    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
+    document.getElementById('lv-status-txt').textContent = 'جاري التحليل...';
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
     if (!blob) { return; }
 
     const form = new FormData();
