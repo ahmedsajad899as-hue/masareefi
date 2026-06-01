@@ -3376,7 +3376,7 @@ async function lvStartCamera() {
 
 function _lvStartInterval() {
   if (_lvInterval) clearTimeout(_lvInterval);
-  _lvInterval = setTimeout(_lvCaptureLoop, 3000);
+  _lvInterval = setTimeout(_lvCaptureLoop, 2000);
 }
 
 async function _lvCaptureLoop() {
@@ -3384,7 +3384,7 @@ async function _lvCaptureLoop() {
   const delay = await _lvCaptureFrame();
   // Schedule next capture after response; use returned delay (e.g. rate-limit backoff)
   if (_lvStream && _lvStream.active) {
-    _lvInterval = setTimeout(_lvCaptureLoop, delay || 3000);
+    _lvInterval = setTimeout(_lvCaptureLoop, delay || 2000);
   }
 }
 
@@ -3436,12 +3436,13 @@ async function _lvCaptureFrame() {
       for (const it of items) {
         const name = (it.product_name || '').trim();
         if (!name) continue;
-        // Skip if already seen (still in list) — only re-add if user manually removed it
-        if (_lvSeenItems.has(name)) continue;
+        const normKey = _lvNormName(name);
+        // Skip if already seen (by normalized key) — only re-add if user manually removed it
+        if (_lvSeenItems.has(normKey)) continue;
         const qty = Number(it.quantity) || 1;
         const price = Number(it.unit_price) || 0;
         _lvItems.push({ product_name: name, quantity: qty, unit_price: price });
-        _lvSeenItems.add(name);
+        _lvSeenItems.add(normKey);
         added++;
       }
       _lvNewCount += added;
@@ -3497,7 +3498,7 @@ function _lvUpdateItem(i, field, val) {
 
 function _lvRemoveItem(i) {
   const name = _lvItems[i]?.product_name;
-  if (name) _lvSeenItems.delete(name);
+  if (name) _lvSeenItems.delete(_lvNormName(name));
   _lvItems.splice(i, 1);
   _lvRenderItems();
 }
