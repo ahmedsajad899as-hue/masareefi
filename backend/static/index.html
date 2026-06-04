@@ -1659,8 +1659,8 @@
               </div>
               <!-- Right: camera preview -->
               <div class="position-relative flex-grow-1">
-              <!-- Multi-camera grid -->
-              <div id="lv-cam-grid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:4px;min-height:140px;max-height:220px;overflow-y:auto;border-radius:10px"></div>
+              <!-- Multi-camera grid: single cam = full view, multi = compact grid -->
+              <div id="lv-cam-grid" style="display:none;grid-template-columns:1fr;gap:4px;border-radius:10px;overflow:hidden"></div>
               <!-- Placeholder when no cameras -->
               <div id="lv-cam-placeholder" style="height:180px;background:#111;border-radius:10px;border:1px solid #333;display:flex;align-items:center;justify-content:center">
                 <div class="text-center text-muted">

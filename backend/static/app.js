@@ -3501,7 +3501,13 @@ function _lvUpdateSaveBtn() {
 
 async function lvStartCameras() {
   try {
-    // Get permission first by requesting any camera stream briefly
+    // Mobile: use back camera directly via facingMode (avoids enum issues)
+    const isMobile = navigator.maxTouchPoints > 1;
+    if (isMobile) {
+      await _lvPickCamera('__environment__', 'الكاميرا');
+      return;
+    }
+    // Desktop: get permission then enumerate devices
     const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     tmp.getTracks().forEach(t => t.stop());
     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -3510,11 +3516,25 @@ async function lvStartCameras() {
     if (_lvCamDevices.length === 1) {
       await _lvPickCamera(_lvCamDevices[0].deviceId, _lvCamDevices[0].label || 'كاميرا 1');
     } else {
-      _lvShowCamPicker();
+      // Show selection list inside the placeholder (it's still visible at this point)
+      _lvShowInitialCamPicker();
     }
   } catch(e) {
     toast('تعذّر فتح الكاميرا: ' + e.message, 'err');
   }
+}
+
+function _lvShowInitialCamPicker() {
+  const ph = document.getElementById('lv-cam-placeholder');
+  if (!ph) return;
+  ph.style.height = 'auto';
+  ph.innerHTML = `<div class="p-2 w-100">
+    <div class="text-muted text-center mb-2" style="font-size:12px"><i class="fas fa-camera me-1" style="color:#a78bfa"></i>اختر الكاميرا للبدء</div>
+    ${_lvCamDevices.map((d, i) => {
+      const lbl = d.label || ('كاميرا ' + (i + 1));
+      return `<button onclick="_lvPickCamera('${d.deviceId.replace(/'/g, '')}','${lbl.replace(/'/g, '')}')" class="btn btn-sm w-100 mb-1 text-end" style="background:#2a2a3e;color:#fff;border:1px solid #555;font-size:12px"><i class="fas fa-video me-1" style="color:#a78bfa"></i>${lbl}</button>`;
+    }).join('')}
+  </div>`;
 }
 
 function _lvShowCamPicker() {
@@ -3535,17 +3555,18 @@ function _lvShowCamPicker() {
 async function _lvPickCamera(deviceId, label) {
   const picker = document.getElementById('lv-cam-picker');
   if (picker) picker.style.display = 'none';
-  if (_lvCams.some(c => c.deviceId === deviceId)) return;
+  if (deviceId !== '__environment__' && _lvCams.some(c => c.deviceId === deviceId)) return;
   const idx = _lvCams.length;
   const cam = {
     id: 'lvcam' + idx, deviceId, label: label || ('كاميرا ' + (idx + 1)),
     stream: null, interval: null, motionCanvas: null, lastGray: null, motionPending: false, peakDiffMap: null,
   };
   try {
-    cam.stream = await navigator.mediaDevices.getUserMedia({
-      video: { deviceId: { exact: deviceId }, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 } },
-      audio: false,
-    });
+    // '__environment__' = mobile back camera via facingMode (no deviceId)
+    const videoConstraints = deviceId === '__environment__'
+      ? { facingMode: { ideal: 'environment' }, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 } }
+      : { deviceId: { exact: deviceId }, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 } };
+    cam.stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
   } catch(e) { toast('تعذّر فتح الكاميرا: ' + e.message, 'err'); return; }
   _lvCams.push(cam);
   // Build camera card
@@ -3554,7 +3575,9 @@ async function _lvPickCamera(deviceId, label) {
   card.id = cam.id + '-card';
   card.className = 'position-relative';
   card.style.cssText = 'background:#000;border-radius:8px;overflow:hidden;border:1px solid #444;';
-  card.innerHTML = `<video id="${cam.id}-video" autoplay playsinline muted style="width:100%;height:140px;object-fit:cover;display:block"></video>
+  // Video height: full (200px) for single camera, compact (140px) for multiple
+  const vidH = _lvCams.length === 1 ? '200px' : '140px';
+  card.innerHTML = `<video id="${cam.id}-video" autoplay playsinline muted style="width:100%;height:${vidH};object-fit:cover;display:block"></video>
     <canvas id="${cam.id}-canvas" style="display:none"></canvas>
     <div style="position:absolute;top:4px;left:4px;right:4px;display:flex;align-items:center;gap:4px;pointer-events:none">
       <span id="${cam.id}-led" style="width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 5px #ef4444;flex-shrink:0;display:inline-block"></span>
@@ -3562,7 +3585,6 @@ async function _lvPickCamera(deviceId, label) {
       <button onclick="_lvRemoveCam('${cam.id}')" style="pointer-events:auto;background:rgba(0,0,0,0.55);border:none;color:#ff8080;border-radius:4px;padding:0 5px;font-size:11px;cursor:pointer;line-height:18px">✕</button>
     </div>`;
   grid.appendChild(card);
-  grid.style.display = 'grid';
   document.getElementById('lv-cam-placeholder').style.display = 'none';
   document.getElementById('lv-status-bar').style.display = '';
   const addRow = document.getElementById('lv-add-cam-row');
@@ -3570,7 +3592,27 @@ async function _lvPickCamera(deviceId, label) {
   const pr = document.getElementById('lv-pause-row');
   if (pr) pr.style.display = '';
   document.getElementById(cam.id + '-video').srcObject = cam.stream;
+  _lvUpdateCamGrid();
   _lvCamStartInterval(cam);
+}
+
+// Adjust grid layout: single camera = full width/height, multiple = compact grid
+function _lvUpdateCamGrid() {
+  const grid = document.getElementById('lv-cam-grid');
+  if (!grid) return;
+  if (_lvCams.length === 0) { grid.style.display = 'none'; return; }
+  grid.style.display = 'grid';
+  if (_lvCams.length === 1) {
+    grid.style.gridTemplateColumns = '1fr';
+    const v = document.getElementById(_lvCams[0].id + '-video');
+    if (v) v.style.height = '200px';
+  } else {
+    grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(140px,1fr))';
+    for (const c of _lvCams) {
+      const v = document.getElementById(c.id + '-video');
+      if (v) v.style.height = '140px';
+    }
+  }
 }
 
 function _lvRemoveCam(camId) {
@@ -3587,6 +3629,8 @@ function _lvRemoveCam(camId) {
     document.getElementById('lv-status-bar').style.display = 'none';
     document.getElementById('lv-add-cam-row').style.display = 'none';
     document.getElementById('lv-pause-row').style.display = 'none';
+  } else {
+    _lvUpdateCamGrid();
   }
 }
 
