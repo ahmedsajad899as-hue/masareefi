@@ -284,6 +284,7 @@ async def analyze_stream_frame(
 
     items_data, raw = await analyze_image_for_market_items(
         image_bytes, content_type, known_products=known,
+        strict_visible_only=True,
     )
     if catalog_price_map:
         for item in items_data:

@@ -1323,6 +1323,7 @@ async def analyze_image_for_market_items(
     mime_type: str,
     known_products: "list[str] | list[dict] | None" = None,
     catalog_ref_images: "list[dict] | None" = None,  # kept for API compat, no longer used
+    strict_visible_only: bool = False,
 ) -> "tuple[list[dict], str]":
     """
     Use GPT-4o vision (preferred) or Gemini 1.5 Flash (fallback) to identify products.
@@ -1330,6 +1331,10 @@ async def analyze_image_for_market_items(
     `known_products` may be either:
       - a list of strings (legacy)  — just product names previously sold, OR
       - a list of dicts             — {name, last_price, avg_price, count}.
+
+    `strict_visible_only`: when True (live stream mode), do NOT send history list to AI.
+    This prevents the AI from hallucinating catalog/history products that aren't visible.
+    Only price lookup is kept so known prices are applied after detection.
 
     Catalog product names are included as a text hint so the AI can match them
     without the overhead of transmitting reference images.
@@ -1406,10 +1411,17 @@ async def analyze_image_for_market_items(
                     known_section_lines.append(f"- {name}")
 
     user_text = "حلل الصورة واستخرج قائمة المنتجات بالتنسيق المطلوب (JSON array فقط)."
-    if known_section_lines:
+    if known_section_lines and not strict_visible_only:
         user_text += (
             "\n\nالمنتجات المعروفة (باعها صاحب المحل سابقاً — إذا طابقت استخدم نفس الاسم ونفس السعر):\n"
             + "\n".join(known_section_lines)
+        )
+    if strict_visible_only:
+        user_text = (
+            "انظر للصورة بدقة. أرجع فقط المنتجات التي تراها فعلاً في هذه الصورة الآن.\n"
+            "⚠ لا تُدرج أي منتج لا يظهر بوضوح في الصورة — حتى لو كنت تعرفه أو بعته من قبل.\n"
+            "⚠ إذا رأيت منتجاً واحداً فقط، أرجع مصفوفة بعنصر واحد فقط.\n"
+            "أرجع JSON array فقط بدون أي نص إضافي."
         )
 
     raw = ""
