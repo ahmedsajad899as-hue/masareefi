@@ -3578,7 +3578,7 @@ async function _lvPickCamera(deviceId, label) {
   // Use aspect-ratio 1:1 → camera fills a square regardless of width
   const vidH = _lvCams.length === 1 ? '100%' : '140px';
   const vidAR = _lvCams.length === 1 ? '1/1' : '1/1';
-  card.innerHTML = `<video id="${cam.id}-video" autoplay playsinline muted style="width:100%;aspect-ratio:1/1;height:auto;object-fit:cover;display:block"></video>
+  card.innerHTML = `<video id="${cam.id}-video" autoplay playsinline muted style="width:100%;max-width:260px;aspect-ratio:1/1;height:auto;object-fit:cover;display:block;margin:0 auto"></video>
     <canvas id="${cam.id}-canvas" style="display:none"></canvas>
     <div style="position:absolute;top:4px;left:4px;right:4px;display:flex;align-items:center;gap:4px;pointer-events:none">
       <span id="${cam.id}-led" style="width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 5px #ef4444;flex-shrink:0;display:inline-block"></span>
@@ -3611,7 +3611,7 @@ function _lvUpdateCamGrid() {
   // Ensure all videos use square aspect-ratio
   for (const c of _lvCams) {
     const v = document.getElementById(c.id + '-video');
-    if (v) { v.style.height = 'auto'; v.style.aspectRatio = '1/1'; }
+    if (v) { v.style.height = 'auto'; v.style.aspectRatio = '1/1'; v.style.maxWidth = _lvCams.length === 1 ? '260px' : ''; }
   }
 }
 
