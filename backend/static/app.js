@@ -3277,8 +3277,10 @@ async function visionSaveSale() {
 // ═══════════════════════════════════════════════════════════════
 // ── Live Vision (continuous camera analysis) ─────────────────
 // ═══════════════════════════════════════════════════════════════
-let _lvStream = null;
-let _lvInterval = null;
+let _lvCams = [];            // per-camera instances [{id,deviceId,label,stream,interval,motionCanvas,lastGray,motionPending,peakDiffMap}]
+let _lvAiQueue = [];         // queued AI requests [{cam,blob,peakDiffMap,canvas}]
+let _lvAiBusy = false;       // only one AI request in flight at a time
+let _lvCamDevices = [];      // cached list of available camera devices
 let _lvSessionId = null;
 let _lvItems = [];
 let _lvSeenItems = new Set();
@@ -3287,25 +3289,21 @@ let _lvCustomers = [];
 let _lvNewCount = 0;
 let _lvDupCount = 0;
 let _lvBusy = false;
-let _lvPaused = false;        // pause/resume toggle
-let _lvMotionCanvas = null;  // offscreen 32×32 canvas for motion detection
-let _lvLastGray = null;      // grayscale snapshot of previous frame (Uint8Array 1024)
-let _lvMotionPending = false; // true = motion detected, waiting for frame to stabilize
-let _lvPeakDiffMap = null;    // diff map from peak-motion frame (used for crop bbox)
+let _lvPaused = false;
 
-// Client-side motion + stability detector.
-// State machine:
-//   1. Idle   → avgDiff > 18  → MotionPending (save peak diff for crop)
-//   2. MotionPending → avgDiff < 10 → FIRE (item settled → send to AI)
-//   3. MotionPending → still > 18  → stay pending, keep updating peak diff
+// Per-camera motion + stability detector.
+// State machine per camera object:
+//   1. idle   → avgDiff > 18  → pending (saves peak diff map for crop bbox)
+//   2. pending → avgDiff < 10 → fire   (item settled → queue to AI)
+//   3. pending → still > 18  → stay pending, keep updating peak diff
 // Returns: 'fire' | 'pending' | 'idle'
-function _lvMotionState(canvas) {
-  if (!_lvMotionCanvas) {
-    _lvMotionCanvas = document.createElement('canvas');
-    _lvMotionCanvas.width = 32;
-    _lvMotionCanvas.height = 32;
+function _lvCamMotionState(cam, canvas) {
+  if (!cam.motionCanvas) {
+    cam.motionCanvas = document.createElement('canvas');
+    cam.motionCanvas.width = 32;
+    cam.motionCanvas.height = 32;
   }
-  const mctx = _lvMotionCanvas.getContext('2d', { willReadFrequently: true });
+  const mctx = cam.motionCanvas.getContext('2d', { willReadFrequently: true });
   mctx.drawImage(canvas, 0, 0, 32, 32);
   const px = mctx.getImageData(0, 0, 32, 32).data;
   const gray = new Uint8Array(1024);
@@ -3313,23 +3311,22 @@ function _lvMotionState(canvas) {
     const o = i << 2;
     gray[i] = (px[o] * 77 + px[o+1] * 150 + px[o+2] * 29) >> 8;
   }
-  if (!_lvLastGray) { _lvLastGray = gray; _lvMotionPending = false; return 'idle'; }
+  if (!cam.lastGray) { cam.lastGray = gray; cam.motionPending = false; return 'idle'; }
   const diff = new Float32Array(1024);
   let total = 0;
   for (let i = 0; i < 1024; i++) {
-    diff[i] = Math.abs(gray[i] - _lvLastGray[i]);
+    diff[i] = Math.abs(gray[i] - cam.lastGray[i]);
     total += diff[i];
   }
-  _lvLastGray = gray;
+  cam.lastGray = gray;
   const avg = total / 1024;
   if (avg > 18) {
-    // Store diff from the PEAK motion frame (best for crop bbox)
-    _lvPeakDiffMap = diff;
-    _lvMotionPending = true;
+    cam.peakDiffMap = diff; // peak motion frame = best crop bbox
+    cam.motionPending = true;
     return 'pending';
-  } else if (_lvMotionPending && avg < 10) {
-    _lvMotionPending = false;
-    return 'fire'; // _lvPeakDiffMap already has the best crop diff
+  } else if (cam.motionPending && avg < 10) {
+    cam.motionPending = false;
+    return 'fire';
   }
   return 'idle';
 }
@@ -3353,15 +3350,15 @@ function _lvLed(color) {
   el.style.boxShadow = `0 0 7px ${glow}`;
 }
 
-// Save 80×60 thumbnail of detected frame into the snapshots sidebar
-function _lvSaveSnapshot(canvas) {
+// Save 80×80 thumbnail of detected frame into the snapshots sidebar
+function _lvSaveSnapshot(canvas, peakDiffMap) {
   // Find bounding box of high-motion region in 32×32 diff map
   let x0 = 31, y0 = 31, x1 = 0, y1 = 0;
   const threshold = 20; // per-pixel diff threshold to count as "item region"
-  if (_lvDiffMap) {
+  if (peakDiffMap) {
     for (let r = 0; r < 32; r++) {
       for (let c = 0; c < 32; c++) {
-        if (_lvDiffMap[r * 32 + c] > threshold) {
+        if (peakDiffMap[r * 32 + c] > threshold) {
           if (c < x0) x0 = c; if (c > x1) x1 = c;
           if (r < y0) y0 = r; if (r > y1) y1 = r;
         }
@@ -3407,9 +3404,12 @@ function lvTogglePause() {
     _lvLed('red');
     document.getElementById('lv-status-txt').textContent = 'موقوف — اضغط للاستئناف';
   } else {
-    _lvLastGray = null; // reset baseline so first frame after resume always checks
-    _lvMotionPending = false;
-    _lvStartInterval();
+    // Reset baseline for all cameras and restart their loops
+    for (const cam of _lvCams) {
+      cam.lastGray = null;
+      cam.motionPending = false;
+      _lvCamStartInterval(cam);
+    }
   }
 }
 
@@ -3421,14 +3421,15 @@ function _lvGenUUID() {
 }
 
 async function openLiveVisionModal() {
+  _lvCams = [];
+  _lvAiQueue = [];
+  _lvAiBusy = false;
   _lvItems = [];
   _lvSeenItems = new Set();
   _lvCustomerId = null;
   _lvNewCount = 0;
   _lvDupCount = 0;
   _lvBusy = false;
-  _lvLastGray = null; // reset motion baseline for new session
-  _lvMotionPending = false;
   _lvPaused = false;
   _lvSessionId = _lvGenUUID();
 
@@ -3447,8 +3448,10 @@ async function openLiveVisionModal() {
   document.getElementById('lv-clear-btn').style.display = 'none';
   document.getElementById('lv-empty-hint').style.display = '';
   document.getElementById('lv-status-bar').style.display = 'none';
-  document.getElementById('lv-video').style.display = 'none';
+  document.getElementById('lv-cam-grid').style.display = 'none';
   document.getElementById('lv-cam-placeholder').style.display = '';
+  const addRow = document.getElementById('lv-add-cam-row');
+  if (addRow) addRow.style.display = 'none';
   document.getElementById('lv-status-txt').textContent = 'جاهز...';
   document.getElementById('lv-counts').textContent = '';
   document.getElementById('lv-cust-hint').textContent = 'اختر زبون قبل الحفظ.';
@@ -3496,96 +3499,158 @@ function _lvUpdateSaveBtn() {
   document.getElementById('lv-save-btn').disabled = !(_lvCustomerId && _lvItems.length > 0);
 }
 
-async function lvStartCamera() {
+async function lvStartCameras() {
   try {
-    // Request high-enough resolution so AI can read product labels
-    _lvStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' },
-        width:  { ideal: 1280, min: 640 },
-        height: { ideal: 720,  min: 480 },
-      },
-      audio: false,
-    });
-    const video = document.getElementById('lv-video');
-    video.srcObject = _lvStream;
-    video.style.display = 'block';
-    document.getElementById('lv-cam-placeholder').style.display = 'none';
-    document.getElementById('lv-status-bar').style.display = '';
-    const pr = document.getElementById('lv-pause-row');
-    if (pr) pr.style.display = '';
-    _lvStartInterval();
+    // Get permission first by requesting any camera stream briefly
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    tmp.getTracks().forEach(t => t.stop());
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    _lvCamDevices = devices.filter(d => d.kind === 'videoinput');
+    if (_lvCamDevices.length === 0) { toast('لا توجد كاميرات متاحة', 'err'); return; }
+    if (_lvCamDevices.length === 1) {
+      await _lvPickCamera(_lvCamDevices[0].deviceId, _lvCamDevices[0].label || 'كاميرا 1');
+    } else {
+      _lvShowCamPicker();
+    }
   } catch(e) {
     toast('تعذّر فتح الكاميرا: ' + e.message, 'err');
   }
 }
 
-function _lvStartInterval() {
-  if (_lvInterval) clearTimeout(_lvInterval);
-  _lvInterval = setTimeout(_lvCaptureLoop, 800);
+function _lvShowCamPicker() {
+  const picker = document.getElementById('lv-cam-picker');
+  if (!picker) return;
+  picker.innerHTML = _lvCamDevices.map((d, i) => {
+    const alreadyOn = _lvCams.some(c => c.deviceId === d.deviceId);
+    const lbl = d.label || ('كاميرا ' + (i + 1));
+    return `<button class="btn btn-sm w-100 mb-1 text-end"
+      style="background:${alreadyOn ? '#2a2a3e' : '#1e1e2e'};color:${alreadyOn ? '#666' : '#fff'};border:1px solid #555;font-size:12px"
+      ${alreadyOn ? 'disabled' : `onclick="_lvPickCamera('${d.deviceId.replace(/'/g,'')}','${lbl.replace(/'/g,'')}')"` }>
+      <i class="fas fa-camera me-1" style="color:${alreadyOn ? '#555' : '#a78bfa'}"></i>${lbl}${alreadyOn ? ' ✓' : ''}
+    </button>`;
+  }).join('');
+  picker.style.display = picker.style.display === 'none' ? '' : 'none';
 }
 
-async function _lvCaptureLoop() {
-  _lvInterval = null;
-  if (_lvPaused) {
-    if (_lvStream && _lvStream.active) _lvInterval = setTimeout(_lvCaptureLoop, 800);
-    return;
-  }
-  const delay = await _lvCaptureFrame();
-  if (_lvStream && _lvStream.active) {
-    // Poll faster (300ms) when motion detected to catch settle quickly
-    const next = delay || (_lvMotionPending ? 300 : 800);
-    _lvInterval = setTimeout(_lvCaptureLoop, next);
-  }
-}
-
-async function _lvCaptureFrame() {
-  const video = document.getElementById('lv-video');
-  if (!video || video.readyState < 2) return;
+async function _lvPickCamera(deviceId, label) {
+  const picker = document.getElementById('lv-cam-picker');
+  if (picker) picker.style.display = 'none';
+  if (_lvCams.some(c => c.deviceId === deviceId)) return;
+  const idx = _lvCams.length;
+  const cam = {
+    id: 'lvcam' + idx, deviceId, label: label || ('كاميرا ' + (idx + 1)),
+    stream: null, interval: null, motionCanvas: null, lastGray: null, motionPending: false, peakDiffMap: null,
+  };
   try {
-    const canvas = document.getElementById('lv-canvas');
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    cam.stream = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: { exact: deviceId }, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 } },
+      audio: false,
+    });
+  } catch(e) { toast('تعذّر فتح الكاميرا: ' + e.message, 'err'); return; }
+  _lvCams.push(cam);
+  // Build camera card
+  const grid = document.getElementById('lv-cam-grid');
+  const card = document.createElement('div');
+  card.id = cam.id + '-card';
+  card.className = 'position-relative';
+  card.style.cssText = 'background:#000;border-radius:8px;overflow:hidden;border:1px solid #444;';
+  card.innerHTML = `<video id="${cam.id}-video" autoplay playsinline muted style="width:100%;height:140px;object-fit:cover;display:block"></video>
+    <canvas id="${cam.id}-canvas" style="display:none"></canvas>
+    <div style="position:absolute;top:4px;left:4px;right:4px;display:flex;align-items:center;gap:4px;pointer-events:none">
+      <span id="${cam.id}-led" style="width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 5px #ef4444;flex-shrink:0;display:inline-block"></span>
+      <span style="font-size:10px;color:#fff;text-shadow:0 1px 3px #000;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cam.label}</span>
+      <button onclick="_lvRemoveCam('${cam.id}')" style="pointer-events:auto;background:rgba(0,0,0,0.55);border:none;color:#ff8080;border-radius:4px;padding:0 5px;font-size:11px;cursor:pointer;line-height:18px">✕</button>
+    </div>`;
+  grid.appendChild(card);
+  grid.style.display = 'grid';
+  document.getElementById('lv-cam-placeholder').style.display = 'none';
+  document.getElementById('lv-status-bar').style.display = '';
+  const addRow = document.getElementById('lv-add-cam-row');
+  if (addRow) addRow.style.display = '';
+  const pr = document.getElementById('lv-pause-row');
+  if (pr) pr.style.display = '';
+  document.getElementById(cam.id + '-video').srcObject = cam.stream;
+  _lvCamStartInterval(cam);
+}
 
-    // Sanity-check: skip all-black frames (GPU texture not accessible on some mobile browsers)
-    // Sample multiple points across the frame, not just center
-    const cx = canvas.width >> 1, cy = canvas.height >> 1;
+function _lvRemoveCam(camId) {
+  const idx = _lvCams.findIndex(c => c.id === camId);
+  if (idx === -1) return;
+  const cam = _lvCams[idx];
+  if (cam.interval) clearTimeout(cam.interval);
+  if (cam.stream) cam.stream.getTracks().forEach(t => t.stop());
+  document.getElementById(camId + '-card')?.remove();
+  _lvCams.splice(idx, 1);
+  if (_lvCams.length === 0) {
+    document.getElementById('lv-cam-grid').style.display = 'none';
+    document.getElementById('lv-cam-placeholder').style.display = '';
+    document.getElementById('lv-status-bar').style.display = 'none';
+    document.getElementById('lv-add-cam-row').style.display = 'none';
+    document.getElementById('lv-pause-row').style.display = 'none';
+  }
+}
+
+function _lvCamSetLed(cam, color) {
+  const el = document.getElementById(cam.id + '-led');
+  if (!el) return;
+  const c = { green: '#22c55e', red: '#ef4444', yellow: '#f59e0b' }[color] || '#ef4444';
+  el.style.background = c; el.style.boxShadow = '0 0 5px ' + c;
+}
+
+function _lvCamStartInterval(cam) {
+  if (cam.interval) clearTimeout(cam.interval);
+  cam.interval = setTimeout(() => _lvCamLoop(cam), 800);
+}
+
+async function _lvCamLoop(cam) {
+  cam.interval = null;
+  if (_lvPaused || !cam.stream || !cam.stream.active) return;
+  await _lvCamFrame(cam);
+  if (cam.stream && cam.stream.active) {
+    cam.interval = setTimeout(() => _lvCamLoop(cam), cam.motionPending ? 300 : 800);
+  }
+}
+
+async function _lvCamFrame(cam) {
+  const videoEl = document.getElementById(cam.id + '-video');
+  if (!videoEl || videoEl.readyState < 2) return;
+  try {
+    const canvasEl = document.getElementById(cam.id + '-canvas');
+    canvasEl.width = videoEl.videoWidth || 640;
+    canvasEl.height = videoEl.videoHeight || 480;
+    const ctx = canvasEl.getContext('2d');
+    ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+    // Black-frame check
+    const cx = canvasEl.width >> 1, cy = canvasEl.height >> 1;
     const s1 = ctx.getImageData(cx, cy, 4, 4).data;
     const s2 = ctx.getImageData(cx >> 1, cy >> 1, 4, 4).data;
-    const combined = [...Array.from(s1), ...Array.from(s2)];
-    // Only check R,G,B channels (skip alpha which is always 255)
-    const bright = combined.some((v, idx) => idx % 4 !== 3 && v > 15);
-    if (!bright) {
-      _lvLed('red');
-      document.getElementById('lv-status-txt').textContent = 'جاري تسخين الكاميرا...';
-      return;
-    }
+    const bright = [...Array.from(s1), ...Array.from(s2)].some((v, idx) => idx % 4 !== 3 && v > 15);
+    if (!bright) { _lvCamSetLed(cam, 'red'); return; }
+    const motionState = _lvCamMotionState(cam, canvasEl);
+    if (motionState === 'idle')    { _lvCamSetLed(cam, 'red');    return; }
+    if (motionState === 'pending') { _lvCamSetLed(cam, 'yellow'); return; }
+    // fire — clone canvas and push to AI queue
+    _lvCamSetLed(cam, 'yellow');
+    const blob = await new Promise(res => canvasEl.toBlob(res, 'image/jpeg', 0.92));
+    if (!blob) return;
+    const snapCanvas = document.createElement('canvas');
+    snapCanvas.width = canvasEl.width; snapCanvas.height = canvasEl.height;
+    snapCanvas.getContext('2d').drawImage(canvasEl, 0, 0);
+    _lvAiQueue.push({ cam, blob, peakDiffMap: cam.peakDiffMap, canvas: snapCanvas });
+    _lvProcessAiQueue();
+  } catch(_) {}
+}
 
-    // Motion state machine — only send to AI when item placed AND settled
-    const motionState = _lvMotionState(canvas);
-    if (motionState === 'idle') {
-      _lvLed('red');
-      document.getElementById('lv-status-txt').textContent = 'في انتظار منتج...';
-      return;
-    }
-    if (motionState === 'pending') {
-      _lvLed('yellow');
-      document.getElementById('lv-status-txt').textContent = 'جاري الكشف...';
-      return;
-    }
-    // motionState === 'fire' — item settled, send to AI
-    _lvLed('yellow');
-    document.getElementById('lv-status-txt').textContent = 'جاري التحليل...';
-    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
-    if (!blob) { return; }
-
+async function _lvProcessAiQueue() {
+  if (_lvAiBusy || _lvAiQueue.length === 0) return;
+  _lvAiBusy = true;
+  const { cam, blob, peakDiffMap, canvas } = _lvAiQueue.shift();
+  _lvLed('yellow');
+  document.getElementById('lv-status-txt').textContent = 'جاري التحليل (' + cam.label + ')...';
+  try {
     const form = new FormData();
     form.append('session_id', _lvSessionId);
     form.append('image', blob, 'frame.jpg');
-
-    // Helper to send the form with current token, with auto-refresh on 401
     const _doFetch = async () => fetch(API + '/market/vision/analyze-stream', {
       method: 'POST',
       headers: S.token ? { 'Authorization': 'Bearer ' + S.token } : {},
@@ -3594,66 +3659,60 @@ async function _lvCaptureFrame() {
     let res = await _doFetch();
     if (res.status === 401 && S.refreshToken) {
       const ok = await tryRefresh();
-      if (ok) { res = await _doFetch(); }
-      else { doLogout(); return; }
+      if (ok) { res = await _doFetch(); } else { doLogout(); _lvAiBusy = false; return; }
     }
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
-      document.getElementById('lv-status-txt').textContent = `خطأ ${res.status}: ${errText.slice(0, 100)}`;
-      return;
+      document.getElementById('lv-status-txt').textContent = `خطأ ${res.status}: ${errText.slice(0, 80)}`;
+      _lvAiBusy = false; _lvProcessAiQueue(); return;
     }
     const data = await res.json();
     const status = data.status || 'empty';
-
-    if (status === 'duplicate') {
-      _lvDupCount++;
-      _lvLed('red');
-      document.getElementById('lv-status-txt').textContent = 'نفس الإطار — تجاهل';
-      const rb = document.getElementById('lv-retry-btn'); if (rb) rb.style.display = 'none';
-    } else if (status === 'new') {
+    if (status === 'new') {
       const items = data.items || [];
       let added = 0;
       for (const it of items) {
         const name = (it.product_name || '').trim();
         if (!name) continue;
         const normKey = _lvNormName(name);
-        // Skip if already seen (by normalized key) — only re-add if user manually removed it
         if (_lvSeenItems.has(normKey)) continue;
-        const qty = Number(it.quantity) || 1;
-        const price = Number(it.unit_price) || 0;
-        _lvItems.push({ product_name: name, quantity: qty, unit_price: price });
-        _lvSeenItems.add(normKey);
-        added++;
+        _lvItems.push({ product_name: name, quantity: Number(it.quantity)||1, unit_price: Number(it.unit_price)||0 });
+        _lvSeenItems.add(normKey); added++;
       }
       _lvNewCount += added;
       if (added > 0) {
         _lvLed('green');
-        document.getElementById('lv-status-txt').textContent = `أُضيف ${added} منتج جديد`;
-        _lvSaveSnapshot(canvas);
+        document.getElementById('lv-status-txt').textContent = `أُضيف ${added} منتج (${cam.label})`;
+        _lvSaveSnapshot(canvas, peakDiffMap);
         setTimeout(() => _lvLed('red'), 2000);
       } else {
         _lvLed('red');
         document.getElementById('lv-status-txt').textContent = 'لم يُكتشف منتج جديد';
       }
       _lvRenderItems();
+    } else if (status === 'duplicate') {
+      _lvDupCount++;
+      _lvLed('red');
+      document.getElementById('lv-status-txt').textContent = 'نفس الإطار — تجاهل';
+      const rb = document.getElementById('lv-retry-btn'); if (rb) rb.style.display = 'none';
     } else {
       _lvLed('red');
-      // status='empty' — show what AI said (first 120 chars) to help debug
       const hint = data.raw_response ? data.raw_response.slice(0, 120) : 'لم يتم التعرف على منتج';
       document.getElementById('lv-status-txt').textContent = hint;
-      // If Gemini rate-limited, pause captures for 60 s and show retry button
       if (hint.includes('gemini-rate-limit') || hint.includes('يرجى الانتظار')) {
         const retryBtn = document.getElementById('lv-retry-btn');
         if (retryBtn) retryBtn.style.display = '';
-        return 60000;
+        _lvAiBusy = false;
+        setTimeout(() => { _lvAiBusy = false; _lvProcessAiQueue(); }, 60000);
+        return;
       }
     }
     document.getElementById('lv-counts').textContent = `جديد:${_lvNewCount} · مكرر:${_lvDupCount}`;
   } catch(e) {
     document.getElementById('lv-status-txt').textContent = 'خطأ: ' + e.message;
   }
-  // default: no special delay
-  return 0;
+  _lvAiBusy = false;
+  _lvProcessAiQueue();
 }
 
 function _lvRenderItems() {
@@ -3698,8 +3757,13 @@ function lvClearItems() {
 }
 
 async function closeLiveVisionModal() {
-  if (_lvInterval) { clearTimeout(_lvInterval); _lvInterval = null; }
-  if (_lvStream) { _lvStream.getTracks().forEach(t => t.stop()); _lvStream = null; }
+  _lvAiQueue = [];
+  _lvAiBusy = false;
+  for (const cam of _lvCams) {
+    if (cam.interval) clearTimeout(cam.interval);
+    if (cam.stream) cam.stream.getTracks().forEach(t => t.stop());
+  }
+  _lvCams = [];
   // End session on backend
   if (_lvSessionId) {
     try {
@@ -3718,12 +3782,14 @@ async function closeLiveVisionModal() {
 }
 
 function lvRetryNow() {
-  // Hide retry button and immediately trigger a new capture
   const retryBtn = document.getElementById('lv-retry-btn');
   if (retryBtn) retryBtn.style.display = 'none';
-  if (_lvInterval) { clearTimeout(_lvInterval); _lvInterval = null; }
   document.getElementById('lv-status-txt').textContent = 'جاري المحاولة...';
-  _lvCaptureLoop();
+  _lvAiBusy = false;
+  for (const cam of _lvCams) {
+    if (!cam.interval && cam.stream && cam.stream.active) _lvCamStartInterval(cam);
+  }
+  _lvProcessAiQueue();
 }
 
 async function lvSaveSale() {

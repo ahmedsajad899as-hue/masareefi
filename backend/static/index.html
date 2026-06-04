@@ -1659,14 +1659,22 @@
               </div>
               <!-- Right: camera preview -->
               <div class="position-relative flex-grow-1">
-                <video id="lv-video" autoplay playsinline muted style="width:100%;max-height:220px;border-radius:10px;border:1px solid #444;background:#000;display:none"></video>
-                <canvas id="lv-canvas" style="display:none"></canvas>
-                <div id="lv-cam-placeholder" style="height:180px;background:#111;border-radius:10px;border:1px solid #333;display:flex;align-items:center;justify-content:center">
-                  <div class="text-center text-muted">
-                    <i class="fas fa-video fa-2x mb-2 d-block" style="color:#7c3aed"></i>
-                    <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="lvStartCamera()"><i class="fas fa-play me-1"></i>تشغيل الكاميرا</button>
-                  </div>
+              <!-- Multi-camera grid -->
+              <div id="lv-cam-grid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:4px;min-height:140px;max-height:220px;overflow-y:auto;border-radius:10px"></div>
+              <!-- Placeholder when no cameras -->
+              <div id="lv-cam-placeholder" style="height:180px;background:#111;border-radius:10px;border:1px solid #333;display:flex;align-items:center;justify-content:center">
+                <div class="text-center text-muted">
+                  <i class="fas fa-video fa-2x mb-2 d-block" style="color:#7c3aed"></i>
+                  <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="lvStartCameras()"><i class="fas fa-play me-1"></i>تشغيل الكاميرا</button>
                 </div>
+              </div>
+              <!-- Add camera button + picker (shown after first camera is active) -->
+              <div id="lv-add-cam-row" style="display:none;position:absolute;top:4px;right:4px;z-index:10">
+                <button onclick="_lvShowCamPicker()" style="background:rgba(124,58,237,0.85);border:none;color:#fff;border-radius:12px;padding:3px 10px;font-size:11px;cursor:pointer">
+                  <i class="fas fa-plus me-1"></i>كاميرا
+                </button>
+                <div id="lv-cam-picker" style="display:none;position:absolute;top:28px;right:0;background:#1e1e2e;border:1px solid #555;border-radius:8px;padding:6px;min-width:180px;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,0.5)"></div>
+              </div>
                 <div id="lv-status-bar" style="display:none;position:absolute;bottom:8px;left:8px;right:8px;background:rgba(0,0,0,0.7);border-radius:20px;padding:6px 14px;font-size:12px;display:flex;align-items:center;gap:7px">
                   <span id="lv-led" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;flex-shrink:0;box-shadow:0 0 5px #ef4444"></span>
                   <span id="lv-status-txt" style="flex:1">جاهز...</span>
