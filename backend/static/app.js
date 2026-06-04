@@ -3435,12 +3435,18 @@ async function _lvCaptureFrame() {
     form.append('session_id', _lvSessionId);
     form.append('image', blob, 'frame.jpg');
 
-    const token = S.token;
-    const res = await fetch(API + '/market/vision/analyze-stream', {
+    // Helper to send the form with current token, with auto-refresh on 401
+    const _doFetch = async () => fetch(API + '/market/vision/analyze-stream', {
       method: 'POST',
-      headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+      headers: S.token ? { 'Authorization': 'Bearer ' + S.token } : {},
       body: form,
     });
+    let res = await _doFetch();
+    if (res.status === 401 && S.refreshToken) {
+      const ok = await tryRefresh();
+      if (ok) { res = await _doFetch(); }
+      else { doLogout(); return; }
+    }
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       document.getElementById('lv-status-txt').textContent = `خطأ ${res.status}: ${errText.slice(0, 100)}`;
