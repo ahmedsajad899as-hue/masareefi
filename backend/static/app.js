@@ -3754,8 +3754,27 @@ async function _lvProcessAiQueue() {
       if (hint.includes('gemini-rate-limit') || hint.includes('يرجى الانتظار')) {
         const retryBtn = document.getElementById('lv-retry-btn');
         if (retryBtn) retryBtn.style.display = '';
-        _lvAiBusy = false;
-        setTimeout(() => { _lvAiBusy = false; _lvProcessAiQueue(); }, 60000);
+        _lvAiBusy = true; // keep locked during cooldown
+        // Countdown timer in status bar
+        let remaining = 60;
+        const tick = () => {
+          document.getElementById('lv-status-txt').textContent = `نفاذ نقاط Gemini — انتظار ${remaining}ث...`;
+          if (remaining > 0) { remaining--; setTimeout(tick, 1000); }
+          else {
+            // Cooldown done: reset AI queue, reset camera motion baselines, resume
+            _lvAiBusy = false;
+            _lvAiQueue.length = 0;
+            for (const c of _lvCams) {
+              c.lastGray = null;
+              c.motionPending = false;
+              if (!c.interval && c.stream && c.stream.active) _lvCamStartInterval(c);
+            }
+            if (retryBtn) retryBtn.style.display = 'none';
+            document.getElementById('lv-status-txt').textContent = 'استُؤنف التحليل تلقائياً';
+            _lvLed('red');
+          }
+        };
+        tick();
         return;
       }
     }
@@ -3838,7 +3857,11 @@ function lvRetryNow() {
   if (retryBtn) retryBtn.style.display = 'none';
   document.getElementById('lv-status-txt').textContent = 'جاري المحاولة...';
   _lvAiBusy = false;
+  _lvAiQueue.length = 0;
+  // Reset motion baselines so cameras detect movement fresh
   for (const cam of _lvCams) {
+    cam.lastGray = null;
+    cam.motionPending = false;
     if (!cam.interval && cam.stream && cam.stream.active) _lvCamStartInterval(cam);
   }
   _lvProcessAiQueue();
