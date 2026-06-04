@@ -3555,7 +3555,7 @@ function _lvShowCamPicker() {
 async function _lvPickCamera(deviceId, label) {
   const picker = document.getElementById('lv-cam-picker');
   if (picker) picker.style.display = 'none';
-  if (!['__environment__','__user__'].includes(deviceId) && _lvCams.some(c => c.deviceId === deviceId)) return;
+  if (_lvCams.some(c => c.deviceId === deviceId)) return;
   const idx = _lvCams.length;
   const cam = {
     id: 'lvcam' + idx, deviceId, label: label || ('كاميرا ' + (idx + 1)),
@@ -3678,7 +3678,15 @@ async function _lvCamFrame(cam) {
     const s2 = ctx.getImageData(cx >> 1, cy >> 1, 4, 4).data;
     const bright = [...Array.from(s1), ...Array.from(s2)].some((v, idx) => idx % 4 !== 3 && v > 15);
     if (!bright) { _lvCamSetLed(cam, 'red'); return; }
-    const motionState = _lvCamMotionState(cam, canvasEl);
+    // forceNext: skip motion detection, analyze current frame immediately (used after cooldown/retry)
+    let motionState;
+    if (cam.forceNext) {
+      cam.forceNext = false;
+      cam.lastGray = null; // reset baseline after forced analysis
+      motionState = 'fire';
+    } else {
+      motionState = _lvCamMotionState(cam, canvasEl);
+    }
     if (motionState === 'idle')    { _lvCamSetLed(cam, 'red');    return; }
     if (motionState === 'pending') { _lvCamSetLed(cam, 'yellow'); return; }
     // fire — clone canvas and push to AI queue
@@ -3761,17 +3769,18 @@ async function _lvProcessAiQueue() {
           document.getElementById('lv-status-txt').textContent = `نفاذ نقاط Gemini — انتظار ${remaining}ث...`;
           if (remaining > 0) { remaining--; setTimeout(tick, 1000); }
           else {
-            // Cooldown done: reset AI queue, reset camera motion baselines, resume
+            // Cooldown done: force-analyze current frame immediately (item may still be in view)
             _lvAiBusy = false;
             _lvAiQueue.length = 0;
             for (const c of _lvCams) {
               c.lastGray = null;
               c.motionPending = false;
+              c.forceNext = true; // skip motion check, send current frame to AI
               if (!c.interval && c.stream && c.stream.active) _lvCamStartInterval(c);
             }
             if (retryBtn) retryBtn.style.display = 'none';
-            document.getElementById('lv-status-txt').textContent = 'استُؤنف التحليل تلقائياً';
-            _lvLed('red');
+            document.getElementById('lv-status-txt').textContent = 'جاري التحليل...';
+            _lvLed('yellow');
           }
         };
         tick();
@@ -3858,10 +3867,11 @@ function lvRetryNow() {
   document.getElementById('lv-status-txt').textContent = 'جاري المحاولة...';
   _lvAiBusy = false;
   _lvAiQueue.length = 0;
-  // Reset motion baselines so cameras detect movement fresh
+  // Reset motion baselines and force-analyze current frame
   for (const cam of _lvCams) {
     cam.lastGray = null;
     cam.motionPending = false;
+    cam.forceNext = true;
     if (!cam.interval && cam.stream && cam.stream.active) _lvCamStartInterval(cam);
   }
   _lvProcessAiQueue();
