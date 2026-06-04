@@ -3291,6 +3291,7 @@ let _lvPaused = false;        // pause/resume toggle
 let _lvMotionCanvas = null;  // offscreen 32×32 canvas for motion detection
 let _lvLastGray = null;      // grayscale snapshot of previous frame (Uint8Array 1024)
 let _lvMotionPending = false; // true = motion detected, waiting for frame to stabilize
+let _lvDiffMap = null;        // per-pixel diff of last two frames (Float32Array 1024) for crop hints
 
 // Client-side motion + stability detector.
 // State machine:
@@ -3313,16 +3314,19 @@ function _lvMotionState(canvas) {
     gray[i] = (px[o] * 77 + px[o+1] * 150 + px[o+2] * 29) >> 8;
   }
   if (!_lvLastGray) { _lvLastGray = gray; _lvMotionPending = false; return 'idle'; }
-  let diff = 0;
-  for (let i = 0; i < 1024; i++) diff += Math.abs(gray[i] - _lvLastGray[i]);
+  const diff = new Float32Array(1024);
+  let total = 0;
+  for (let i = 0; i < 1024; i++) {
+    diff[i] = Math.abs(gray[i] - _lvLastGray[i]);
+    total += diff[i];
+  }
+  _lvDiffMap = diff; // store for crop detection
   _lvLastGray = gray;
-  const avg = diff / 1024;
+  const avg = total / 1024;
   if (avg > 18) {
-    // Significant change — item being placed/moved
     _lvMotionPending = true;
     return 'pending';
   } else if (_lvMotionPending && avg < 10) {
-    // Was moving, now stable — fire AI analysis
     _lvMotionPending = false;
     return 'fire';
   }
@@ -3350,12 +3354,38 @@ function _lvLed(color) {
 
 // Save 80×60 thumbnail of detected frame into the snapshots sidebar
 function _lvSaveSnapshot(canvas) {
+  // Find bounding box of high-motion region in 32×32 diff map
+  let x0 = 31, y0 = 31, x1 = 0, y1 = 0;
+  const threshold = 20; // per-pixel diff threshold to count as "item region"
+  if (_lvDiffMap) {
+    for (let r = 0; r < 32; r++) {
+      for (let c = 0; c < 32; c++) {
+        if (_lvDiffMap[r * 32 + c] > threshold) {
+          if (c < x0) x0 = c; if (c > x1) x1 = c;
+          if (r < y0) y0 = r; if (r > y1) y1 = r;
+        }
+      }
+    }
+  }
+  // Fall back to full frame if no motion region found
+  if (x1 <= x0 || y1 <= y0) { x0 = 0; y0 = 0; x1 = 31; y1 = 31; }
+  // Add padding (20% each side) and clamp
+  const padX = Math.max(2, Math.round((x1 - x0) * 0.2));
+  const padY = Math.max(2, Math.round((y1 - y0) * 0.2));
+  x0 = Math.max(0, x0 - padX); y0 = Math.max(0, y0 - padY);
+  x1 = Math.min(31, x1 + padX); y1 = Math.min(31, y1 + padY);
+  // Map 32×32 bbox → full canvas coordinates
+  const scaleX = canvas.width / 32, scaleY = canvas.height / 32;
+  const sx = Math.round(x0 * scaleX), sy = Math.round(y0 * scaleY);
+  const sw = Math.round((x1 - x0 + 1) * scaleX);
+  const sh = Math.round((y1 - y0 + 1) * scaleY);
+  // Draw cropped region into 80×80 square thumbnail
   const snap = document.createElement('canvas');
-  snap.width = 80; snap.height = 60;
-  snap.getContext('2d').drawImage(canvas, 0, 0, 80, 60);
+  snap.width = 80; snap.height = 80;
+  snap.getContext('2d').drawImage(canvas, sx, sy, sw, sh, 0, 0, 80, 80);
   const img = document.createElement('img');
-  img.src = snap.toDataURL('image/jpeg', 0.75);
-  img.style.cssText = 'width:80px;height:60px;border-radius:6px;border:2px solid #22c55e;object-fit:cover;flex-shrink:0';
+  img.src = snap.toDataURL('image/jpeg', 0.80);
+  img.style.cssText = 'width:80px;height:80px;border-radius:8px;border:2px solid #22c55e;object-fit:cover;flex-shrink:0';
   const hint = document.getElementById('lv-snap-hint');
   if (hint) hint.style.display = 'none';
   const container = document.getElementById('lv-snapshots');
