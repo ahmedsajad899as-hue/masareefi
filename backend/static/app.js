@@ -3288,6 +3288,15 @@ let _lvNewCount = 0;
 let _lvDupCount = 0;
 let _lvBusy = false;
 
+// Mirror of backend _normalize_product_key — keeps dedup consistent with AI spelling variations
+function _lvNormName(name) {
+  let s = (name || '').trim().toLowerCase();
+  s = s.replace(/[أإآ]/g, 'ا').replace(/[ىئ]/g, 'ي').replace(/ؤ/g, 'و').replace(/ة/g, 'ه');
+  s = s.replace(/[\u064b-\u0652\u0670\u0640]/g, '');
+  s = s.replace(/[\s\-_/\\.,]+/g, ' ').trim();
+  return s;
+}
+
 function _lvGenUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = Math.random() * 16 | 0;
