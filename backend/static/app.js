@@ -3575,9 +3575,10 @@ async function _lvPickCamera(deviceId, label) {
   card.id = cam.id + '-card';
   card.className = 'position-relative';
   card.style.cssText = 'background:#000;border-radius:8px;overflow:hidden;border:1px solid #444;';
-  // Video height: full (200px) for single camera, compact (140px) for multiple
-  const vidH = _lvCams.length === 1 ? '200px' : '140px';
-  card.innerHTML = `<video id="${cam.id}-video" autoplay playsinline muted style="width:100%;height:${vidH};object-fit:cover;display:block"></video>
+  // Use aspect-ratio 1:1 → camera fills a square regardless of width
+  const vidH = _lvCams.length === 1 ? '100%' : '140px';
+  const vidAR = _lvCams.length === 1 ? '1/1' : '1/1';
+  card.innerHTML = `<video id="${cam.id}-video" autoplay playsinline muted style="width:100%;aspect-ratio:1/1;height:auto;object-fit:cover;display:block"></video>
     <canvas id="${cam.id}-canvas" style="display:none"></canvas>
     <div style="position:absolute;top:4px;left:4px;right:4px;display:flex;align-items:center;gap:4px;pointer-events:none">
       <span id="${cam.id}-led" style="width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 5px #ef4444;flex-shrink:0;display:inline-block"></span>
@@ -3596,7 +3597,7 @@ async function _lvPickCamera(deviceId, label) {
   _lvCamStartInterval(cam);
 }
 
-// Adjust grid layout: single camera = full width/height, multiple = compact grid
+// Adjust grid layout: single camera = full width, multiple = compact grid (both square via aspect-ratio)
 function _lvUpdateCamGrid() {
   const grid = document.getElementById('lv-cam-grid');
   if (!grid) return;
@@ -3604,14 +3605,13 @@ function _lvUpdateCamGrid() {
   grid.style.display = 'grid';
   if (_lvCams.length === 1) {
     grid.style.gridTemplateColumns = '1fr';
-    const v = document.getElementById(_lvCams[0].id + '-video');
-    if (v) v.style.height = '200px';
   } else {
     grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(140px,1fr))';
-    for (const c of _lvCams) {
-      const v = document.getElementById(c.id + '-video');
-      if (v) v.style.height = '140px';
-    }
+  }
+  // Ensure all videos use square aspect-ratio
+  for (const c of _lvCams) {
+    const v = document.getElementById(c.id + '-video');
+    if (v) { v.style.height = 'auto'; v.style.aspectRatio = '1/1'; }
   }
 }
 
