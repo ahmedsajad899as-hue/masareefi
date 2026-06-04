@@ -1651,22 +1651,35 @@
             <button type="button" class="btn-close btn-close-white" onclick="closeLiveVisionModal()"></button>
           </div>
           <div class="modal-body">
-            <!-- Camera preview -->
-            <div class="text-center mb-3 position-relative">
-              <video id="lv-video" autoplay playsinline muted style="width:100%;max-height:240px;border-radius:10px;border:1px solid #444;background:#000;display:none"></video>
-              <canvas id="lv-canvas" style="display:none"></canvas>
-              <div id="lv-cam-placeholder" style="height:180px;background:#111;border-radius:10px;border:1px solid #333;display:flex;align-items:center;justify-content:center">
-                <div class="text-center text-muted">
-                  <i class="fas fa-video fa-2x mb-2 d-block" style="color:#7c3aed"></i>
-                  <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="lvStartCamera()"><i class="fas fa-play me-1"></i>تشغيل الكاميرا</button>
+            <!-- Camera + snapshots split layout -->
+            <div class="d-flex gap-2 mb-2" style="min-height:200px">
+              <!-- Left: detected item snapshots -->
+              <div id="lv-snapshots" style="width:88px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;overflow-y:auto;max-height:220px;padding:2px">
+                <div id="lv-snap-hint" class="text-muted text-center" style="font-size:10px;margin-top:8px">صور<br>الإيتامات</div>
+              </div>
+              <!-- Right: camera preview -->
+              <div class="position-relative flex-grow-1">
+                <video id="lv-video" autoplay playsinline muted style="width:100%;max-height:220px;border-radius:10px;border:1px solid #444;background:#000;display:none"></video>
+                <canvas id="lv-canvas" style="display:none"></canvas>
+                <div id="lv-cam-placeholder" style="height:180px;background:#111;border-radius:10px;border:1px solid #333;display:flex;align-items:center;justify-content:center">
+                  <div class="text-center text-muted">
+                    <i class="fas fa-video fa-2x mb-2 d-block" style="color:#7c3aed"></i>
+                    <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="lvStartCamera()"><i class="fas fa-play me-1"></i>تشغيل الكاميرا</button>
+                  </div>
+                </div>
+                <div id="lv-status-bar" style="display:none;position:absolute;bottom:8px;left:8px;right:8px;background:rgba(0,0,0,0.7);border-radius:20px;padding:6px 14px;font-size:12px;display:flex;align-items:center;gap:7px">
+                  <span id="lv-led" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;flex-shrink:0;box-shadow:0 0 5px #ef4444"></span>
+                  <span id="lv-status-txt" style="flex:1">جاهز...</span>
+                  <button id="lv-retry-btn" onclick="lvRetryNow()" style="display:none;background:#7c3aed;border:none;color:#fff;border-radius:12px;padding:2px 10px;font-size:11px;cursor:pointer">إعادة المحاولة</button>
+                  <span class="text-muted" id="lv-counts"></span>
                 </div>
               </div>
-              <div id="lv-status-bar" style="display:none;position:absolute;bottom:8px;left:8px;right:8px;background:rgba(0,0,0,0.7);border-radius:20px;padding:6px 14px;font-size:12px;display:flex;align-items:center;gap:7px">
-                <span id="lv-led" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;flex-shrink:0;box-shadow:0 0 5px #ef4444"></span>
-                <span id="lv-status-txt" style="flex:1">جاهز...</span>
-                <button id="lv-retry-btn" onclick="lvRetryNow()" style="display:none;background:#7c3aed;border:none;color:#fff;border-radius:12px;padding:2px 10px;font-size:11px;cursor:pointer">إعادة المحاولة</button>
-                <span class="text-muted" id="lv-counts"></span>
-              </div>
+            </div>
+            <!-- Pause/Resume button -->
+            <div class="text-center mb-2" id="lv-pause-row" style="display:none">
+              <button id="lv-pause-btn" onclick="lvTogglePause()" class="btn btn-sm" style="background:#374151;color:#fff;border:1px solid #555;border-radius:20px;padding:4px 18px;font-size:12px">
+                <i class="fas fa-pause me-1"></i>إيقاف التحليل
+              </button>
             </div>
             <!-- Items table -->
             <div class="table-responsive" style="max-height:220px;overflow-y:auto">

@@ -3287,8 +3287,9 @@ let _lvCustomers = [];
 let _lvNewCount = 0;
 let _lvDupCount = 0;
 let _lvBusy = false;
-let _lvMotionCanvas = null; // offscreen 32×32 canvas for motion detection
-let _lvLastGray = null;    // grayscale snapshot of previous frame (Uint8Array 1024)
+let _lvPaused = false;        // pause/resume toggle
+let _lvMotionCanvas = null;  // offscreen 32×32 canvas for motion detection
+let _lvLastGray = null;      // grayscale snapshot of previous frame (Uint8Array 1024)
 let _lvMotionPending = false; // true = motion detected, waiting for frame to stabilize
 
 // Client-side motion + stability detector.
@@ -3347,6 +3348,40 @@ function _lvLed(color) {
   el.style.boxShadow = `0 0 7px ${glow}`;
 }
 
+// Save 80×60 thumbnail of detected frame into the snapshots sidebar
+function _lvSaveSnapshot(canvas) {
+  const snap = document.createElement('canvas');
+  snap.width = 80; snap.height = 60;
+  snap.getContext('2d').drawImage(canvas, 0, 0, 80, 60);
+  const img = document.createElement('img');
+  img.src = snap.toDataURL('image/jpeg', 0.75);
+  img.style.cssText = 'width:80px;height:60px;border-radius:6px;border:2px solid #22c55e;object-fit:cover;flex-shrink:0';
+  const hint = document.getElementById('lv-snap-hint');
+  if (hint) hint.style.display = 'none';
+  const container = document.getElementById('lv-snapshots');
+  if (container) container.prepend(img);
+}
+
+// Pause / resume live analysis
+function lvTogglePause() {
+  _lvPaused = !_lvPaused;
+  const btn = document.getElementById('lv-pause-btn');
+  if (btn) {
+    btn.innerHTML = _lvPaused
+      ? '<i class="fas fa-play me-1"></i>استئناف التحليل'
+      : '<i class="fas fa-pause me-1"></i>إيقاف التحليل';
+    btn.style.background = _lvPaused ? '#7c3aed' : '#374151';
+  }
+  if (_lvPaused) {
+    _lvLed('red');
+    document.getElementById('lv-status-txt').textContent = 'موقوف — اضغط للاستئناف';
+  } else {
+    _lvLastGray = null; // reset baseline so first frame after resume always checks
+    _lvMotionPending = false;
+    _lvStartInterval();
+  }
+}
+
 function _lvGenUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = Math.random() * 16 | 0;
@@ -3363,7 +3398,16 @@ async function openLiveVisionModal() {
   _lvBusy = false;
   _lvLastGray = null; // reset motion baseline for new session
   _lvMotionPending = false;
+  _lvPaused = false;
   _lvSessionId = _lvGenUUID();
+
+  // Reset snapshots sidebar
+  const snaps = document.getElementById('lv-snapshots');
+  if (snaps) snaps.innerHTML = '<div id="lv-snap-hint" class="text-muted text-center" style="font-size:10px;margin-top:8px">صور<br>الإيتامات</div>';
+  const pauseRow = document.getElementById('lv-pause-row');
+  if (pauseRow) pauseRow.style.display = 'none';
+  const pauseBtn = document.getElementById('lv-pause-btn');
+  if (pauseBtn) { pauseBtn.innerHTML = '<i class="fas fa-pause me-1"></i>إيقاف التحليل'; pauseBtn.style.background = '#374151'; }
 
   document.getElementById('lv-items').innerHTML = '';
   document.getElementById('lv-total').textContent = '0';
@@ -3437,6 +3481,8 @@ async function lvStartCamera() {
     video.style.display = 'block';
     document.getElementById('lv-cam-placeholder').style.display = 'none';
     document.getElementById('lv-status-bar').style.display = '';
+    const pr = document.getElementById('lv-pause-row');
+    if (pr) pr.style.display = '';
     _lvStartInterval();
   } catch(e) {
     toast('تعذّر فتح الكاميرا: ' + e.message, 'err');
@@ -3445,15 +3491,18 @@ async function lvStartCamera() {
 
 function _lvStartInterval() {
   if (_lvInterval) clearTimeout(_lvInterval);
-  _lvInterval = setTimeout(_lvCaptureLoop, 2000);
+  _lvInterval = setTimeout(_lvCaptureLoop, 800);
 }
 
 async function _lvCaptureLoop() {
   _lvInterval = null;
+  if (_lvPaused) {
+    if (_lvStream && _lvStream.active) _lvInterval = setTimeout(_lvCaptureLoop, 800);
+    return;
+  }
   const delay = await _lvCaptureFrame();
-  // Schedule next capture after response; use returned delay (e.g. rate-limit backoff)
   if (_lvStream && _lvStream.active) {
-    _lvInterval = setTimeout(_lvCaptureLoop, delay || 2000);
+    _lvInterval = setTimeout(_lvCaptureLoop, delay || 800);
   }
 }
 
@@ -3547,7 +3596,7 @@ async function _lvCaptureFrame() {
       if (added > 0) {
         _lvLed('green');
         document.getElementById('lv-status-txt').textContent = `أُضيف ${added} منتج جديد`;
-        // Flash green then back to red after 2s
+        _lvSaveSnapshot(canvas);
         setTimeout(() => _lvLed('red'), 2000);
       } else {
         _lvLed('red');
