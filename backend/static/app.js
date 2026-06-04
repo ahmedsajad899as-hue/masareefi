@@ -3324,6 +3324,16 @@ function _lvNormName(name) {
   return s;
 }
 
+// LED helper: 'green' | 'red' | 'yellow'
+function _lvLed(color) {
+  const el = document.getElementById('lv-led');
+  if (!el) return;
+  const map = { green: ['#22c55e','#22c55e'], red: ['#ef4444','#ef4444'], yellow: ['#f59e0b','#f59e0b'] };
+  const [bg, glow] = map[color] || map.red;
+  el.style.background = bg;
+  el.style.boxShadow = `0 0 7px ${glow}`;
+}
+
 function _lvGenUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = Math.random() * 16 | 0;
@@ -3452,16 +3462,19 @@ async function _lvCaptureFrame() {
     // Only check R,G,B channels (skip alpha which is always 255)
     const bright = combined.some((v, idx) => idx % 4 !== 3 && v > 15);
     if (!bright) {
+      _lvLed('red');
       document.getElementById('lv-status-txt').textContent = 'جاري تسخين الكاميرا...';
       return;
     }
 
     // Motion detection — skip AI if scene hasn't changed (saves tokens when counter is empty)
     if (!_lvHasMotion(canvas)) {
+      _lvLed('red');
       document.getElementById('lv-status-txt').textContent = 'في انتظار منتج...';
       return;
     }
 
+    _lvLed('yellow');
     document.getElementById('lv-status-txt').textContent = 'جاري التحليل...';
     const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
     if (!blob) { return; }
@@ -3492,6 +3505,7 @@ async function _lvCaptureFrame() {
 
     if (status === 'duplicate') {
       _lvDupCount++;
+      _lvLed('red');
       document.getElementById('lv-status-txt').textContent = 'نفس الإطار — تجاهل';
       const rb = document.getElementById('lv-retry-btn'); if (rb) rb.style.display = 'none';
     } else if (status === 'new') {
@@ -3510,10 +3524,18 @@ async function _lvCaptureFrame() {
         added++;
       }
       _lvNewCount += added;
-      document.getElementById('lv-status-txt').textContent =
-        added > 0 ? `أُضيف ${added} منتج جديد` : 'لم يُكتشف منتج جديد';
+      if (added > 0) {
+        _lvLed('green');
+        document.getElementById('lv-status-txt').textContent = `أُضيف ${added} منتج جديد`;
+        // Flash green then back to red after 2s
+        setTimeout(() => _lvLed('red'), 2000);
+      } else {
+        _lvLed('red');
+        document.getElementById('lv-status-txt').textContent = 'لم يُكتشف منتج جديد';
+      }
       _lvRenderItems();
     } else {
+      _lvLed('red');
       // status='empty' — show what AI said (first 120 chars) to help debug
       const hint = data.raw_response ? data.raw_response.slice(0, 120) : 'لم يتم التعرف على منتج';
       document.getElementById('lv-status-txt').textContent = hint;
