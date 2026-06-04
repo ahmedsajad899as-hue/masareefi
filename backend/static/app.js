@@ -3287,6 +3287,33 @@ let _lvCustomers = [];
 let _lvNewCount = 0;
 let _lvDupCount = 0;
 let _lvBusy = false;
+let _lvMotionCanvas = null; // offscreen 32×32 canvas for motion detection
+let _lvLastGray = null;    // grayscale snapshot of previous frame (Uint8Array 1024)
+
+// Client-side motion detector — compares 32×32 grayscale downsamples.
+// Returns true when the scene changed enough to warrant an AI call.
+// avgDiff threshold 6/255 (~2.4%) ignores hand tremor / lighting flicker
+// but fires when a product is placed/moved in front of the camera.
+function _lvHasMotion(canvas) {
+  if (!_lvMotionCanvas) {
+    _lvMotionCanvas = document.createElement('canvas');
+    _lvMotionCanvas.width = 32;
+    _lvMotionCanvas.height = 32;
+  }
+  const mctx = _lvMotionCanvas.getContext('2d', { willReadFrequently: true });
+  mctx.drawImage(canvas, 0, 0, 32, 32);
+  const px = mctx.getImageData(0, 0, 32, 32).data; // RGBA 32×32 = 4096 bytes
+  const gray = new Uint8Array(1024);
+  for (let i = 0; i < 1024; i++) {
+    const o = i << 2;
+    gray[i] = (px[o] * 77 + px[o+1] * 150 + px[o+2] * 29) >> 8; // fast BT.601 luma
+  }
+  if (!_lvLastGray) { _lvLastGray = gray; return true; } // always send first frame
+  let diff = 0;
+  for (let i = 0; i < 1024; i++) diff += Math.abs(gray[i] - _lvLastGray[i]);
+  _lvLastGray = gray;
+  return (diff / 1024) > 6;
+}
 
 // Mirror of backend _normalize_product_key — keeps dedup consistent with AI spelling variations
 function _lvNormName(name) {
@@ -3311,6 +3338,7 @@ async function openLiveVisionModal() {
   _lvNewCount = 0;
   _lvDupCount = 0;
   _lvBusy = false;
+  _lvLastGray = null; // reset motion baseline for new session
   _lvSessionId = _lvGenUUID();
 
   document.getElementById('lv-items').innerHTML = '';
@@ -3427,6 +3455,13 @@ async function _lvCaptureFrame() {
       document.getElementById('lv-status-txt').textContent = 'جاري تسخين الكاميرا...';
       return;
     }
+
+    // Motion detection — skip AI if scene hasn't changed (saves tokens when counter is empty)
+    if (!_lvHasMotion(canvas)) {
+      document.getElementById('lv-status-txt').textContent = 'في انتظار منتج...';
+      return;
+    }
+
     document.getElementById('lv-status-txt').textContent = 'جاري التحليل...';
     const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
     if (!blob) { return; }
