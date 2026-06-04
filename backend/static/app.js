@@ -3291,13 +3291,13 @@ let _lvPaused = false;        // pause/resume toggle
 let _lvMotionCanvas = null;  // offscreen 32×32 canvas for motion detection
 let _lvLastGray = null;      // grayscale snapshot of previous frame (Uint8Array 1024)
 let _lvMotionPending = false; // true = motion detected, waiting for frame to stabilize
-let _lvDiffMap = null;        // per-pixel diff of last two frames (Float32Array 1024) for crop hints
+let _lvPeakDiffMap = null;    // diff map from peak-motion frame (used for crop bbox)
 
 // Client-side motion + stability detector.
 // State machine:
-//   1. Idle   → avgDiff > 18  → MotionPending (item being placed)
+//   1. Idle   → avgDiff > 18  → MotionPending (save peak diff for crop)
 //   2. MotionPending → avgDiff < 10 → FIRE (item settled → send to AI)
-//   3. MotionPending → still > 18  → stay pending (still moving)
+//   3. MotionPending → still > 18  → stay pending, keep updating peak diff
 // Returns: 'fire' | 'pending' | 'idle'
 function _lvMotionState(canvas) {
   if (!_lvMotionCanvas) {
@@ -3320,15 +3320,16 @@ function _lvMotionState(canvas) {
     diff[i] = Math.abs(gray[i] - _lvLastGray[i]);
     total += diff[i];
   }
-  _lvDiffMap = diff; // store for crop detection
   _lvLastGray = gray;
   const avg = total / 1024;
   if (avg > 18) {
+    // Store diff from the PEAK motion frame (best for crop bbox)
+    _lvPeakDiffMap = diff;
     _lvMotionPending = true;
     return 'pending';
   } else if (_lvMotionPending && avg < 10) {
     _lvMotionPending = false;
-    return 'fire';
+    return 'fire'; // _lvPeakDiffMap already has the best crop diff
   }
   return 'idle';
 }
@@ -3532,7 +3533,9 @@ async function _lvCaptureLoop() {
   }
   const delay = await _lvCaptureFrame();
   if (_lvStream && _lvStream.active) {
-    _lvInterval = setTimeout(_lvCaptureLoop, delay || 800);
+    // Poll faster (300ms) when motion detected to catch settle quickly
+    const next = delay || (_lvMotionPending ? 300 : 800);
+    _lvInterval = setTimeout(_lvCaptureLoop, next);
   }
 }
 
