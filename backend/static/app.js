@@ -3555,7 +3555,7 @@ function _lvShowCamPicker() {
 async function _lvPickCamera(deviceId, label) {
   const picker = document.getElementById('lv-cam-picker');
   if (picker) picker.style.display = 'none';
-  if (deviceId !== '__environment__' && _lvCams.some(c => c.deviceId === deviceId)) return;
+  if (!['__environment__','__user__'].includes(deviceId) && _lvCams.some(c => c.deviceId === deviceId)) return;
   const idx = _lvCams.length;
   const cam = {
     id: 'lvcam' + idx, deviceId, label: label || ('كاميرا ' + (idx + 1)),
@@ -3565,20 +3565,20 @@ async function _lvPickCamera(deviceId, label) {
     // '__environment__' = mobile back camera via facingMode (no deviceId)
     const videoConstraints = deviceId === '__environment__'
       ? { facingMode: { ideal: 'environment' }, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 } }
-      : { deviceId: { exact: deviceId }, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 } };
+      : deviceId === '__user__'
+        ? { facingMode: 'user', width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 } }
+        : { deviceId: { exact: deviceId }, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 } };
     cam.stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
   } catch(e) { toast('تعذّر فتح الكاميرا: ' + e.message, 'err'); return; }
   _lvCams.push(cam);
-  // Build camera card
+  // Build camera card — width matches video to avoid black sides
+  const isSingle = _lvCams.length === 1;
   const grid = document.getElementById('lv-cam-grid');
   const card = document.createElement('div');
   card.id = cam.id + '-card';
   card.className = 'position-relative';
-  card.style.cssText = 'background:#000;border-radius:8px;overflow:hidden;border:1px solid #444;';
-  // Use aspect-ratio 1:1 → camera fills a square regardless of width
-  const vidH = _lvCams.length === 1 ? '100%' : '140px';
-  const vidAR = _lvCams.length === 1 ? '1/1' : '1/1';
-  card.innerHTML = `<video id="${cam.id}-video" autoplay playsinline muted style="width:100%;max-width:225px;aspect-ratio:1/1;height:auto;object-fit:cover;display:block;margin:0 auto"></video>
+  card.style.cssText = `background:#000;border-radius:8px;overflow:hidden;border:1px solid #444;${isSingle ? 'width:225px;margin:0 auto;' : ''}`;
+  card.innerHTML = `<video id="${cam.id}-video" autoplay playsinline muted style="width:100%;aspect-ratio:1/1;height:auto;object-fit:cover;display:block"></video>
     <canvas id="${cam.id}-canvas" style="display:none"></canvas>
     <div style="position:absolute;top:4px;left:4px;right:4px;display:flex;align-items:center;gap:4px;pointer-events:none">
       <span id="${cam.id}-led" style="width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 5px #ef4444;flex-shrink:0;display:inline-block"></span>
@@ -3587,17 +3587,24 @@ async function _lvPickCamera(deviceId, label) {
     </div>`;
   grid.appendChild(card);
   document.getElementById('lv-cam-placeholder').style.display = 'none';
-  document.getElementById('lv-status-bar').style.display = '';
+  document.getElementById('lv-status-bar').style.display = 'flex';
   const addRow = document.getElementById('lv-add-cam-row');
   if (addRow) addRow.style.display = '';
   const pr = document.getElementById('lv-pause-row');
   if (pr) pr.style.display = '';
   document.getElementById(cam.id + '-video').srcObject = cam.stream;
+  // Enumerate devices now (permission granted) so + camera picker works on mobile too
+  if (_lvCamDevices.length === 0) {
+    try {
+      const all = await navigator.mediaDevices.enumerateDevices();
+      _lvCamDevices = all.filter(d => d.kind === 'videoinput');
+    } catch(_) {}
+  }
   _lvUpdateCamGrid();
   _lvCamStartInterval(cam);
 }
 
-// Adjust grid layout: single camera = full width, multiple = compact grid (both square via aspect-ratio)
+// Adjust grid layout: single camera = 225px centered, multiple = compact grid
 function _lvUpdateCamGrid() {
   const grid = document.getElementById('lv-cam-grid');
   if (!grid) return;
@@ -3605,13 +3612,14 @@ function _lvUpdateCamGrid() {
   grid.style.display = 'grid';
   if (_lvCams.length === 1) {
     grid.style.gridTemplateColumns = '1fr';
+    const card = document.getElementById(_lvCams[0].id + '-card');
+    if (card) { card.style.width = '225px'; card.style.margin = '0 auto'; }
   } else {
     grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(140px,1fr))';
-  }
-  // Ensure all videos use square aspect-ratio
-  for (const c of _lvCams) {
-    const v = document.getElementById(c.id + '-video');
-    if (v) { v.style.height = 'auto'; v.style.aspectRatio = '1/1'; v.style.maxWidth = _lvCams.length === 1 ? '225px' : ''; }
+    for (const c of _lvCams) {
+      const card = document.getElementById(c.id + '-card');
+      if (card) { card.style.width = ''; card.style.margin = ''; }
+    }
   }
 }
 
