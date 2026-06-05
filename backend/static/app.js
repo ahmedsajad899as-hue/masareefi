@@ -669,6 +669,9 @@ function goTo(page) {
   location.hash = page;
   localStorage.setItem('last_page', page);
 
+  // Stop checkout silent camera if navigating away
+  if (page !== 'market-checkout') _checkoutStopCamera();
+
   switch (page) {
     case 'dashboard':        loadDashboard(); break;
     case 'expenses':         loadExpenses();  break;
@@ -4396,6 +4399,9 @@ async function markSupplierPaid(invoiceId) {
 let _checkoutItems = [];
 let _checkoutCustId = null;
 let _checkoutCustomers = [];
+let _checkoutCamStream = null;   // persistent camera stream for Enter-key capture
+let _checkoutEnterBusy = false;  // prevent overlapping captures
+let _checkoutSilentVideo = null; // hidden <video> element reused each capture
 
 function loadCheckout() {
   checkoutLoadCustomers();
@@ -4404,6 +4410,8 @@ function loadCheckout() {
   const printBtn = document.getElementById('checkout-print-btn');
   if (saveBtn) saveBtn.disabled = !hasItems;
   if (printBtn) printBtn.disabled = !hasItems;
+  // Pre-warm camera for instant Enter-key capture
+  if (navigator.mediaDevices?.getUserMedia) _checkoutWarmCamera();
 }
 
 function checkoutLoadCustomers() {
@@ -4620,6 +4628,104 @@ function checkoutPrintReceipt() {
   if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 400); }
 }
 
+async function _checkoutWarmCamera() {
+  if (_checkoutCamStream && _checkoutCamStream.active) return;
+  try {
+    _checkoutCamStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    // Create a hidden video element once and keep it alive for fast frame grabs
+    if (!_checkoutSilentVideo) {
+      _checkoutSilentVideo = document.createElement('video');
+      _checkoutSilentVideo.muted = true;
+      _checkoutSilentVideo.playsInline = true;
+      _checkoutSilentVideo.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none';
+      document.body.appendChild(_checkoutSilentVideo);
+    }
+    _checkoutSilentVideo.srcObject = _checkoutCamStream;
+    await _checkoutSilentVideo.play().catch(() => {});
+  } catch (e) {
+    _checkoutCamStream = null;
+  }
+}
+
+function _checkoutStopCamera() {
+  if (_checkoutCamStream) {
+    _checkoutCamStream.getTracks().forEach(t => t.stop());
+    _checkoutCamStream = null;
+  }
+  if (_checkoutSilentVideo) {
+    _checkoutSilentVideo.srcObject = null;
+    _checkoutSilentVideo.remove();
+    _checkoutSilentVideo = null;
+  }
+}
+
+async function checkoutSilentCapture() {
+  if (_checkoutEnterBusy) return;
+  _checkoutEnterBusy = true;
+  const statusEl = document.getElementById('checkout-status');
+  if (statusEl) statusEl.innerHTML = '<div class="alert alert-info py-1 small">📷 جاري التصوير والتحليل...</div>';
+  try {
+    // Ensure camera stream is alive
+    if (!_checkoutCamStream || !_checkoutCamStream.active) {
+      await _checkoutWarmCamera();
+    }
+    if (!_checkoutCamStream || !_checkoutSilentVideo) {
+      // Fallback: open the normal camera UI
+      if (statusEl) statusEl.innerHTML = '';
+      checkoutOpenCamera();
+      _checkoutEnterBusy = false;
+      return;
+    }
+    // Short settle delay then grab frame
+    await new Promise(r => setTimeout(r, 120));
+    const video = _checkoutSilentVideo;
+    const vw = video.videoWidth || 1280;
+    const vh = video.videoHeight || 720;
+    // Resize to max 800px for the API
+    const scale = Math.min(1, 800 / Math.max(vw, vh));
+    const canvas = document.createElement('canvas');
+    canvas.width  = Math.round(vw * scale);
+    canvas.height = Math.round(vh * scale);
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.82));
+    if (!blob) throw new Error('فشل التصوير');
+    const fd = new FormData();
+    fd.append('image', blob, 'checkout.jpg');
+    const resp = await fetch(API + '/market/vision/analyze', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.token },
+      body: fd,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || 'HTTP ' + resp.status);
+    }
+    const data = await resp.json();
+    if (data.items && data.items.length) {
+      const newItems = data.items.map(it => ({
+        product_name: it.product_name || '',
+        quantity:     it.quantity    || 1,
+        unit_price:   it.unit_price  || 0,
+      }));
+      const existing = _checkoutItems.filter(it => (it.product_name || '').trim());
+      _checkoutItems = [...existing, ...newItems];
+      checkoutRenderItems();
+      if (statusEl) statusEl.innerHTML = `<div class="alert alert-success py-1 small">✅ تم التعرف على ${newItems.length} منتج — اضغط Enter مجدداً لتصوير المزيد</div>`;
+      document.getElementById('checkout-save-btn').disabled = false;
+      document.getElementById('checkout-print-btn').disabled = false;
+    } else {
+      if (statusEl) statusEl.innerHTML = '<div class="alert alert-warning py-1 small">⚠️ لم يُتعرف على منتجات، حاول مجدداً أو أضف يدوياً</div>';
+    }
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = `<div class="alert alert-danger py-1 small">خطأ: ${e.message || 'فشل التحليل'}</div>`;
+  } finally {
+    _checkoutEnterBusy = false;
+  }
+}
+
 function checkoutReset() {
   _checkoutItems = [];
   _checkoutCustId = null;
@@ -4644,6 +4750,9 @@ function checkoutReset() {
   if (cashRadio) cashRadio.checked = true;
   const fileEl = document.getElementById('checkout-file');
   if (fileEl) fileEl.value = '';
+  // Stop and re-warm camera for next session
+  _checkoutStopCamera();
+  if (navigator.mediaDevices?.getUserMedia) _checkoutWarmCamera();
   toast('تم التصفير ✅');
 }
 
@@ -5444,6 +5553,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   initCatalogPreviewZoom();
+
+  // Enter key → silent camera capture on Checkout page
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    const pg = document.getElementById('pg-market-checkout');
+    if (!pg || pg.style.display === 'none') return;
+    // Don't hijack Enter inside text inputs / selects
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    e.preventDefault();
+    checkoutSilentCapture();
+  });
 
   // Close referral dropdown when clicking outside it
   document.addEventListener('click', function(e) {
