@@ -1371,7 +1371,7 @@ async def analyze_image_for_market_items(
             _img = _img.resize((_new_w, _new_h), _PILImage.LANCZOS)
         _buf = _io.BytesIO()
         _fmt = "PNG" if mime_type == "image/png" else "JPEG"
-        _img.save(_buf, format=_fmt, quality=85)
+        _img.save(_buf, format=_fmt, quality=92)  # high quality preserves text readability
         image_bytes = _buf.getvalue()
         if _fmt == "JPEG":
             mime_type = "image/jpeg"
@@ -1434,12 +1434,12 @@ async def analyze_image_for_market_items(
                 messages=[
                     {"role": "system", "content": VISION_SYSTEM_PROMPT},
                     {"role": "user", "content": [
-                        {"type": "image_url", "image_url": {"url": data_url, "detail": "auto"}},
+                        {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}},
                         {"type": "text", "text": user_text},
                     ]},
                 ],
                 temperature=0.1,
-                max_tokens=900,
+                max_tokens=1500,
             )
             raw = response.choices[0].message.content or "[]"
         except Exception as e:
@@ -1488,7 +1488,7 @@ async def analyze_image_for_market_items(
             ],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 900,
+                "maxOutputTokens": 1500,
                 "responseMimeType": "application/json",
             },
         }
@@ -1553,6 +1553,13 @@ async def analyze_image_for_market_items(
         match = re.search(r"\[.*\]", cleaned, re.DOTALL)
         if match:
             cleaned = match.group(0)
+
+    # ── Repair truncated JSON (max_tokens cut the response mid-array) ──────
+    # Strategy: find last complete object {...} and close the array after it.
+    if cleaned.startswith("[") and not cleaned.rstrip().endswith("]"):
+        last_close = cleaned.rfind("}")
+        if last_close != -1:
+            cleaned = cleaned[: last_close + 1] + "]"
 
     try:
         data = json.loads(cleaned)

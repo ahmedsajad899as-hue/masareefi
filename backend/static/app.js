@@ -4461,7 +4461,7 @@ function checkoutFileSelectedDirect(file) {
   const statusEl = document.getElementById('checkout-status');
   statusEl.innerHTML = '<div class="alert alert-info py-1 small">🔍 جاري التعرف على المنتجات...</div>';
 
-  visionCompressImage(file, 800, 0.72).then(blob => {
+  visionCompressImage(file, 1000, 0.88).then(blob => {
     const fd = new FormData();
     fd.append('image', blob, 'checkout.jpg');
     const doSend = () => fetch(API + '/market/vision/analyze', {
@@ -4675,13 +4675,13 @@ async function checkoutSilentCapture() {
     const video = camVideo;
     const vw = video.videoWidth || 1280;
     const vh = video.videoHeight || 720;
-    // Resize to max 800px for the API
-    const scale = Math.min(1, 800 / Math.max(vw, vh));
+    // Resize to max 1200px for better text readability
+    const scale = Math.min(1, 1200 / Math.max(vw, vh));
     const canvas = document.createElement('canvas');
     canvas.width  = Math.round(vw * scale);
     canvas.height = Math.round(vh * scale);
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.82));
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.90));
     // Camera no longer needed — stop immediately before sending to API
     if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
     if (camVideo)  { camVideo.srcObject = null; camVideo.remove(); camVideo = null; }
