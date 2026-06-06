@@ -670,7 +670,7 @@ function goTo(page) {
   localStorage.setItem('last_page', page);
 
   // Stop checkout silent camera if navigating away
-  if (page !== 'market-checkout') _checkoutStopCamera();
+  if (page !== 'market-checkout') { /* camera is always released after each capture */ }
 
   switch (page) {
     case 'dashboard':        loadDashboard(); break;
@@ -4399,9 +4399,7 @@ async function markSupplierPaid(invoiceId) {
 let _checkoutItems = [];
 let _checkoutCustId = null;
 let _checkoutCustomers = [];
-let _checkoutCamStream = null;   // persistent camera stream for Enter-key capture
 let _checkoutEnterBusy = false;  // prevent overlapping captures
-let _checkoutSilentVideo = null; // hidden <video> element reused each capture
 
 function loadCheckout() {
   checkoutLoadCustomers();
@@ -4410,8 +4408,6 @@ function loadCheckout() {
   const printBtn = document.getElementById('checkout-print-btn');
   if (saveBtn) saveBtn.disabled = !hasItems;
   if (printBtn) printBtn.disabled = !hasItems;
-  // Pre-warm camera for instant Enter-key capture
-  if (navigator.mediaDevices?.getUserMedia) _checkoutWarmCamera();
 }
 
 function checkoutLoadCustomers() {
@@ -4628,38 +4624,31 @@ function checkoutPrintReceipt() {
   if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 400); }
 }
 
-async function _checkoutWarmCamera() {
-  if (_checkoutCamStream && _checkoutCamStream.active) return;
-  try {
-    _checkoutCamStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    });
-    // Create a hidden video element once and keep it alive for fast frame grabs
-    if (!_checkoutSilentVideo) {
-      _checkoutSilentVideo = document.createElement('video');
-      _checkoutSilentVideo.muted = true;
-      _checkoutSilentVideo.playsInline = true;
-      _checkoutSilentVideo.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none';
-      document.body.appendChild(_checkoutSilentVideo);
-    }
-    _checkoutSilentVideo.srcObject = _checkoutCamStream;
-    await _checkoutSilentVideo.play().catch(() => {});
-  } catch (e) {
-    _checkoutCamStream = null;
-  }
-}
-
-function _checkoutStopCamera() {
-  if (_checkoutCamStream) {
-    _checkoutCamStream.getTracks().forEach(t => t.stop());
-    _checkoutCamStream = null;
-  }
-  if (_checkoutSilentVideo) {
-    _checkoutSilentVideo.srcObject = null;
-    _checkoutSilentVideo.remove();
-    _checkoutSilentVideo = null;
-  }
+async function _checkoutOpenCameraOnce() {
+  // Open camera stream, wait for first frame, then return the video element.
+  // Caller is responsible for stopping the stream after capturing.
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+    audio: false,
+  });
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none';
+  document.body.appendChild(video);
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  // Wait until the camera delivers real frames (up to 1.5s)
+  await new Promise(resolve => {
+    let waited = 0;
+    const check = () => {
+      if (video.videoWidth > 0 || waited >= 1500) { resolve(); return; }
+      waited += 80;
+      setTimeout(check, 80);
+    };
+    check();
+  });
+  return { stream, video };
 }
 
 async function checkoutSilentCapture() {
@@ -4667,21 +4656,18 @@ async function checkoutSilentCapture() {
   _checkoutEnterBusy = true;
   const statusEl = document.getElementById('checkout-status');
   if (statusEl) statusEl.innerHTML = '<div class="alert alert-info py-1 small">📷 جاري التصوير والتحليل...</div>';
+  let camStream = null;
+  let camVideo  = null;
   try {
-    // Ensure camera stream is alive
-    if (!_checkoutCamStream || !_checkoutCamStream.active) {
-      await _checkoutWarmCamera();
-    }
-    if (!_checkoutCamStream || !_checkoutSilentVideo) {
-      // Fallback: open the normal camera UI
+    if (!navigator.mediaDevices?.getUserMedia) {
+      // No camera API — fallback to file picker UI
       if (statusEl) statusEl.innerHTML = '';
       checkoutOpenCamera();
       _checkoutEnterBusy = false;
       return;
     }
-    // Short settle delay then grab frame
-    await new Promise(r => setTimeout(r, 120));
-    const video = _checkoutSilentVideo;
+    ({ stream: camStream, video: camVideo } = await _checkoutOpenCameraOnce());
+    const video = camVideo;
     const vw = video.videoWidth || 1280;
     const vh = video.videoHeight || 720;
     // Resize to max 800px for the API
@@ -4691,6 +4677,9 @@ async function checkoutSilentCapture() {
     canvas.height = Math.round(vh * scale);
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.82));
+    // Camera no longer needed — stop immediately before sending to API
+    if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+    if (camVideo)  { camVideo.srcObject = null; camVideo.remove(); camVideo = null; }
     if (!blob) throw new Error('فشل التصوير');
     const fd = new FormData();
     fd.append('image', blob, 'checkout.jpg');
@@ -4722,6 +4711,9 @@ async function checkoutSilentCapture() {
   } catch (e) {
     if (statusEl) statusEl.innerHTML = `<div class="alert alert-danger py-1 small">خطأ: ${e.message || 'فشل التحليل'}</div>`;
   } finally {
+    // Guarantee camera is released even on error
+    if (camStream) { camStream.getTracks().forEach(t => t.stop()); }
+    if (camVideo)  { camVideo.srcObject = null; camVideo.remove(); }
     _checkoutEnterBusy = false;
   }
 }
@@ -4750,9 +4742,6 @@ function checkoutReset() {
   if (cashRadio) cashRadio.checked = true;
   const fileEl = document.getElementById('checkout-file');
   if (fileEl) fileEl.value = '';
-  // Stop and re-warm camera for next session
-  _checkoutStopCamera();
-  if (navigator.mediaDevices?.getUserMedia) _checkoutWarmCamera();
   toast('تم التصفير ✅');
 }
 
