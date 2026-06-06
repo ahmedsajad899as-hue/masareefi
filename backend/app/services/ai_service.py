@@ -1020,88 +1020,34 @@ async def transcribe_audio_for_market(audio_bytes: bytes, filename: str) -> str:
 # ── Market Vision (Image Analysis) ──────────────────────────────────────────
 # ═════════════════════════════════════════════════════════════════════════════
 
-VISION_SYSTEM_PROMPT = """
-You are an expert product-recognition assistant for an Iraqi shop owner (pharmacy,
-grocery, supermarket, general store). You will receive a photo that may contain:
-  - one or more physical products on a counter, shelf, or in a bag
-  - a handwritten note listing products
-  - a printed receipt or invoice
-  - a screenshot of a shopping list
+VISION_SYSTEM_PROMPT = """You are a product-recognition assistant for an Iraqi shop (pharmacy, grocery, supermarket).
+Analyze the photo and return a JSON array of every product visible.
 
-Your job: identify EVERY product visible and return a JSON array.
-NEVER return an empty array if any product, package, brand, or written word is visible.
+🌐 LANGUAGE RULE (critical):
+- Keep the product name in the SAME language as written on the label.
+- English label → English name. Arabic label → Arabic name. Do NOT translate.
 
-════════════════════════════════════════════════════════════════════════════════
-  🌐 LANGUAGE RULE — CRITICAL:
-  • PRESERVE the language exactly as it appears on the packaging / label.
-  • If the brand name is written in English on the box → keep it in English.
-  • If the product name is written in Arabic → keep it in Arabic.
-  • If the label is bilingual → use the MORE COMPLETE version (usually English
-    for medicines/pharmaceuticals, Arabic for food/household items).
-  • Do NOT translate English names to Arabic or Arabic names to English.
-  • Examples of CORRECT behaviour:
-      Label says "Panadol Extra 500mg"        → "Panadol Extra 500mg"          ✅
-      Label says "TAMSOLIN-S 0.4mg 10 Tabs"   → "TAMSOLIN-S 0.4mg 10 Tabs"    ✅
-      Label says "بيبسي 330 مل"               → "بيبسي 330مل"                  ✅
-      Label says "Lay's Classic 28g"          → "Lay's Classic 28g"            ✅
-════════════════════════════════════════════════════════════════════════════════
+📋 EXTRACT ALL VISIBLE DETAILS in one product_name string:
+  1. Brand name (e.g. Panadol, TAMSOLIN-S, بيبسي)
+  2. Generic/scientific name (e.g. Paracetamol, Tamsulosin, Mometasone Furoate)
+  3. Strength/Dosage (e.g. 500mg, 0.4mg+6mg, 0.1% w/w)
+  4. Form (e.g. Tablets, Cream, Syrup, Capsules)
+  5. Pack size/Qty (e.g. 10 Tabs, 30g, 330ml, 1.5L)
+  6. Manufacturer if clearly visible (e.g. GSK, Julphar)
+  Good: "TAMSOLIN-S Tamsulosin 0.4mg+6mg Modified Release Tablets 10s"
+  Good: "Elica Cream Mometasone Furoate 0.1% w/w 30g"
+  Good: "بيبسي كولا 330مل علبة"   Good: "حليب نيدو كامل الدسم 400غ"
 
-════════════════════════════════════════════════════════════════════════════════
-  📋 FULL DETAIL EXTRACTION RULE:
-  For EVERY product, extract and include ALL of the following details that are
-  visible on the label — combine them into one descriptive product_name string:
-
-  1. Brand name          (الاسم التجاري)   e.g. Panadol, TAMSOLIN-S, بيبسي
-  2. Generic/scientific name (الاسم العلمي / المادة الفعالة)  e.g. Paracetamol, Tamsulosin
-  3. Strength / Dosage   (الجرعة / القوة)  e.g. 500mg, 0.4mg+6mg, 0.1% w/w
-  4. Form / Shape        (الشكل / الهيئة)  e.g. Tablets, Cream, Syrup, Capsules, Gel
-  5. Pack size / Qty     (التعبئة / الكمية) e.g. 10 Tabs, 30 Caps, 30g, 1.5L, 24 pcs
-  6. Manufacturer        (الشركة / المصنع)  e.g. GSK, Julphar — include if clearly visible
-
-  ✅ Good examples:
-      "Panadol Extra Paracetamol 500mg + Caffeine Tablets 24s GSK"
-      "TAMSOLIN-S Tamsulosin 0.4mg+6mg Modified Release Tablets 10s"
-      "Elica Cream Mometasone Furoate 0.1% w/w 30g"
-      "Rovas-20 Rosuvastatin 20mg Tablets 30s"
-      "بيبسي كولا 330مل علبة"
-      "زيت صافية دوار الشمس 1.8 لتر"
-      "حليب نيدو كامل الدسم 400 غرام"
-
-  ✏ If a detail is NOT visible or unreadable, simply omit it — do not guess.
-════════════════════════════════════════════════════════════════════════════════
-
-PRODUCT CATEGORIES YOU MUST RECOGNIZE WELL (Iraqi market staples — examples only):
-• Pharmaceuticals / medicines: read brand + INN + strength + form + pack exactly as on label
-• Soft drinks / juices: بيبسي, كوكا كولا, سبايت, ميريندا, 7 Up, عصير راني, سنتوب …
-• Water: جبل صافي, صفا, سباركل … (250مل / 500مل / 1.5ل / 5ل / جالون)
-• Dairy / eggs: حليب نيدو, حليب لاكتيل, لبن, جبن كيري, زبدة, بيض …
-• Snacks / chips: Lay's, Cheetos, Doritos, Pringles, بوب كورن …
-• Chocolate & sweets: Cadbury, Snickers, Mars, KitKat, بسكوت, حلوى …
-• Tea & coffee: شاي الغزالين, Lipton, Nescafé, قهوة تركية …
-• Oils & condiments: زيت صافية, Heinz ketchup, مايونيز, خل, ملح …
-• Hygiene / personal care: صابون, شامبو, Colgate, Signal, فوط صحية, حفاضات …
-• Cleaning: Tide, Ariel, Downy, Fairy, Dettol, Clorox …
-• Cigarettes: Marlboro, Winston, Esse, Sporter …
-• Fresh produce: طماطة, بصل, بطاطا, خيار, تفاح, موز …
-
-Each object MUST have:
-- "product_name": string
-  • Use the FULL detail format described above.
-  • PRESERVE original label language (English→English, Arabic→Arabic).
-  • If the brand is unreadable but type/form is clear, name by what IS visible:
-        "Cream 30g Mometasone 0.1%",  "شامبو 400مل"
-  • If completely unclear: "Unknown product [describe colour/shape]"
-- "quantity": number — how many UNITS of that product are visible. Default 1.
-- "unit_price": number — in Iraqi Dinar (IQD).
-  • If a price tag is visible, read it exactly.
-  • If the owner has previously sold it (provided as "سعر سابق"), use THAT price.
-  • Otherwise estimate a reasonable Iraqi retail price, or use 0.
+Each JSON object must have:
+- "product_name": full descriptive name (see above)
+- "quantity": number of visible units (default 1)
+- "unit_price": price in IQD. Read from label if visible; use owner's past price if provided; else estimate; else 0.
 
 Rules:
-- Return ONLY a valid JSON array. No markdown fences, no explanation.
-- Do NOT return an empty array unless the image is completely blank/blurry.
-- Prefer the EXACT product_name from "المنتجات المعروفة" when there is a clear match.
-"""
+- Return ONLY a valid JSON array, no markdown, no explanation.
+- NEVER return empty array if any product/text is visible.
+- If brand unreadable, name by type+details: "Cream 30g Mometasone 0.1%"
+- Prefer exact name from المنتجات المعروفة when there is a clear match."""
 
 
 def _normalize_product_key(name: str) -> str:
@@ -1357,27 +1303,19 @@ async def analyze_image_for_market_items(
     if not has_openai and not has_gemini:
         return [], "no-api-key"
 
-    # ── Resize image to max 1600 px on longest side to reduce API token costs ──
+    # ── Skip backend resize — frontend already resizes to ≤900px before upload ──
+    # Only strip alpha channel (RGBA→RGB) so JPEG encode doesn't fail.
     try:
         from PIL import Image as _PILImage
         _img = _PILImage.open(_io.BytesIO(image_bytes))
-        # Convert RGBA → RGB so JPEG save doesn't fail
         if _img.mode in ("RGBA", "P"):
             _img = _img.convert("RGB")
-        _max_side = max(_img.size)
-        if _max_side > 1600:
-            _scale = 1600 / _max_side
-            _new_w = max(1, int(_img.size[0] * _scale))
-            _new_h = max(1, int(_img.size[1] * _scale))
-            _img = _img.resize((_new_w, _new_h), _PILImage.LANCZOS)
-        _buf = _io.BytesIO()
-        _fmt = "PNG" if mime_type == "image/png" else "JPEG"
-        _img.save(_buf, format=_fmt, quality=92)  # high quality preserves text readability
-        image_bytes = _buf.getvalue()
-        if _fmt == "JPEG":
+            _buf = _io.BytesIO()
+            _img.save(_buf, format="JPEG", quality=92)
+            image_bytes = _buf.getvalue()
             mime_type = "image/jpeg"
     except Exception:
-        pass  # If resize fails, use original bytes unchanged
+        pass  # use original bytes unchanged
 
     b64 = base64.b64encode(image_bytes).decode("utf-8")
 
@@ -1440,7 +1378,7 @@ async def analyze_image_for_market_items(
                     ]},
                 ],
                 temperature=0.1,
-                max_tokens=1500,
+                max_tokens=1200,
             )
             raw = response.choices[0].message.content or "[]"
         except Exception as e:
@@ -1489,7 +1427,7 @@ async def analyze_image_for_market_items(
             ],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 1500,
+                "maxOutputTokens": 1200,
                 "responseMimeType": "application/json",
             },
         }

@@ -4643,13 +4643,13 @@ async function _checkoutOpenCameraOnce() {
   document.body.appendChild(video);
   video.srcObject = stream;
   await video.play().catch(() => {});
-  // Wait until the camera delivers real frames (up to 1.5s)
+  // Wait until the camera delivers real frames (up to 600ms)
   await new Promise(resolve => {
     let waited = 0;
     const check = () => {
-      if (video.videoWidth > 0 || waited >= 1500) { resolve(); return; }
-      waited += 80;
-      setTimeout(check, 80);
+      if (video.videoWidth > 0 || waited >= 600) { resolve(); return; }
+      waited += 60;
+      setTimeout(check, 60);
     };
     check();
   });
@@ -4675,13 +4675,13 @@ async function checkoutSilentCapture() {
     const video = camVideo;
     const vw = video.videoWidth || 1280;
     const vh = video.videoHeight || 720;
-    // Resize to max 1200px for better text readability
-    const scale = Math.min(1, 1200 / Math.max(vw, vh));
+    // 900px: enough for text readability, fewer API tiles = faster
+    const scale = Math.min(1, 900 / Math.max(vw, vh));
     const canvas = document.createElement('canvas');
     canvas.width  = Math.round(vw * scale);
     canvas.height = Math.round(vh * scale);
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.90));
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.88));
     // Camera no longer needed — stop immediately before sending to API
     if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
     if (camVideo)  { camVideo.srcObject = null; camVideo.remove(); camVideo = null; }
