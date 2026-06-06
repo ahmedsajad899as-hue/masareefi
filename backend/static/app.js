@@ -4464,11 +4464,16 @@ function checkoutFileSelectedDirect(file) {
   visionCompressImage(file, 800, 0.72).then(blob => {
     const fd = new FormData();
     fd.append('image', blob, 'checkout.jpg');
-    fetch(API + '/market/vision/analyze', {
+    const doSend = () => fetch(API + '/market/vision/analyze', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + S.token },
       body: fd,
-    })
+    });
+    doSend()
+      .then(r => r.status === 401 && S.refreshToken
+        ? tryRefresh().then(ok => ok ? doSend() : r)
+        : r
+      )
       .then(r => {
         if (!r.ok) return r.json().then(e => { throw new Error(e.detail || 'HTTP ' + r.status); });
         return r.json();
@@ -4683,11 +4688,18 @@ async function checkoutSilentCapture() {
     if (!blob) throw new Error('فشل التصوير');
     const fd = new FormData();
     fd.append('image', blob, 'checkout.jpg');
-    const resp = await fetch(API + '/market/vision/analyze', {
+
+    // Helper: send the blob, auto-refresh token once on 401
+    const doSend = async () => fetch(API + '/market/vision/analyze', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + S.token },
       body: fd,
     });
+    let resp = await doSend();
+    if (resp.status === 401 && S.refreshToken) {
+      const refreshed = await tryRefresh();
+      if (refreshed) resp = await doSend();
+    }
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
       throw new Error(err.detail || 'HTTP ' + resp.status);
