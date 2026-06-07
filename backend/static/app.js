@@ -4857,7 +4857,7 @@ function _csScanSchedule() {
     }
   };
   _doCapture();  // first capture immediately (don't wait 800ms)
-  _csScanTimer = setInterval(_doCapture, 800);
+  _csScanTimer = setInterval(_doCapture, 2500);  // 2.5s between captures — stays within Gemini free tier (15 RPM)
 }
 
 async function _csScanCapture() {
@@ -4907,8 +4907,26 @@ async function _csScanCapture() {
   const data = await resp.json();
   const statusEl = document.getElementById('checkout-scan-status');
 
-  // Debug: log full server response to browser console
-  console.log('[cs-scan] status:', data.status, '| items:', data.items?.length ?? 0, '| raw:', (data.raw_response || '').slice(0, 120));
+  // ── Rate-limit: pause scan and auto-resume after server-specified wait ──
+  const raw = (data.raw_response || '').trim();
+  if (raw.startsWith('gemini-rate-limit') || raw.startsWith('openai-rate-limit')) {
+    // Extract wait seconds from message e.g. "...يرجى الانتظار 31 ثانية"
+    const match = raw.match(/(\d+)/);
+    const waitSec = match ? Math.min(parseInt(match[1], 10) + 2, 90) : 35;
+    _csScanBusy = true;  // block further captures during wait
+    if (statusEl) statusEl.textContent = `⏸️ حد Gemini — استئناف بعد ${waitSec}ث...`;
+    let w = waitSec;
+    const waitTick = setInterval(() => {
+      w--;
+      if (statusEl && _csScanActive) statusEl.textContent = `⏸️ حد Gemini — استئناف بعد ${w}ث...`;
+      if (w <= 0) {
+        clearInterval(waitTick);
+        _csScanBusy = false;
+        if (statusEl && _csScanActive) statusEl.textContent = `▶️ استُؤنف المسح — وجّه الكاميرا نحو المنتج`;
+      }
+    }, 1000);
+    return;
+  }
 
   if (data.status === 'new' && data.items?.length) {
     let added = 0;
@@ -4951,14 +4969,7 @@ async function _csScanCapture() {
   } else if (data.status === 'new' && !data.items?.length) {
     if (statusEl) statusEl.textContent = `🔍 لم يُتعرف على منتج — قرّب المنتج أكثر (${_csScanNewCount} مضاف)`;
   } else {
-    // status === 'empty': show raw_response snippet so we can diagnose
-    const raw = (data.raw_response || '').trim();
-    if (raw && raw !== '[]' && !raw.startsWith('[')) {
-      // AI returned an error or unexpected text
-      if (statusEl) statusEl.textContent = `⚠️ ${raw.slice(0, 80)}`;
-    } else {
-      if (statusEl) statusEl.textContent = `🔍 لا منتجات مرئية — مرر المنتج أمام الكاميرا (${_csScanNewCount} مضاف)`;
-    }
+    if (statusEl) statusEl.textContent = `🔍 لا منتجات مرئية — مرر المنتج أمام الكاميرا (${_csScanNewCount} مضاف)`;
   }
 }
 
