@@ -4763,17 +4763,16 @@ function checkoutReset() {
 let _csScanActive      = false;
 let _csScanSession     = null;
 let _csScanTimer       = null;
-let _csScanAutoTimer   = null;  // auto-stop countdown
-let _csScanCountdown   = null;  // countdown interval
+let _csScanAutoTimer   = null;
+let _csScanCountdown   = null;
 let _csScanStream      = null;
 let _csScanVideo       = null;
-let _csScanInFlight    = 0;
+let _csScanBusy        = false;   // single-flight: one AI call at a time
 let _csScanNewCount    = 0;
-const _CS_MAX_PARALLEL = 3;
 
 function _csGetDuration() {
   const sel = document.getElementById('checkout-scan-duration');
-  return sel ? parseInt(sel.value, 10) : 0; // 0 = no limit
+  return sel ? parseInt(sel.value, 10) : 0;
 }
 
 async function checkoutStartContinuousScan() {
@@ -4785,7 +4784,7 @@ async function checkoutStartContinuousScan() {
   }
 
   _csScanActive   = true;
-  _csScanInFlight = 0;
+  _csScanBusy     = false;
   _csScanNewCount = 0;
   _csScanSession  = 'cs-' + Math.random().toString(36).slice(2) + Date.now();
 
@@ -4844,15 +4843,21 @@ function _csFormatRemaining(sec) {
 
 function _csScanSchedule() {
   if (!_csScanActive) return;
-  // Capture every 700ms. Allow up to _CS_MAX_PARALLEL concurrent AI calls
-  // so no frame is dropped while waiting for a previous response.
-  _csScanTimer = setInterval(async () => {
-    if (!_csScanActive) { clearInterval(_csScanTimer); return; }
-    if (_csScanInFlight < _CS_MAX_PARALLEL) {
-      _csScanInFlight++;
-      _csScanCapture().catch(() => {}).finally(() => { _csScanInFlight = Math.max(0, _csScanInFlight - 1); });
+  // Fire immediately, then repeat every 800ms.
+  // Single-flight: skip tick if previous AI call still in progress.
+  const _doCapture = async () => {
+    if (!_csScanActive) return;
+    if (_csScanBusy) return;   // AI still processing previous frame — skip this tick
+    _csScanBusy = true;
+    try { await _csScanCapture(); } catch (e) {
+      const statusEl = document.getElementById('checkout-scan-status');
+      if (statusEl) statusEl.textContent = `❌ خطأ: ${e.message || ''}`;
+    } finally {
+      _csScanBusy = false;
     }
-  }, 700);
+  };
+  _doCapture();  // first capture immediately (don't wait 800ms)
+  _csScanTimer = setInterval(_doCapture, 800);
 }
 
 async function _csScanCapture() {
@@ -4868,32 +4873,33 @@ async function _csScanCapture() {
   const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.86));
   if (!blob || !_csScanActive) return;
 
-  // Build a fresh FormData each time (fixes re-use bug on token refresh)
-  const makeFormData = () => {
-    const fd = new FormData();
-    fd.append('session_id', _csScanSession);
-    fd.append('image', new File([blob], 'frame.jpg', { type: 'image/jpeg' }), 'frame.jpg');
-    return fd;
-  };
+  const fd = new FormData();
+  fd.append('session_id', _csScanSession);
+  fd.append('image', blob, 'frame.jpg');
 
   let resp = await fetch(API + '/market/vision/analyze-stream', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + S.token },
-    body: makeFormData(),
+    body: fd,
   });
   if (resp.status === 401 && S.refreshToken) {
     const ok = await tryRefresh();
-    if (ok) resp = await fetch(API + '/market/vision/analyze-stream', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + S.token },
-      body: makeFormData(),
-    });
+    if (ok) {
+      const fd2 = new FormData();
+      fd2.append('session_id', _csScanSession);
+      fd2.append('image', blob, 'frame.jpg');
+      resp = await fetch(API + '/market/vision/analyze-stream', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + S.token },
+        body: fd2,
+      });
+    }
   }
   if (!_csScanActive) return;
   if (!resp.ok) {
-    const statusEl = document.getElementById('checkout-scan-status');
     let errMsg = 'HTTP ' + resp.status;
     try { const e = await resp.json(); errMsg = e.detail || errMsg; } catch (_) {}
+    const statusEl = document.getElementById('checkout-scan-status');
     if (statusEl) statusEl.textContent = `❌ خطأ: ${errMsg}`;
     return;
   }
