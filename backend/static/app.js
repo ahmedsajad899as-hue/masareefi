@@ -4817,14 +4817,22 @@ async function checkoutStartContinuousScan() {
 
 function _csScanSchedule() {
   if (!_csScanActive) return;
+  // Minimum gap between *start* of captures = 400ms.
+  // We fire next capture immediately after the previous one finishes,
+  // but never faster than 400ms from when the last one started.
+  const MIN_GAP = 400;
+  const started = Date.now();
   _csScanTimer = setTimeout(async () => {
-    if (!_csScanBusy && _csScanActive) {
+    if (_csScanActive) {
       _csScanBusy = true;
       try { await _csScanCapture(); } catch (_) {}
       _csScanBusy = false;
+      // Schedule next run: wait for remainder of MIN_GAP from when this one started
+      const elapsed = Date.now() - started;
+      const wait = Math.max(0, MIN_GAP - elapsed);
+      if (_csScanActive) _csScanTimer = setTimeout(() => _csScanSchedule(), wait);
     }
-    _csScanSchedule();
-  }, 1400);
+  }, 0);
 }
 
 async function _csScanCapture() {
