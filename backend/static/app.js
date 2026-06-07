@@ -4907,6 +4907,9 @@ async function _csScanCapture() {
   const data = await resp.json();
   const statusEl = document.getElementById('checkout-scan-status');
 
+  // Debug: log full server response to browser console
+  console.log('[cs-scan] status:', data.status, '| items:', data.items?.length ?? 0, '| raw:', (data.raw_response || '').slice(0, 120));
+
   if (data.status === 'new' && data.items?.length) {
     let added = 0;
     for (const it of data.items) {
@@ -4944,9 +4947,18 @@ async function _csScanCapture() {
       }, 700);
     }
   } else if (data.status === 'duplicate') {
-    if (statusEl) statusEl.textContent = `⏳ انتظر... مرر منتجاً جديداً (${_csScanNewCount} مضاف)`;
+    if (statusEl) statusEl.textContent = `🔁 صورة مكررة — حرّك المنتج (${_csScanNewCount} مضاف)`;
+  } else if (data.status === 'new' && !data.items?.length) {
+    if (statusEl) statusEl.textContent = `🔍 لم يُتعرف على منتج — قرّب المنتج أكثر (${_csScanNewCount} مضاف)`;
   } else {
-    if (statusEl) statusEl.textContent = `🔍 جاري المسح... (${_csScanNewCount} منتج مضاف)`;
+    // status === 'empty': show raw_response snippet so we can diagnose
+    const raw = (data.raw_response || '').trim();
+    if (raw && raw !== '[]' && !raw.startsWith('[')) {
+      // AI returned an error or unexpected text
+      if (statusEl) statusEl.textContent = `⚠️ ${raw.slice(0, 80)}`;
+    } else {
+      if (statusEl) statusEl.textContent = `🔍 لا منتجات مرئية — مرر المنتج أمام الكاميرا (${_csScanNewCount} مضاف)`;
+    }
   }
 }
 
