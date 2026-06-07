@@ -4765,8 +4765,9 @@ let _csScanSession  = null;
 let _csScanTimer    = null;
 let _csScanStream   = null;
 let _csScanVideo    = null;
-let _csScanBusy     = false;
+let _csScanInFlight = 0;   // number of AI calls currently in progress
 let _csScanNewCount = 0;
+const _CS_MAX_PARALLEL = 3; // max concurrent AI requests
 
 async function checkoutStartContinuousScan() {
   if (_csScanActive) return;
@@ -4778,7 +4779,7 @@ async function checkoutStartContinuousScan() {
   }
 
   _csScanActive   = true;
-  _csScanBusy     = false;
+  _csScanInFlight = 0;
   _csScanNewCount = 0;
   _csScanSession  = 'cs-' + Math.random().toString(36).slice(2) + Date.now();
 
@@ -4817,16 +4818,13 @@ async function checkoutStartContinuousScan() {
 
 function _csScanSchedule() {
   if (!_csScanActive) return;
-  // Capture every 700ms regardless of AI response time.
-  // Calls are fire-and-forget (no await) so next capture starts on time
-  // even if the previous AI call is still in flight.
-  // _csScanBusy only blocks if the *previous* capture hasn't even been
-  // sent yet (e.g. canvas encoding still running).
+  // Capture every 700ms. Allow up to _CS_MAX_PARALLEL concurrent AI calls
+  // so no frame is dropped while waiting for a previous response.
   _csScanTimer = setInterval(async () => {
     if (!_csScanActive) { clearInterval(_csScanTimer); return; }
-    if (!_csScanBusy) {
-      _csScanBusy = true;
-      _csScanCapture().catch(() => {}).finally(() => { _csScanBusy = false; });
+    if (_csScanInFlight < _CS_MAX_PARALLEL) {
+      _csScanInFlight++;
+      _csScanCapture().catch(() => {}).finally(() => { _csScanInFlight = Math.max(0, _csScanInFlight - 1); });
     }
   }, 700);
 }

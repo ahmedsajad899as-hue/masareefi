@@ -254,7 +254,7 @@ async def analyze_stream_frame(
 
     h = _ahash(image_bytes)
     if h:
-        for prev in sess["hashes"][-3:]:
+        for prev in sess["hashes"][-10:]:
             if _hamming(h, prev) <= 8:
                 return StreamFrameResponse(status="duplicate")
 
