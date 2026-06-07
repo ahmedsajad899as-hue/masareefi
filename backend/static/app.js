@@ -4872,8 +4872,8 @@ function _csScanSchedule() {
       _csScanBusy = false;
     }
   };
-  _doCapture();  // first capture immediately (don't wait 800ms)
-  _csScanTimer = setInterval(_doCapture, 2500);  // 2.5s between captures — stays within Gemini free tier (15 RPM)
+  _doCapture();  // first capture immediately
+  _csScanTimer = setInterval(_doCapture, 5000);  // 5s = 12 RPM — safely under Gemini free tier (15 RPM)
 }
 
 async function _csScanCapture() {
@@ -4923,13 +4923,17 @@ async function _csScanCapture() {
   const data = await resp.json();
   const statusEl = document.getElementById('checkout-scan-status');
 
-  // ── Rate-limit: pause scan and auto-resume after server-specified wait ──
+  // ── Rate-limit: pause scan + pause auto-stop countdown, resume after wait ──
   const raw = (data.raw_response || '').trim();
   if (raw.startsWith('gemini-rate-limit') || raw.startsWith('openai-rate-limit')) {
-    // Extract wait seconds from message e.g. "...يرجى الانتظار 31 ثانية"
     const match = raw.match(/(\d+)/);
-    const waitSec = match ? Math.min(parseInt(match[1], 10) + 2, 90) : 35;
-    _csScanBusy = true;  // block further captures during wait
+    const waitSec = match ? Math.min(parseInt(match[1], 10) + 3, 90) : 38;
+    _csScanBusy = true;
+    // Pause auto-stop so wait time doesn't eat the session budget
+    if (_csScanAutoTimer)  { clearTimeout(_csScanAutoTimer);   _csScanAutoTimer  = null; }
+    if (_csScanCountdown)  { clearInterval(_csScanCountdown); _csScanCountdown = null; }
+    const countEl = document.getElementById('checkout-scan-countdown');
+    if (countEl) countEl.style.display = 'none';
     if (statusEl) statusEl.textContent = `⏸️ حد Gemini — استئناف بعد ${waitSec}ث...`;
     let w = waitSec;
     const waitTick = setInterval(() => {
@@ -4938,7 +4942,20 @@ async function _csScanCapture() {
       if (w <= 0) {
         clearInterval(waitTick);
         _csScanBusy = false;
-        if (statusEl && _csScanActive) statusEl.textContent = `▶️ استُؤنف المسح — وجّه الكاميرا نحو المنتج`;
+        // Resume auto-stop with remaining duration (at least 15s)
+        const durMs = _csGetDuration();
+        if (durMs > 0 && _csScanActive) {
+          const resumeMs = Math.max(15000, durMs / 2);
+          let rem = Math.ceil(resumeMs / 1000);
+          if (countEl) { countEl.style.display = ''; countEl.textContent = _csFormatRemaining(rem); }
+          _csScanCountdown = setInterval(() => {
+            rem--;
+            if (countEl) countEl.textContent = _csFormatRemaining(rem);
+            if (rem <= 0) { clearInterval(_csScanCountdown); _csScanCountdown = null; }
+          }, 1000);
+          _csScanAutoTimer = setTimeout(() => checkoutStopContinuousScan(false), resumeMs);
+        }
+        if (statusEl && _csScanActive) statusEl.textContent = `▶️ استُؤنف — وجّه الكاميرا نحو المنتج`;
       }
     }, 1000);
     return;
