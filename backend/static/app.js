@@ -4430,7 +4430,7 @@ function checkoutLoadVisionUsage() {
       const color = remaining === 0 ? 'danger' : remaining <= 10 ? 'warning' : 'success';
       el.className = `badge bg-${color}`;
       el.innerHTML = `<i class="fas fa-camera me-1"></i>${uses_today}/${daily_limit} صورة اليوم`;
-      el.title = `استُخدم ${uses_today} من ${daily_limit} صورة يومية — متبقي ${remaining}`;
+      el.title = `استُخدم ${uses_today} من ${daily_limit} صورة AI يومياً — متبقي ${remaining}\nكل صورة ترسل للتحليل = استخدام واحد\nالمسح 30 ثانية = ~12 استخدام`;
     })
     .catch(() => {});
 }
@@ -4985,9 +4985,15 @@ async function _csScanCapture() {
     if (statusEl) statusEl.textContent = `🔁 صورة مكررة — حرّك المنتج (${_csScanNewCount} مضاف)`;
   } else if (data.status === 'new' && !data.items?.length) {
     if (statusEl) statusEl.textContent = `🔍 لم يُتعرف على منتج — قرّب المنتج أكثر (${_csScanNewCount} مضاف)`;
+    checkoutLoadVisionUsage();
   } else {
     if (statusEl) statusEl.textContent = `🔍 لا منتجات مرئية — مرر المنتج أمام الكاميرا (${_csScanNewCount} مضاف)`;
+    checkoutLoadVisionUsage();
   }
+  // Refresh usage badge every 5 AI calls regardless of result
+  if (typeof _csScanCallCount === 'undefined') window._csScanCallCount = 0;
+  window._csScanCallCount++;
+  if (window._csScanCallCount % 5 === 0) checkoutLoadVisionUsage();
 }
 
 async function checkoutStopContinuousScan(silent = false) {

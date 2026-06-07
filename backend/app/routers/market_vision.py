@@ -22,7 +22,7 @@ ALLOWED_IMAGE_TYPES = {
     "image/heic", "image/heif",
 }
 MAX_IMAGE_SIZE_MB = 20
-DEFAULT_DAILY_VISION_LIMIT = 80
+DEFAULT_DAILY_VISION_LIMIT = 200  # per-user daily limit; admin can override via custom_daily_vision
 
 
 async def _increment_vision_usage(user: User, db: AsyncSession) -> None:
