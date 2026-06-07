@@ -1021,7 +1021,13 @@ async def transcribe_audio_for_market(audio_bytes: bytes, filename: str) -> str:
 # ═════════════════════════════════════════════════════════════════════════════
 
 VISION_SYSTEM_PROMPT = """You are a product-recognition assistant for an Iraqi shop (pharmacy, grocery, supermarket).
-Analyze the photo and return a JSON array of every product visible.
+Analyze the photo and return a JSON array of ONLY the products you can actually see in this image.
+
+⚠ STRICT VISIBILITY RULE (most important):
+- ONLY include products that are physically visible in this specific image.
+- DO NOT add products from memory, history, or any list provided — unless you can clearly see them in this image.
+- If you cannot clearly identify a product, do NOT include it.
+- It is perfectly fine to return an empty array [] if no products are clearly visible.
 
 🌐 LANGUAGE RULE (critical):
 - Keep the product name in the SAME language as written on the label.
@@ -1045,9 +1051,8 @@ Each JSON object must have:
 
 Rules:
 - Return ONLY a valid JSON array, no markdown, no explanation.
-- NEVER return empty array if any product/text is visible.
-- If brand unreadable, name by type+details: "Cream 30g Mometasone 0.1%"
-- Prefer exact name from المنتجات المعروفة when there is a clear match."""
+- If brand unreadable but product is visible, name by type+details: "Cream 30g Mometasone 0.1%"
+- If a product matches المنتجات المعروفة AND is visible in the image, use that exact name and price."""
 
 
 def _normalize_product_key(name: str) -> str:
@@ -1349,10 +1354,12 @@ async def analyze_image_for_market_items(
                 else:
                     known_section_lines.append(f"- {name}")
 
-    user_text = "حلل الصورة واستخرج قائمة المنتجات بالتنسيق المطلوب (JSON array فقط)."
+    user_text = "حلل الصورة واستخرج قائمة المنتجات التي تراها فعلاً في الصورة (JSON array فقط)."
     if known_section_lines and not strict_visible_only:
         user_text += (
-            "\n\nالمنتجات المعروفة (باعها صاحب المحل سابقاً — إذا طابقت استخدم نفس الاسم ونفس السعر):\n"
+            "\n\n📌 قائمة مرجعية للأسماء والأسعار — للمطابقة فقط:"
+            "\nاستخدم هذه القائمة لتصحيح اسم أو سعر منتج تراه فعلاً في الصورة."
+            "\n⚠ لا تُدرج أي منتج من هذه القائمة ما لم تره بوضوح في الصورة:\n"
             + "\n".join(known_section_lines)
         )
     if strict_visible_only:
