@@ -1456,12 +1456,29 @@
       <div class="glass-card p-3 mb-3">
         <input type="file" id="checkout-file" accept="image/*" capture="environment" style="display:none" onchange="checkoutFileSelected(event)">
         <div class="d-flex gap-2 mb-3">
-          <button class="btn btn-success flex-grow-1" onclick="checkoutOpenCamera()">
-            <i class="fas fa-camera me-2"></i>صور الأغراض بالكاميرا (AI)
+          <button class="btn btn-success flex-grow-1" id="checkout-scan-start-btn" onclick="checkoutStartContinuousScan()" title="مسح متتالي — مرر الأغراض أمام الكاميرا واحداً تلو الآخر">
+            <i class="fas fa-barcode me-2"></i>مسح متتالي (AI)
+          </button>
+          <button class="btn btn-outline-info" onclick="checkoutOpenCamera()" title="تصوير صورة واحدة">
+            <i class="fas fa-camera"></i>
           </button>
           <button class="btn btn-outline-warning" onclick="checkoutAddItem()" title="إضافة سطر يدوياً">
             <i class="fas fa-plus"></i>
           </button>
+        </div>
+        <!-- Continuous Scan Live Panel -->
+        <div id="checkout-scan-panel" style="display:none" class="mb-3">
+          <div style="position:relative;background:#000;border-radius:10px;overflow:hidden;border:2px solid #22c55e">
+            <video id="checkout-scan-video" autoplay playsinline muted style="width:100%;max-height:240px;object-fit:cover;display:block"></video>
+            <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#22c55e 50%,transparent);animation:checkout-scanline 1.5s linear infinite"></div>
+            <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.75);padding:6px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <span id="checkout-scan-status" style="color:#fff;font-size:0.78rem;flex:1">جاري المسح...</span>
+              <button class="btn btn-sm btn-danger py-0 px-2" onclick="checkoutStopContinuousScan()" style="font-size:0.78rem">
+                <i class="fas fa-stop me-1"></i>إيقاف
+              </button>
+            </div>
+          </div>
+          <div class="text-muted text-center mt-1" style="font-size:0.72rem">مرر كل منتج أمام الكاميرا — يُضاف تلقائياً عند التعرف عليه</div>
         </div>
         <div id="checkout-status"></div>
         <div id="checkout-img-wrap" style="display:none" class="text-center mb-2">

@@ -670,7 +670,7 @@ function goTo(page) {
   localStorage.setItem('last_page', page);
 
   // Stop checkout silent camera if navigating away
-  if (page !== 'market-checkout') { /* camera is always released after each capture */ }
+  if (page !== 'market-checkout') { checkoutStopContinuousScan(true); }
 
   switch (page) {
     case 'dashboard':        loadDashboard(); break;
@@ -4754,7 +4754,189 @@ function checkoutReset() {
   if (cashRadio) cashRadio.checked = true;
   const fileEl = document.getElementById('checkout-file');
   if (fileEl) fileEl.value = '';
+  // Also stop any active continuous scan
+  checkoutStopContinuousScan(true);
   toast('تم التصفير ✅');
+}
+
+// ─────────────────────── Continuous Scan (مسح متتالي) ───────────────────────
+let _csScanActive   = false;
+let _csScanSession  = null;
+let _csScanTimer    = null;
+let _csScanStream   = null;
+let _csScanVideo    = null;
+let _csScanBusy     = false;
+let _csScanNewCount = 0;
+
+async function checkoutStartContinuousScan() {
+  if (_csScanActive) return;
+
+  // Fallback: no camera API → single-shot
+  if (!navigator.mediaDevices?.getUserMedia) {
+    checkoutOpenCamera();
+    return;
+  }
+
+  _csScanActive   = true;
+  _csScanBusy     = false;
+  _csScanNewCount = 0;
+  _csScanSession  = 'cs-' + Math.random().toString(36).slice(2) + Date.now();
+
+  // Show live panel
+  const panel = document.getElementById('checkout-scan-panel');
+  if (panel) panel.style.display = '';
+  const startBtn = document.getElementById('checkout-scan-start-btn');
+  if (startBtn) startBtn.disabled = true;
+
+  const statusEl = document.getElementById('checkout-scan-status');
+  if (statusEl) statusEl.textContent = 'جاري تشغيل الكاميرا...';
+
+  try {
+    _csScanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    const video = document.getElementById('checkout-scan-video');
+    if (video) {
+      video.srcObject = _csScanStream;
+      video.muted = true;
+      video.playsInline = true;
+      await video.play().catch(() => {});
+      _csScanVideo = video;
+    }
+    if (statusEl) statusEl.textContent = 'وجّه الكاميرا نحو المنتج — يتم المسح تلقائياً...';
+    _csScanSchedule();
+  } catch (e) {
+    _csScanActive = false;
+    if (panel) panel.style.display = 'none';
+    if (startBtn) startBtn.disabled = false;
+    const mainStatus = document.getElementById('checkout-status');
+    if (mainStatus) mainStatus.innerHTML = `<div class="alert alert-danger py-1 small">فشل تشغيل الكاميرا: ${e.message || ''}</div>`;
+  }
+}
+
+function _csScanSchedule() {
+  if (!_csScanActive) return;
+  _csScanTimer = setTimeout(async () => {
+    if (!_csScanBusy && _csScanActive) {
+      _csScanBusy = true;
+      try { await _csScanCapture(); } catch (_) {}
+      _csScanBusy = false;
+    }
+    _csScanSchedule();
+  }, 1400);
+}
+
+async function _csScanCapture() {
+  const video = _csScanVideo;
+  if (!video || video.videoWidth === 0 || !_csScanActive) return;
+
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const scale = Math.min(1, 900 / Math.max(vw, vh));
+  const canvas = document.createElement('canvas');
+  canvas.width  = Math.round(vw * scale);
+  canvas.height = Math.round(vh * scale);
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.86));
+  if (!blob || !_csScanActive) return;
+
+  const fd = new FormData();
+  fd.append('session_id', _csScanSession);
+  fd.append('image', blob, 'frame.jpg');
+
+  const doSend = () => fetch(API + '/market/vision/analyze-stream', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + S.token },
+    body: fd,
+  });
+
+  let resp = await doSend();
+  if (resp.status === 401 && S.refreshToken) {
+    const ok = await tryRefresh();
+    if (ok) resp = await doSend();
+  }
+  if (!resp.ok || !_csScanActive) return;
+
+  const data = await resp.json();
+  const statusEl = document.getElementById('checkout-scan-status');
+
+  if (data.status === 'new' && data.items?.length) {
+    let added = 0;
+    for (const it of data.items) {
+      const name = (it.product_name || '').trim();
+      if (!name) continue;
+      const existing = _checkoutItems.findIndex(x => x.product_name === name);
+      if (existing >= 0) {
+        _checkoutItems[existing].quantity += (it.quantity || 1);
+      } else {
+        _checkoutItems.push({
+          product_name: name,
+          quantity:     it.quantity  || 1,
+          unit_price:   it.unit_price || 0,
+        });
+        added++;
+        _csScanNewCount++;
+      }
+    }
+    checkoutRenderItems();
+    const saveBtn = document.getElementById('checkout-save-btn');
+    const printBtn = document.getElementById('checkout-print-btn');
+    if (saveBtn) saveBtn.disabled = false;
+    if (printBtn) printBtn.disabled = false;
+    if (statusEl) statusEl.textContent = `✅ ${_csScanNewCount} منتج مضاف — مرر المنتج التالي`;
+
+    // Flash green border on video
+    const panel = document.getElementById('checkout-scan-panel');
+    if (panel) {
+      panel.firstElementChild.style.borderColor = '#22c55e';
+      panel.firstElementChild.style.boxShadow = '0 0 12px #22c55e88';
+      setTimeout(() => {
+        if (panel.firstElementChild) {
+          panel.firstElementChild.style.boxShadow = '';
+        }
+      }, 700);
+    }
+  } else if (data.status === 'duplicate') {
+    if (statusEl) statusEl.textContent = `⏳ انتظر... مرر منتجاً جديداً (${_csScanNewCount} مضاف)`;
+  } else {
+    if (statusEl) statusEl.textContent = `🔍 جاري المسح... (${_csScanNewCount} منتج مضاف)`;
+  }
+}
+
+async function checkoutStopContinuousScan(silent = false) {
+  if (!_csScanActive && !_csScanStream) return;
+  _csScanActive = false;
+  if (_csScanTimer) { clearTimeout(_csScanTimer); _csScanTimer = null; }
+
+  if (_csScanStream) {
+    _csScanStream.getTracks().forEach(t => t.stop());
+    _csScanStream = null;
+  }
+  if (_csScanVideo) { _csScanVideo.srcObject = null; _csScanVideo = null; }
+
+  // Notify server to free session cache
+  if (_csScanSession) {
+    const sid = _csScanSession;
+    _csScanSession = null;
+    const fd = new FormData();
+    fd.append('session_id', sid);
+    fetch(API + '/market/vision/stream-end', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.token },
+      body: fd,
+    }).catch(() => {});
+  }
+
+  const panel = document.getElementById('checkout-scan-panel');
+  if (panel) panel.style.display = 'none';
+  const startBtn = document.getElementById('checkout-scan-start-btn');
+  if (startBtn) startBtn.disabled = false;
+
+  if (!silent && _csScanNewCount > 0) {
+    const mainStatus = document.getElementById('checkout-status');
+    if (mainStatus) mainStatus.innerHTML = `<div class="alert alert-success py-1 small">✅ اكتمل المسح — تم إضافة ${_csScanNewCount} منتج</div>`;
+  }
+  _csScanNewCount = 0;
 }
 
 // ── My Purchases (regular user, read-only) ──────────────────────

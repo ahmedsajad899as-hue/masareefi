@@ -1232,6 +1232,11 @@ body.light-theme {
 .wallet-picker-icon { font-size: 1.3rem; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
+@keyframes checkout-scanline {
+  0%   { top: 0; }
+  100% { top: calc(100% - 2px); }
+}
+
 /* ═══════════ EXPENSE DRAWER ═══════════ */
 .drawer-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.55);
