@@ -6,7 +6,7 @@ from io import BytesIO
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from PIL import Image
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -22,22 +22,43 @@ ALLOWED_IMAGE_TYPES = {
     "image/heic", "image/heif",
 }
 MAX_IMAGE_SIZE_MB = 20
-DEFAULT_DAILY_VISION_LIMIT = 80  # generous default; override per user via custom_daily_vision
+DEFAULT_DAILY_VISION_LIMIT = 80
 
 
 async def _increment_vision_usage(user: User, db: AsyncSession) -> None:
-    """Increment today's vision counter, resetting if it's a new day."""
-    today = date.today().isoformat()
-    if getattr(user, "vision_reset_date", "") != today:
-        user.vision_uses_today = 1
-        user.vision_reset_date = today
-    else:
-        user.vision_uses_today = (user.vision_uses_today or 0) + 1
-    await db.commit()
+    """Increment today's vision counter using raw SQL (columns may not exist yet)."""
+    try:
+        today = date.today().isoformat()
+        await db.execute(text("""
+            UPDATE users
+            SET vision_uses_today = CASE
+                WHEN vision_reset_date = :today THEN COALESCE(vision_uses_today, 0) + 1
+                ELSE 1
+            END,
+            vision_reset_date = :today
+            WHERE id = :uid
+        """), {"today": today, "uid": str(user.id)})
+        await db.commit()
+    except Exception:
+        await db.rollback()  # columns don't exist yet — ignore silently
 
 
-def _get_vision_limit(user: User) -> int:
-    return user.custom_daily_vision or DEFAULT_DAILY_VISION_LIMIT
+async def _get_vision_usage(user: User, db: AsyncSession) -> dict:
+    """Get today's usage via raw SQL (columns may not exist yet)."""
+    try:
+        today = date.today().isoformat()
+        row = await db.execute(text("""
+            SELECT vision_uses_today, vision_reset_date, custom_daily_vision
+            FROM users WHERE id = :uid
+        """), {"uid": str(user.id)})
+        r = row.fetchone()
+        if r is None:
+            return {"uses_today": 0, "daily_limit": DEFAULT_DAILY_VISION_LIMIT, "remaining": DEFAULT_DAILY_VISION_LIMIT}
+        uses = (r[0] or 0) if r[1] == today else 0
+        limit = r[2] or DEFAULT_DAILY_VISION_LIMIT
+        return {"uses_today": uses, "daily_limit": limit, "remaining": max(0, limit - uses)}
+    except Exception:
+        return {"uses_today": 0, "daily_limit": DEFAULT_DAILY_VISION_LIMIT, "remaining": DEFAULT_DAILY_VISION_LIMIT}
 
 
 class VisionItem(BaseModel):
@@ -183,16 +204,10 @@ async def analyze_image(
 @router.get("/usage")
 async def get_vision_usage(
     current_user: User = Depends(get_current_market_owner),
+    db: AsyncSession = Depends(get_db),
 ):
     """Return today's AI vision usage for the current user."""
-    today = date.today().isoformat()
-    uses = (current_user.vision_uses_today or 0) if getattr(current_user, "vision_reset_date", "") == today else 0
-    limit = _get_vision_limit(current_user)
-    return {
-        "uses_today": uses,
-        "daily_limit": limit,
-        "remaining": max(0, limit - uses),
-    }
+    return await _get_vision_usage(current_user, db)
 
 
 # ════════════════════════════════════════════════════════════════════════════

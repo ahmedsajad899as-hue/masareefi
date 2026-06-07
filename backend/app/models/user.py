@@ -51,10 +51,6 @@ class User(Base):
     # estimates with prices from the owner's MarketProduct catalog.
     # Default False = kill switch engaged; identical to pre-catalog behavior.
     use_product_catalog: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
-    # Vision (AI camera) daily usage tracking
-    vision_uses_today: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    vision_reset_date: Mapped[str] = mapped_column(String(10), default="", server_default="")
-    custom_daily_vision: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Password reset
     reset_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reset_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
