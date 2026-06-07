@@ -4889,7 +4889,14 @@ async function _csScanCapture() {
       body: makeFormData(),
     });
   }
-  if (!resp.ok || !_csScanActive) return;
+  if (!_csScanActive) return;
+  if (!resp.ok) {
+    const statusEl = document.getElementById('checkout-scan-status');
+    let errMsg = 'HTTP ' + resp.status;
+    try { const e = await resp.json(); errMsg = e.detail || errMsg; } catch (_) {}
+    if (statusEl) statusEl.textContent = `❌ خطأ: ${errMsg}`;
+    return;
+  }
 
   const data = await resp.json();
   const statusEl = document.getElementById('checkout-scan-status');

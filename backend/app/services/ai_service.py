@@ -1367,13 +1367,7 @@ async def analyze_image_for_market_items(
             "\n⚠ لا تُدرج أي منتج من هذه القائمة ما لم تره بوضوح في الصورة:\n"
             + "\n".join(known_section_lines)
         )
-    if strict_visible_only:
-        user_text = (
-            "انظر للصورة بدقة. أرجع فقط المنتجات التي تراها فعلاً في هذه الصورة الآن.\n"
-            "⚠ لا تُدرج أي منتج لا يظهر بوضوح في الصورة — حتى لو كنت تعرفه أو بعته من قبل.\n"
-            "⚠ إذا رأيت منتجاً واحداً فقط، أرجع مصفوفة بعنصر واحد فقط.\n"
-            "أرجع JSON array فقط بدون أي نص إضافي."
-        )
+    # strict_visible_only: no history/catalog hints sent to AI — pure visual detection only
 
     raw = ""
     # ── Try OpenAI first ──
