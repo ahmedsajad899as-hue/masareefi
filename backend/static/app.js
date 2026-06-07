@@ -4760,19 +4760,25 @@ function checkoutReset() {
 }
 
 // ─────────────────────── Continuous Scan (مسح متتالي) ───────────────────────
-let _csScanActive   = false;
-let _csScanSession  = null;
-let _csScanTimer    = null;
-let _csScanStream   = null;
-let _csScanVideo    = null;
-let _csScanInFlight = 0;   // number of AI calls currently in progress
-let _csScanNewCount = 0;
-const _CS_MAX_PARALLEL = 3; // max concurrent AI requests
+let _csScanActive      = false;
+let _csScanSession     = null;
+let _csScanTimer       = null;
+let _csScanAutoTimer   = null;  // auto-stop countdown
+let _csScanCountdown   = null;  // countdown interval
+let _csScanStream      = null;
+let _csScanVideo       = null;
+let _csScanInFlight    = 0;
+let _csScanNewCount    = 0;
+const _CS_MAX_PARALLEL = 3;
+
+function _csGetDuration() {
+  const sel = document.getElementById('checkout-scan-duration');
+  return sel ? parseInt(sel.value, 10) : 0; // 0 = no limit
+}
 
 async function checkoutStartContinuousScan() {
   if (_csScanActive) return;
 
-  // Fallback: no camera API → single-shot
   if (!navigator.mediaDevices?.getUserMedia) {
     checkoutOpenCamera();
     return;
@@ -4783,7 +4789,6 @@ async function checkoutStartContinuousScan() {
   _csScanNewCount = 0;
   _csScanSession  = 'cs-' + Math.random().toString(36).slice(2) + Date.now();
 
-  // Show live panel
   const panel = document.getElementById('checkout-scan-panel');
   if (panel) panel.style.display = '';
   const startBtn = document.getElementById('checkout-scan-start-btn');
@@ -4807,6 +4812,20 @@ async function checkoutStartContinuousScan() {
     }
     if (statusEl) statusEl.textContent = 'وجّه الكاميرا نحو المنتج — يتم المسح تلقائياً...';
     _csScanSchedule();
+
+    // ── Auto-stop countdown ──────────────────────────────────────
+    const durMs = _csGetDuration();
+    if (durMs > 0) {
+      let remaining = Math.ceil(durMs / 1000);
+      const countEl = document.getElementById('checkout-scan-countdown');
+      if (countEl) { countEl.style.display = ''; countEl.textContent = _csFormatRemaining(remaining); }
+      _csScanCountdown = setInterval(() => {
+        remaining--;
+        if (countEl) countEl.textContent = _csFormatRemaining(remaining);
+        if (remaining <= 0) { clearInterval(_csScanCountdown); _csScanCountdown = null; }
+      }, 1000);
+      _csScanAutoTimer = setTimeout(() => checkoutStopContinuousScan(false), durMs);
+    }
   } catch (e) {
     _csScanActive = false;
     if (panel) panel.style.display = 'none';
@@ -4814,6 +4833,13 @@ async function checkoutStartContinuousScan() {
     const mainStatus = document.getElementById('checkout-status');
     if (mainStatus) mainStatus.innerHTML = `<div class="alert alert-danger py-1 small">فشل تشغيل الكاميرا: ${e.message || ''}</div>`;
   }
+}
+
+function _csFormatRemaining(sec) {
+  if (sec <= 0) return '00:00';
+  const m = Math.floor(sec / 60).toString().padStart(2, '0');
+  const s = (sec % 60).toString().padStart(2, '0');
+  return m + ':' + s;
 }
 
 function _csScanSchedule() {
@@ -4842,20 +4868,26 @@ async function _csScanCapture() {
   const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.86));
   if (!blob || !_csScanActive) return;
 
-  const fd = new FormData();
-  fd.append('session_id', _csScanSession);
-  fd.append('image', blob, 'frame.jpg');
+  // Build a fresh FormData each time (fixes re-use bug on token refresh)
+  const makeFormData = () => {
+    const fd = new FormData();
+    fd.append('session_id', _csScanSession);
+    fd.append('image', new File([blob], 'frame.jpg', { type: 'image/jpeg' }), 'frame.jpg');
+    return fd;
+  };
 
-  const doSend = () => fetch(API + '/market/vision/analyze-stream', {
+  let resp = await fetch(API + '/market/vision/analyze-stream', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + S.token },
-    body: fd,
+    body: makeFormData(),
   });
-
-  let resp = await doSend();
   if (resp.status === 401 && S.refreshToken) {
     const ok = await tryRefresh();
-    if (ok) resp = await doSend();
+    if (ok) resp = await fetch(API + '/market/vision/analyze-stream', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.token },
+      body: makeFormData(),
+    });
   }
   if (!resp.ok || !_csScanActive) return;
 
@@ -4908,7 +4940,12 @@ async function _csScanCapture() {
 async function checkoutStopContinuousScan(silent = false) {
   if (!_csScanActive && !_csScanStream) return;
   _csScanActive = false;
-  if (_csScanTimer) { clearInterval(_csScanTimer); _csScanTimer = null; }
+  if (_csScanTimer)     { clearInterval(_csScanTimer);   _csScanTimer    = null; }
+  if (_csScanAutoTimer) { clearTimeout(_csScanAutoTimer); _csScanAutoTimer = null; }
+  if (_csScanCountdown) { clearInterval(_csScanCountdown); _csScanCountdown = null; }
+
+  const countEl = document.getElementById('checkout-scan-countdown');
+  if (countEl) countEl.style.display = 'none';
 
   if (_csScanStream) {
     _csScanStream.getTracks().forEach(t => t.stop());
