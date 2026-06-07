@@ -1,5 +1,6 @@
 """Market vision router — analyze product images via GPT-4o vision."""
 import time
+from datetime import date
 from io import BytesIO
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -21,6 +22,22 @@ ALLOWED_IMAGE_TYPES = {
     "image/heic", "image/heif",
 }
 MAX_IMAGE_SIZE_MB = 20
+DEFAULT_DAILY_VISION_LIMIT = 80  # generous default; override per user via custom_daily_vision
+
+
+async def _increment_vision_usage(user: User, db: AsyncSession) -> None:
+    """Increment today's vision counter, resetting if it's a new day."""
+    today = date.today().isoformat()
+    if getattr(user, "vision_reset_date", "") != today:
+        user.vision_uses_today = 1
+        user.vision_reset_date = today
+    else:
+        user.vision_uses_today = (user.vision_uses_today or 0) + 1
+    await db.commit()
+
+
+def _get_vision_limit(user: User) -> int:
+    return user.custom_daily_vision or DEFAULT_DAILY_VISION_LIMIT
 
 
 class VisionItem(BaseModel):
@@ -159,7 +176,23 @@ async def analyze_image(
                 item["unit_price"] = catalog_price_map[key]
 
     items = [VisionItem(**d) for d in items_data]
+    await _increment_vision_usage(current_user, db)
     return VisionAnalyzeResponse(items=items, raw_response=raw)
+
+
+@router.get("/usage")
+async def get_vision_usage(
+    current_user: User = Depends(get_current_market_owner),
+):
+    """Return today's AI vision usage for the current user."""
+    today = date.today().isoformat()
+    uses = (current_user.vision_uses_today or 0) if getattr(current_user, "vision_reset_date", "") == today else 0
+    limit = _get_vision_limit(current_user)
+    return {
+        "uses_today": uses,
+        "daily_limit": limit,
+        "remaining": max(0, limit - uses),
+    }
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -286,6 +319,7 @@ async def analyze_stream_frame(
         image_bytes, content_type, known_products=known,
         strict_visible_only=True,
     )
+    await _increment_vision_usage(current_user, db)  # count every real AI call
     if catalog_price_map:
         for item in items_data:
             key = _normalize_product_key(item.get("product_name", ""))

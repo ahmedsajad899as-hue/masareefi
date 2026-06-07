@@ -4403,6 +4403,7 @@ let _checkoutEnterBusy = false;  // prevent overlapping captures
 
 function loadCheckout() {
   checkoutLoadCustomers();
+  checkoutLoadVisionUsage();
   const hasItems = _checkoutItems.some(it => (it.product_name || '').trim());
   const saveBtn = document.getElementById('checkout-save-btn');
   const printBtn = document.getElementById('checkout-print-btn');
@@ -4415,6 +4416,21 @@ function checkoutLoadCustomers() {
     .then(data => {
       _checkoutCustomers = Array.isArray(data) ? data : (data.customers || []);
       checkoutRenderCustomers();
+    })
+    .catch(() => {});
+}
+
+function checkoutLoadVisionUsage() {
+  api('GET', '/market/vision/usage')
+    .then(data => {
+      const el = document.getElementById('checkout-vision-usage');
+      if (!el) return;
+      const { uses_today = 0, daily_limit = 80, remaining = 80 } = data;
+      const pct = Math.round((uses_today / daily_limit) * 100);
+      const color = remaining === 0 ? 'danger' : remaining <= 10 ? 'warning' : 'success';
+      el.className = `badge bg-${color}`;
+      el.innerHTML = `<i class="fas fa-camera me-1"></i>${uses_today}/${daily_limit} صورة اليوم`;
+      el.title = `استُخدم ${uses_today} من ${daily_limit} صورة يومية — متبقي ${remaining}`;
     })
     .catch(() => {});
 }
@@ -4952,6 +4968,7 @@ async function _csScanCapture() {
     if (saveBtn) saveBtn.disabled = false;
     if (printBtn) printBtn.disabled = false;
     if (statusEl) statusEl.textContent = `✅ ${_csScanNewCount} منتج مضاف — مرر المنتج التالي`;
+    checkoutLoadVisionUsage();
 
     // Flash green border on video
     const panel = document.getElementById('checkout-scan-panel');
