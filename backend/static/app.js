@@ -4873,7 +4873,7 @@ function _csScanSchedule() {
     }
   };
   _doCapture();  // first capture immediately
-  _csScanTimer = setInterval(_doCapture, 5000);  // 5s = 12 RPM — safely under Gemini free tier (15 RPM)
+  _csScanTimer = setInterval(_doCapture, 1000);  // 1s — duplicates (pHash) are free, AI only called on new frames
 }
 
 async function _csScanCapture() {
