@@ -3297,7 +3297,7 @@ let _lvPaused = false;
 // Per-camera motion + stability detector.
 // State machine per camera object:
 //   1. idle   → avgDiff > 18  → pending (saves peak diff map for crop bbox)
-//   2. pending → avgDiff < 10 → fire   (item settled → queue to AI)
+//   2. pending → avgDiff < 12 → fire   (item settled → queue to AI)
 //   3. pending → still > 18  → stay pending, keep updating peak diff
 // Returns: 'fire' | 'pending' | 'idle'
 function _lvCamMotionState(cam, canvas) {
@@ -3325,9 +3325,13 @@ function _lvCamMotionState(cam, canvas) {
   const avg = total / 1024;
   if (avg > 18) {
     cam.peakDiffMap = diff; // peak motion frame = best crop bbox
+    const wasIdle = !cam.motionPending;
     cam.motionPending = true;
+    // Fire immediately on FIRST frame of motion — catches fast-moving items
+    if (wasIdle) return 'fire';
     return 'pending';
-  } else if (cam.motionPending && avg < 10) {
+  } else if (cam.motionPending && avg < 12) {
+    // Motion settled — fire again (item may have stopped in frame)
     cam.motionPending = false;
     return 'fire';
   }
@@ -3669,7 +3673,7 @@ async function _lvCamLoop(cam) {
   if (_lvPaused || !cam.stream || !cam.stream.active) return;
   await _lvCamFrame(cam);
   if (cam.stream && cam.stream.active) {
-    cam.interval = setTimeout(() => _lvCamLoop(cam), cam.motionPending ? 300 : 800);
+    cam.interval = setTimeout(() => _lvCamLoop(cam), cam.motionPending ? 200 : 500);
   }
 }
 
