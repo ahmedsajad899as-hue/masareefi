@@ -3304,6 +3304,17 @@ function _lvNormName(name) {
   return s;
 }
 
+// Extract brand key: first word > 2 chars that’s not purely numeric
+// Used to prevent "Kiri Fresh cream" and "جبنة Kiri" from both being added
+function _lvBrandKey(name) {
+  const words = (name || '').trim().split(/\s+/);
+  for (const w of words) {
+    const clean = w.replace(/[^a-z\u0600-\u06ff]/gi, '').toLowerCase();
+    if (clean.length > 2 && !/^\d+$/.test(clean)) return clean;
+  }
+  return _lvNormName(name).slice(0, 10);
+}
+
 // LED helper: 'green' | 'red' | 'yellow'
 function _lvLed(color) {
   const el = document.getElementById('lv-led');
@@ -3726,17 +3737,24 @@ async function _lvSendToAi({ cam, blob, canvas }) {
         const name = (it.product_name || '').trim();
         if (!name) continue;
         const normKey = _lvNormName(name);
-        if (_lvSeenItems.has(normKey)) continue;
+        // Brand dedup: extract first significant word as brand key
+        // prevents "Kiri Fresh cream" and "جبنة Kiri كريمية" from both being added
+        const brandKey = 'brand:' + _lvBrandKey(name);
+        if (_lvSeenItems.has(normKey) || _lvSeenItems.has(brandKey)) continue;
         _lvItems.push({ product_name: name, quantity: Number(it.quantity)||1, unit_price: Number(it.unit_price)||0 });
-        _lvSeenItems.add(normKey); added++;
+        _lvSeenItems.add(normKey);
+        _lvSeenItems.add(brandKey);
+        added++;
       }
       _lvNewCount += added;
       if (added > 0) {
         _lvLed('green');
         document.getElementById('lv-status-txt').textContent = `أُضيف ${added} منتج (${cam.label})`;
         _lvSaveSnapshot(canvas, null);
-        // Pause this camera 4s to match backend cooldown — prevents re-detecting same item
-        cam.pauseUntil = Date.now() + 4000;
+        // Global pause: clear pending queue + pause ALL cameras 5s to prevent re-detecting same item
+        _lvAiQueue.length = 0;
+        const pauseEnd = Date.now() + 5000;
+        for (const c of _lvCams) c.pauseUntil = pauseEnd;
         setTimeout(() => _lvLed('red'), 2000);
       } else {
         _lvLed('red');

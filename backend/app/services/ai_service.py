@@ -1059,6 +1059,19 @@ Rules:
 - If brand unreadable but item is visible, name by type+details: "Cream 15g Hydrocortisone 1%"
 - If a visible item matches the reference list, use that exact name and price."""
 
+# Stricter prompt for live-stream mode: one item per physical product, no translation, no hallucination.
+VISION_STREAM_SYSTEM_PROMPT = """You are scanning items on a shop counter using a live camera feed.
+
+🔴 CRITICAL RULES — read carefully:
+1. Return ONLY products that are PHYSICALLY VISIBLE and CLEARLY IDENTIFIABLE in THIS image.
+2. NEVER hallucinate or add products from memory, past frames, or reference lists.
+3. If you are not at least 80% confident a product is visible, do NOT include it.
+4. Return EXACTLY ONE entry per physical product — even if the same item has both Arabic and English text on its label, return it ONCE using the most prominent language on the label.
+5. Do NOT translate — use the EXACT language printed on the product.
+6. Return ONLY a valid JSON array. No markdown, no explanation.
+
+Each item: {"product_name": "<text from label>", "quantity": 1, "unit_price": 0}"""
+
 
 def _normalize_product_key(name: str) -> str:
     """Loose normalization used to match a vision-returned product to a learned one."""
@@ -1373,11 +1386,12 @@ async def analyze_image_for_market_items(
     # ── Try OpenAI first ──
     if has_openai:
         data_url = f"data:{mime_type};base64,{b64}"
+        system_prompt = VISION_STREAM_SYSTEM_PROMPT if strict_visible_only else VISION_SYSTEM_PROMPT
         try:
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",  # faster + cheaper, plenty good for shop photos
                 messages=[
-                    {"role": "system", "content": VISION_SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": [
                         {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}},
                         {"type": "text", "text": user_text},
@@ -1422,7 +1436,7 @@ async def analyze_image_for_market_items(
             "gemini-pro-latest",
         ]
         payload = {
-            "systemInstruction": {"parts": [{"text": VISION_SYSTEM_PROMPT}]},
+            "systemInstruction": {"parts": [{"text": VISION_STREAM_SYSTEM_PROMPT if strict_visible_only else VISION_SYSTEM_PROMPT}]},
             "contents": [
                 {
                     "parts": [
