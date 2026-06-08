@@ -3523,7 +3523,7 @@ async function _lvPickCamera(deviceId, label) {
   const idx = _lvCams.length;
   const cam = {
     id: 'lvcam' + idx, deviceId, label: label || ('كاميرا ' + (idx + 1)),
-    stream: null, interval: null,
+    stream: null, interval: null, pauseUntil: 0,
   };
   try {
     // '__environment__' = mobile back camera via facingMode (no deviceId)
@@ -3645,6 +3645,8 @@ async function _lvCamLoop(cam) {
 async function _lvCamFrame(cam) {
   const videoEl = document.getElementById(cam.id + '-video');
   if (!videoEl || videoEl.readyState < 2) return;
+  // Respect per-camera pause after a successful detection
+  if (cam.pauseUntil && Date.now() < cam.pauseUntil) return;
   // If AI queue is already backed up, skip this frame
   if (_lvAiQueue.length >= _LV_MAX_CONCURRENT * 2) return;
   try {
@@ -3733,6 +3735,8 @@ async function _lvSendToAi({ cam, blob, canvas }) {
         _lvLed('green');
         document.getElementById('lv-status-txt').textContent = `أُضيف ${added} منتج (${cam.label})`;
         _lvSaveSnapshot(canvas, null);
+        // Pause this camera 4s to match backend cooldown — prevents re-detecting same item
+        cam.pauseUntil = Date.now() + 4000;
         setTimeout(() => _lvLed('red'), 2000);
       } else {
         _lvLed('red');

@@ -294,16 +294,26 @@ async def analyze_stream_frame(
     # ── pHash dedup ───────────────────────────────────────────────────────
     sess = _STREAM_CACHE.setdefault(
         session_id,
-        {"ts": time.time(), "hashes": [], "owner": str(current_user.id)},
+        {"ts": time.time(), "hashes": [], "owner": str(current_user.id), "last_new_ts": 0.0},
     )
     sess["ts"] = time.time()
     if sess["owner"] != str(current_user.id):
         raise HTTPException(403, "Session belongs to another user")
 
+    # ── Post-detection cooldown (4 s) ─────────────────────────────────────
+    # After any successful AI detection, block all frames for 4 seconds.
+    # This prevents the same stationary item from being added multiple times
+    # with slightly different names/languages while it sits in the frame.
+    _DETECTION_COOLDOWN = 4.0
+    if time.time() - sess.get("last_new_ts", 0.0) < _DETECTION_COOLDOWN:
+        return StreamFrameResponse(status="duplicate")
+
     h = _ahash(image_bytes)
     if h:
-        for prev in sess["hashes"][-10:]:
-            if _hamming(h, prev) <= 8:
+        # Threshold 20/256 ≈ 8% difference — catches same item from slightly
+        # different angles / lighting while still allowing new items through.
+        for prev in sess["hashes"][-30:]:
+            if _hamming(h, prev) <= 20:
                 return StreamFrameResponse(status="duplicate")
 
     # ── Reuse the EXACT same analysis pipeline as /analyze ────────────────
@@ -344,11 +354,12 @@ async def analyze_stream_frame(
     if not items_data:
         return StreamFrameResponse(status="empty", raw_response=raw[:300])
 
-    # Only store hash when AI actually found items (avoid blocking future product frames)
+    # Record detection time for cooldown and store hash
+    sess["last_new_ts"] = time.time()
     if h:
         sess["hashes"].append(h)
-        if len(sess["hashes"]) > 20:
-            sess["hashes"] = sess["hashes"][-20:]
+        if len(sess["hashes"]) > 30:
+            sess["hashes"] = sess["hashes"][-30:]
 
     return StreamFrameResponse(
         status="new",
