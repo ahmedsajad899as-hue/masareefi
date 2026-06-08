@@ -1,4 +1,5 @@
 """Market vision router — analyze product images via GPT-4o vision."""
+import re
 import time
 from datetime import date
 from io import BytesIO
@@ -16,6 +17,28 @@ from app.services.ai_service import analyze_image_for_market_items, _normalize_p
 from app.utils.dependencies import get_current_market_owner
 
 router = APIRouter()
+
+
+def _is_valid_stream_item(name: str) -> bool:
+    """Reject hallucinated / fragment items from the live-stream AI response.
+
+    Blocks: single short brand words (Fanta, ACHI, Danone alone),
+    bare numbers (10, 330), names < 4 chars.
+    Allows: "Pepsi Can 330ml", "حليب كامل الدسم 400غ", "Anchor Cream Cheese 200g"
+    """
+    s = name.strip()
+    if len(s) < 4:
+        return False
+    if re.fullmatch(r'[\d\s.,mMgGlLkK%]+', s):
+        return False
+    if not re.search(r'[a-zA-Z\u0600-\u06ff]', s):
+        return False
+    words = [w for w in re.split(r'\s+', s) if w]
+    meaningful = [w for w in words if re.search(r'[a-zA-Z\u0600-\u06ff]', w) and len(w) > 1]
+    # A single short word (< 6 chars) is too vague — needs at least brand+detail
+    if len(meaningful) == 1 and len(meaningful[0]) < 6:
+        return False
+    return True
 
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg", "image/jpg", "image/png", "image/webp",
@@ -350,6 +373,9 @@ async def analyze_stream_frame(
             key = _normalize_product_key(item.get("product_name", ""))
             if key and key in catalog_price_map:
                 item["unit_price"] = catalog_price_map[key]
+
+    # ── Strict stream filter: drop vague/hallucinated items ──────────────
+    items_data = [it for it in items_data if _is_valid_stream_item(it.get("product_name", ""))]
 
     if not items_data:
         return StreamFrameResponse(status="empty", raw_response=raw[:300])
