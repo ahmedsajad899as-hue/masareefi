@@ -4785,6 +4785,8 @@ let _csScanStream      = null;
 let _csScanVideo       = null;
 let _csScanBusy        = false;   // single-flight: one AI call at a time
 let _csScanNewCount    = 0;
+let _csScanLastSeen    = {};       // product_name_lower → Date.now() last detected
+const _CS_REENTRY_MS   = 3000;    // must be absent for 3s before re-adding
 
 function _csGetDuration() {
   const sel = document.getElementById('checkout-scan-duration');
@@ -4802,6 +4804,7 @@ async function checkoutStartContinuousScan() {
   _csScanActive   = true;
   _csScanBusy     = false;
   _csScanNewCount = 0;
+  _csScanLastSeen = {};
   _csScanSession  = 'cs-' + Math.random().toString(36).slice(2) + Date.now();
 
   const panel = document.getElementById('checkout-scan-panel');
@@ -4962,14 +4965,19 @@ async function _csScanCapture() {
   }
 
   if (data.status === 'new' && data.items?.length) {
+    const now = Date.now();
     let added = 0;
     for (const it of data.items) {
       const name = (it.product_name || '').trim();
       if (!name) continue;
+      const key = name.toLowerCase();
+      const lastSeen = _csScanLastSeen[key];
+      // Allow adding only if never seen before, OR absent for > 3 seconds (re-entry)
+      const canAdd = !lastSeen || (now - lastSeen) > _CS_REENTRY_MS;
+      _csScanLastSeen[key] = now;
+      if (!canAdd) continue;
       const existing = _checkoutItems.findIndex(x => x.product_name === name);
-      if (existing >= 0) {
-        _checkoutItems[existing].quantity += (it.quantity || 1);
-      } else {
+      if (existing < 0) {
         _checkoutItems.push({
           product_name: name,
           quantity:     it.quantity  || 1,
