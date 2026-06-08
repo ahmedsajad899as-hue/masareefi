@@ -5920,7 +5920,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (S.token && S.user) {
     try {
-      await initApp(true);
+      await initApp(false);  // false = page refresh, restore last visited page
       clearTimeout(_bootTimeout);
       // Restore impersonation banner if page was refreshed while impersonating
       if (localStorage.getItem('admin_backup_token') && S.user) {
