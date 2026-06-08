@@ -3280,9 +3280,10 @@ async function visionSaveSale() {
 // ═══════════════════════════════════════════════════════════════
 // ── Live Vision (continuous camera analysis) ─────────────────
 // ═══════════════════════════════════════════════════════════════
-let _lvCams = [];            // per-camera instances [{id,deviceId,label,stream,interval,motionCanvas,lastGray,motionPending,peakDiffMap}]
-let _lvAiQueue = [];         // queued AI requests [{cam,blob,peakDiffMap,canvas}]
-let _lvAiBusy = false;       // only one AI request in flight at a time
+let _lvCams = [];            // per-camera instances [{id,deviceId,label,stream,interval}]
+let _lvAiQueue = [];         // queued AI requests [{cam,blob,canvas}]
+let _lvInFlight = 0;         // concurrent AI requests in flight
+const _LV_MAX_CONCURRENT = 3; // max parallel AI calls (matches backend semaphore)
 let _lvCamDevices = [];      // cached list of available camera devices
 let _lvSessionId = null;
 let _lvItems = [];
@@ -3293,50 +3294,6 @@ let _lvNewCount = 0;
 let _lvDupCount = 0;
 let _lvBusy = false;
 let _lvPaused = false;
-
-// Per-camera motion + stability detector.
-// State machine per camera object:
-//   1. idle   → avgDiff > 18  → pending (saves peak diff map for crop bbox)
-//   2. pending → avgDiff < 12 → fire   (item settled → queue to AI)
-//   3. pending → still > 18  → stay pending, keep updating peak diff
-// Returns: 'fire' | 'pending' | 'idle'
-function _lvCamMotionState(cam, canvas) {
-  if (!cam.motionCanvas) {
-    cam.motionCanvas = document.createElement('canvas');
-    cam.motionCanvas.width = 32;
-    cam.motionCanvas.height = 32;
-  }
-  const mctx = cam.motionCanvas.getContext('2d', { willReadFrequently: true });
-  mctx.drawImage(canvas, 0, 0, 32, 32);
-  const px = mctx.getImageData(0, 0, 32, 32).data;
-  const gray = new Uint8Array(1024);
-  for (let i = 0; i < 1024; i++) {
-    const o = i << 2;
-    gray[i] = (px[o] * 77 + px[o+1] * 150 + px[o+2] * 29) >> 8;
-  }
-  if (!cam.lastGray) { cam.lastGray = gray; cam.motionPending = false; return 'idle'; }
-  const diff = new Float32Array(1024);
-  let total = 0;
-  for (let i = 0; i < 1024; i++) {
-    diff[i] = Math.abs(gray[i] - cam.lastGray[i]);
-    total += diff[i];
-  }
-  cam.lastGray = gray;
-  const avg = total / 1024;
-  if (avg > 18) {
-    cam.peakDiffMap = diff; // peak motion frame = best crop bbox
-    const wasIdle = !cam.motionPending;
-    cam.motionPending = true;
-    // Fire immediately on FIRST frame of motion — catches fast-moving items
-    if (wasIdle) return 'fire';
-    return 'pending';
-  } else if (cam.motionPending && avg < 12) {
-    // Motion settled — fire again (item may have stopped in frame)
-    cam.motionPending = false;
-    return 'fire';
-  }
-  return 'idle';
-}
 
 // Mirror of backend _normalize_product_key — keeps dedup consistent with AI spelling variations
 function _lvNormName(name) {
@@ -3430,7 +3387,7 @@ function _lvGenUUID() {
 async function openLiveVisionModal() {
   _lvCams = [];
   _lvAiQueue = [];
-  _lvAiBusy = false;
+  _lvInFlight = 0;
   _lvItems = [];
   _lvSeenItems = new Set();
   _lvCustomerId = null;
@@ -3566,7 +3523,7 @@ async function _lvPickCamera(deviceId, label) {
   const idx = _lvCams.length;
   const cam = {
     id: 'lvcam' + idx, deviceId, label: label || ('كاميرا ' + (idx + 1)),
-    stream: null, interval: null, motionCanvas: null, lastGray: null, motionPending: false, peakDiffMap: null, forceNext: false, lastFireTime: 0,
+    stream: null, interval: null,
   };
   try {
     // '__environment__' = mobile back camera via facingMode (no deviceId)
@@ -3609,13 +3566,6 @@ async function _lvPickCamera(deviceId, label) {
   }
   _lvUpdateCamGrid();
   _lvCamStartInterval(cam);
-  // Force-analyze the initial scene 2s after camera stabilises
-  setTimeout(() => {
-    if (cam.stream && cam.stream.active && !_lvPaused) {
-      cam.lastGray = null;
-      cam.forceNext = true;
-    }
-  }, 2000);
 }
 
 // Adjust grid layout: single camera = 225px centered, multiple = compact grid
@@ -3673,13 +3623,15 @@ async function _lvCamLoop(cam) {
   if (_lvPaused || !cam.stream || !cam.stream.active) return;
   await _lvCamFrame(cam);
   if (cam.stream && cam.stream.active) {
-    cam.interval = setTimeout(() => _lvCamLoop(cam), cam.motionPending ? 200 : 500);
+    cam.interval = setTimeout(() => _lvCamLoop(cam), 350);
   }
 }
 
 async function _lvCamFrame(cam) {
   const videoEl = document.getElementById(cam.id + '-video');
   if (!videoEl || videoEl.readyState < 2) return;
+  // If AI queue is already backed up, skip this frame
+  if (_lvAiQueue.length >= _LV_MAX_CONCURRENT * 2) return;
   try {
     const canvasEl = document.getElementById(cam.id + '-canvas');
     canvasEl.width = videoEl.videoWidth || 640;
@@ -3692,33 +3644,20 @@ async function _lvCamFrame(cam) {
     const s2 = ctx.getImageData(cx >> 1, cy >> 1, 4, 4).data;
     const bright = [...Array.from(s1), ...Array.from(s2)].some((v, idx) => idx % 4 !== 3 && v > 15);
     if (!bright) { _lvCamSetLed(cam, 'red'); return; }
-    // forceNext: skip motion detection, analyze current frame immediately (used after cooldown/retry)
-    let motionState;
-    if (cam.forceNext) {
-      cam.forceNext = false;
-      cam.lastGray = null; // reset baseline after forced analysis
-      motionState = 'fire';
-    } else {
-      motionState = _lvCamMotionState(cam, canvasEl);
-    }
-    if (motionState === 'idle') {
-      // If nothing fired for 10s, force-analyze to catch stationary items
-      if (Date.now() - cam.lastFireTime > 10000) {
-        cam.lastGray = null;
-        cam.forceNext = true;
-      }
-      _lvCamSetLed(cam, 'red'); return;
-    }
-    if (motionState === 'pending') { _lvCamSetLed(cam, 'yellow'); return; }
-    cam.lastFireTime = Date.now();
-    // fire — clone canvas and push to AI queue
     _lvCamSetLed(cam, 'yellow');
-    const blob = await new Promise(res => canvasEl.toBlob(res, 'image/jpeg', 0.92));
+    // Downsample to max 640px for faster upload
+    const targetW = Math.min(canvasEl.width, 640);
+    const targetH = Math.round(canvasEl.height * targetW / canvasEl.width);
+    const smallCanvas = document.createElement('canvas');
+    smallCanvas.width = targetW; smallCanvas.height = targetH;
+    smallCanvas.getContext('2d').drawImage(canvasEl, 0, 0, targetW, targetH);
+    const blob = await new Promise(res => smallCanvas.toBlob(res, 'image/jpeg', 0.80));
     if (!blob) return;
+    // Snapshot at full resolution for sidebar thumbnail
     const snapCanvas = document.createElement('canvas');
     snapCanvas.width = canvasEl.width; snapCanvas.height = canvasEl.height;
     snapCanvas.getContext('2d').drawImage(canvasEl, 0, 0);
-    _lvAiQueue.push({ cam, blob, peakDiffMap: cam.peakDiffMap, canvas: snapCanvas });
+    _lvAiQueue.push({ cam, blob, canvas: snapCanvas });
     _lvProcessAiQueue();
   } catch(err) {
     if (typeof err === 'object' && err && err.message) {
@@ -3728,12 +3667,20 @@ async function _lvCamFrame(cam) {
   }
 }
 
-async function _lvProcessAiQueue() {
-  if (_lvAiBusy || _lvAiQueue.length === 0) return;
-  _lvAiBusy = true;
-  const { cam, blob, peakDiffMap, canvas } = _lvAiQueue.shift();
+// Drain queue — start up to _LV_MAX_CONCURRENT parallel AI requests
+function _lvProcessAiQueue() {
+  while (_lvInFlight < _LV_MAX_CONCURRENT && _lvAiQueue.length > 0) {
+    const job = _lvAiQueue.shift();
+    _lvInFlight++;
+    _lvSendToAi(job).finally(() => {
+      _lvInFlight--;
+      _lvProcessAiQueue();
+    });
+  }
+}
+
+async function _lvSendToAi({ cam, blob, canvas }) {
   _lvLed('yellow');
-  document.getElementById('lv-status-txt').textContent = 'جاري التحليل (' + cam.label + ')...';
   try {
     const form = new FormData();
     form.append('session_id', _lvSessionId);
@@ -3746,12 +3693,12 @@ async function _lvProcessAiQueue() {
     let res = await _doFetch();
     if (res.status === 401 && S.refreshToken) {
       const ok = await tryRefresh();
-      if (ok) { res = await _doFetch(); } else { doLogout(); _lvAiBusy = false; return; }
+      if (ok) { res = await _doFetch(); } else { doLogout(); return; }
     }
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       document.getElementById('lv-status-txt').textContent = `خطأ ${res.status}: ${errText.slice(0, 80)}`;
-      _lvAiBusy = false; _lvProcessAiQueue(); return;
+      return;
     }
     const data = await res.json();
     const status = data.status || 'empty';
@@ -3770,7 +3717,7 @@ async function _lvProcessAiQueue() {
       if (added > 0) {
         _lvLed('green');
         document.getElementById('lv-status-txt').textContent = `أُضيف ${added} منتج (${cam.label})`;
-        _lvSaveSnapshot(canvas, peakDiffMap);
+        _lvSaveSnapshot(canvas, null);
         setTimeout(() => _lvLed('red'), 2000);
       } else {
         _lvLed('red');
@@ -3779,9 +3726,7 @@ async function _lvProcessAiQueue() {
       _lvRenderItems();
     } else if (status === 'duplicate') {
       _lvDupCount++;
-      _lvLed('red');
-      document.getElementById('lv-status-txt').textContent = 'نفس الإطار — تجاهل';
-      const rb = document.getElementById('lv-retry-btn'); if (rb) rb.style.display = 'none';
+      if (_lvInFlight === 0) { _lvLed('red'); }
     } else {
       _lvLed('red');
       const hint = data.raw_response ? data.raw_response.slice(0, 120) : 'لم يتم التعرف على منتج';
@@ -3789,20 +3734,17 @@ async function _lvProcessAiQueue() {
       if (hint.includes('gemini-rate-limit') || hint.includes('يرجى الانتظار')) {
         const retryBtn = document.getElementById('lv-retry-btn');
         if (retryBtn) retryBtn.style.display = '';
-        _lvAiBusy = true; // keep locked during cooldown
-        // Countdown timer in status bar
+        // Pause cameras and start countdown
+        _lvPaused = true;
+        _lvAiQueue.length = 0;
         let remaining = 60;
         const tick = () => {
           document.getElementById('lv-status-txt').textContent = `نفاذ نقاط Gemini — انتظار ${remaining}ث...`;
           if (remaining > 0) { remaining--; setTimeout(tick, 1000); }
           else {
-            // Cooldown done: force-analyze current frame immediately (item may still be in view)
-            _lvAiBusy = false;
+            _lvPaused = false;
             _lvAiQueue.length = 0;
             for (const c of _lvCams) {
-              c.lastGray = null;
-              c.motionPending = false;
-              c.forceNext = true; // skip motion check, send current frame to AI
               if (!c.interval && c.stream && c.stream.active) _lvCamStartInterval(c);
             }
             if (retryBtn) retryBtn.style.display = 'none';
@@ -3811,15 +3753,12 @@ async function _lvProcessAiQueue() {
           }
         };
         tick();
-        return;
       }
     }
     document.getElementById('lv-counts').textContent = `جديد:${_lvNewCount} · مكرر:${_lvDupCount}`;
   } catch(e) {
     document.getElementById('lv-status-txt').textContent = 'خطأ: ' + e.message;
   }
-  _lvAiBusy = false;
-  _lvProcessAiQueue();
 }
 
 function _lvRenderItems() {
@@ -3865,7 +3804,7 @@ function lvClearItems() {
 
 async function closeLiveVisionModal() {
   _lvAiQueue = [];
-  _lvAiBusy = false;
+  _lvInFlight = 0;
   for (const cam of _lvCams) {
     if (cam.interval) clearTimeout(cam.interval);
     if (cam.stream) cam.stream.getTracks().forEach(t => t.stop());
@@ -3892,16 +3831,11 @@ function lvRetryNow() {
   const retryBtn = document.getElementById('lv-retry-btn');
   if (retryBtn) retryBtn.style.display = 'none';
   document.getElementById('lv-status-txt').textContent = 'جاري المحاولة...';
-  _lvAiBusy = false;
   _lvAiQueue.length = 0;
-  // Reset motion baselines and force-analyze current frame
+  _lvPaused = false;
   for (const cam of _lvCams) {
-    cam.lastGray = null;
-    cam.motionPending = false;
-    cam.forceNext = true;
     if (!cam.interval && cam.stream && cam.stream.active) _lvCamStartInterval(cam);
   }
-  _lvProcessAiQueue();
 }
 
 async function lvSaveSale() {
