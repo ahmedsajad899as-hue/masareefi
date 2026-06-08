@@ -3562,7 +3562,7 @@ async function _lvPickCamera(deviceId, label) {
   const idx = _lvCams.length;
   const cam = {
     id: 'lvcam' + idx, deviceId, label: label || ('كاميرا ' + (idx + 1)),
-    stream: null, interval: null, motionCanvas: null, lastGray: null, motionPending: false, peakDiffMap: null,
+    stream: null, interval: null, motionCanvas: null, lastGray: null, motionPending: false, peakDiffMap: null, forceNext: false, lastFireTime: 0,
   };
   try {
     // '__environment__' = mobile back camera via facingMode (no deviceId)
@@ -3605,6 +3605,13 @@ async function _lvPickCamera(deviceId, label) {
   }
   _lvUpdateCamGrid();
   _lvCamStartInterval(cam);
+  // Force-analyze the initial scene 2s after camera stabilises
+  setTimeout(() => {
+    if (cam.stream && cam.stream.active && !_lvPaused) {
+      cam.lastGray = null;
+      cam.forceNext = true;
+    }
+  }, 2000);
 }
 
 // Adjust grid layout: single camera = 225px centered, multiple = compact grid
@@ -3690,8 +3697,16 @@ async function _lvCamFrame(cam) {
     } else {
       motionState = _lvCamMotionState(cam, canvasEl);
     }
-    if (motionState === 'idle')    { _lvCamSetLed(cam, 'red');    return; }
+    if (motionState === 'idle') {
+      // If nothing fired for 10s, force-analyze to catch stationary items
+      if (Date.now() - cam.lastFireTime > 10000) {
+        cam.lastGray = null;
+        cam.forceNext = true;
+      }
+      _lvCamSetLed(cam, 'red'); return;
+    }
     if (motionState === 'pending') { _lvCamSetLed(cam, 'yellow'); return; }
+    cam.lastFireTime = Date.now();
     // fire — clone canvas and push to AI queue
     _lvCamSetLed(cam, 'yellow');
     const blob = await new Promise(res => canvasEl.toBlob(res, 'image/jpeg', 0.92));
@@ -3701,7 +3716,12 @@ async function _lvCamFrame(cam) {
     snapCanvas.getContext('2d').drawImage(canvasEl, 0, 0);
     _lvAiQueue.push({ cam, blob, peakDiffMap: cam.peakDiffMap, canvas: snapCanvas });
     _lvProcessAiQueue();
-  } catch(_) {}
+  } catch(err) {
+    if (typeof err === 'object' && err && err.message) {
+      const statusEl = document.getElementById('lv-status-txt');
+      if (statusEl) statusEl.textContent = 'خطأ في الكاميرا: ' + err.message;
+    }
+  }
 }
 
 async function _lvProcessAiQueue() {
