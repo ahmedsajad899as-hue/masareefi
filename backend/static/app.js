@@ -3548,7 +3548,8 @@ async function _lvPickCamera(deviceId, label) {
       <span id="${cam.id}-led" style="width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 5px #ef4444;flex-shrink:0;display:inline-block"></span>
       <span style="font-size:10px;color:#fff;text-shadow:0 1px 3px #000;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cam.label}</span>
       <button onclick="_lvRemoveCam('${cam.id}')" style="pointer-events:auto;background:rgba(0,0,0,0.55);border:none;color:#ff8080;border-radius:4px;padding:0 5px;font-size:11px;cursor:pointer;line-height:18px">✕</button>
-    </div>`;
+    </div>
+    <div id="${cam.id}-info" style="position:absolute;bottom:4px;left:4px;right:4px;font-size:9px;color:rgba(255,255,255,0.65);text-align:center;text-shadow:0 1px 2px #000;pointer-events:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>`;
   grid.appendChild(card);
   document.getElementById('lv-cam-placeholder').style.display = 'none';
   document.getElementById('lv-status-bar').style.display = 'flex';
@@ -3556,7 +3557,21 @@ async function _lvPickCamera(deviceId, label) {
   if (addRow) addRow.style.display = '';
   const pr = document.getElementById('lv-pause-row');
   if (pr) pr.style.display = '';
-  document.getElementById(cam.id + '-video').srcObject = cam.stream;
+  const videoEl2 = document.getElementById(cam.id + '-video');
+  videoEl2.srcObject = cam.stream;
+  // Show camera specs once video metadata loads
+  videoEl2.addEventListener('loadedmetadata', () => {
+    const track = cam.stream.getVideoTracks()[0];
+    const s = track ? track.getSettings() : {};
+    const w = s.width || videoEl2.videoWidth || '?';
+    const h = s.height || videoEl2.videoHeight || '?';
+    const fps = s.frameRate ? Math.round(s.frameRate) : '?';
+    const lbl = track ? (track.label || cam.label) : cam.label;
+    const infoEl = document.getElementById(cam.id + '-info');
+    if (infoEl) infoEl.textContent = `${w}×${h} · ${fps}fps · ${lbl}`;
+    document.getElementById('lv-cam-specs').textContent =
+      `📷 ${lbl} — ${w}×${h} · ${fps}fps`;
+  }, { once: true });
   // Enumerate devices now (permission granted) so + camera picker works on mobile too
   if (_lvCamDevices.length === 0) {
     try {
