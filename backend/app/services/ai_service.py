@@ -1045,9 +1045,9 @@ Your job: look carefully at the image and identify ALL products you can see.
   4. Form (e.g. Tablets, Cream, Syrup, Capsules)
   5. Pack size/Qty (e.g. 10 Tabs, 30g, 330ml, 1.5L)
   6. Manufacturer if clearly visible (e.g. GSK, Julphar)
-  Good: "TAMSOLIN-S Tamsulosin 0.4mg+6mg Modified Release Tablets 10s"
-  Good: "Elica Cream Mometasone Furoate 0.1% w/w 30g"
-  Good: "بيبسي كولا 330مل علبة"   Good: "حليب نيدو كامل الدسم 400غ"
+  Good: "BRANDX-S Tamsulosin 0.4mg+6mg Modified Release Tablets 10s"
+  Good: "SkinCare Cream Hydrocortisone 1% w/w 15g"
+  Good: "مشروب غازي 330مل علبة"   Good: "حليب كامل الدسم 400غ"
 
 Each JSON object must have:
 - "product_name": full descriptive name (see above)
@@ -1056,7 +1056,7 @@ Each JSON object must have:
 
 Rules:
 - Return ONLY a valid JSON array, no markdown, no explanation.
-- If brand unreadable but item is visible, name by type+details: "Cream 30g Mometasone 0.1%"
+- If brand unreadable but item is visible, name by type+details: "Cream 15g Hydrocortisone 1%"
 - If a visible item matches the reference list, use that exact name and price."""
 
 

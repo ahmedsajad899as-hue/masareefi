@@ -39,6 +39,7 @@ dependencies:
 
   # Live camera (continuous vision mode — mobile only)
   camera: ^0.10.6
+  flutter_image_compress: ^2.3.0
 
   # Utils
   intl: ^0.19.0

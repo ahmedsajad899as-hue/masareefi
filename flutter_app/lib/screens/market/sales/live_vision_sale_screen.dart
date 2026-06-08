@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -47,6 +48,11 @@ class _LiveVisionSaleScreenState extends ConsumerState<LiveVisionSaleScreen> {
   int _newCount = 0;
   int _dupCount = 0;
 
+  // Re-entry tracking: track the last DateTime each product was detected
+  // An item can only be re-added if it was absent for > _reEntryDuration
+  static const Duration _reEntryDuration = Duration(seconds: 3);
+  final Map<String, DateTime> _productLastSeenTime = {};
+
   final _fmt = NumberFormat('#,###', 'ar');
 
   @override
@@ -90,7 +96,7 @@ class _LiveVisionSaleScreenState extends ConsumerState<LiveVisionSaleScreen> {
   void _startCaptureLoop() {
     _captureTimer?.cancel();
     _captureTimer = Timer.periodic(
-      const Duration(milliseconds: 1500),
+      const Duration(milliseconds: 800),
       (_) => _captureOnce(),
     );
   }
@@ -106,7 +112,16 @@ class _LiveVisionSaleScreenState extends ConsumerState<LiveVisionSaleScreen> {
     XFile? shot;
     try {
       shot = await _controller!.takePicture();
-      final bytes = await File(shot.path).readAsBytes();
+      // Compress to max 800px wide, quality 75 — keeps text readable, cuts size ~80%
+      final rawBytes = await File(shot.path).readAsBytes();
+      final bytes = await FlutterImageCompress.compressWithList(
+            rawBytes,
+            minWidth: 800,
+            minHeight: 600,
+            quality: 75,
+            format: CompressFormat.jpeg,
+          ) ??
+          rawBytes;
 
       final form = FormData.fromMap({
         'session_id': _sessionId,
@@ -128,6 +143,7 @@ class _LiveVisionSaleScreenState extends ConsumerState<LiveVisionSaleScreen> {
           setState(() => _statusMsg = 'نفس الإطار — تجاهل ($_dupCount)');
         }
       } else if (status == 'new') {
+        final now = DateTime.now();
         final List rawItems = data['items'] as List? ?? [];
         int added = 0;
         for (final it in rawItems) {
@@ -135,12 +151,17 @@ class _LiveVisionSaleScreenState extends ConsumerState<LiveVisionSaleScreen> {
           if (name.isEmpty) continue;
           final qty = (it['quantity'] as num?)?.toDouble() ?? 1;
           final price = (it['unit_price'] as num?)?.toDouble() ?? 0;
-          final existing = _items.indexWhere((x) => x.name == name);
-          if (existing >= 0) {
-            _items[existing].qty += qty;
-          } else {
-            _items.add(_LiveItem(name, qty, price));
-            added++;
+          final key = name.toLowerCase();
+          final lastSeen = _productLastSeenTime[key];
+          // Allow adding only if: never seen before, OR absent for > 3 seconds (re-entry)
+          final canAdd = lastSeen == null || now.difference(lastSeen) > _reEntryDuration;
+          _productLastSeenTime[key] = now;
+          if (canAdd) {
+            final existing = _items.indexWhere((x) => x.name.toLowerCase() == key);
+            if (existing < 0) {
+              _items.add(_LiveItem(name, qty, price));
+              added++;
+            }
           }
         }
         _newCount += added;
