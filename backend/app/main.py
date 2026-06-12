@@ -19,8 +19,41 @@ async def lifespan(app: FastAPI):
     # Always create tables if they don't exist (safe: uses CREATE TABLE IF NOT EXISTS).
     # On PostgreSQL, Alembic handles schema changes; this is a safety net for fresh deployments.
     await create_all_tables()
+    await _ensure_schema_columns()
     await seed_default_user()
     yield
+
+
+async def _ensure_schema_columns():
+    """Directly add any missing columns via raw SQL — runs on every startup,
+    safe to call even if the column already exists (uses IF NOT EXISTS)."""
+    import logging
+    from sqlalchemy import text
+    from app.database import AsyncSessionLocal, _is_sqlite
+
+    logger = logging.getLogger("masareefi.schema")
+    try:
+        async with AsyncSessionLocal() as db:
+            if _is_sqlite:
+                # SQLite: check pragma, add only if missing
+                result = await db.execute(text("PRAGMA table_info(market_products)"))
+                cols = [row[1] for row in result.fetchall()]
+                if "barcode" not in cols:
+                    await db.execute(text("ALTER TABLE market_products ADD COLUMN barcode VARCHAR(100)"))
+                    await db.commit()
+                    logger.info("schema: added barcode column to market_products (SQLite)")
+            else:
+                # PostgreSQL: ADD COLUMN IF NOT EXISTS — idempotent
+                await db.execute(text(
+                    "ALTER TABLE market_products ADD COLUMN IF NOT EXISTS barcode VARCHAR(100)"
+                ))
+                await db.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_market_products_barcode ON market_products (barcode)"
+                ))
+                await db.commit()
+                logger.info("schema: ensured barcode column on market_products (Postgres)")
+    except Exception as e:
+        logger.error(f"_ensure_schema_columns failed (non-fatal): {e}")
 
 
 async def seed_default_user():
