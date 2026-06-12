@@ -16,16 +16,13 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("market_products") as batch_op:
-        batch_op.add_column(
-            sa.Column("barcode", sa.String(100), nullable=True)
-        )
-        batch_op.create_index(
-            "ix_market_products_barcode", ["barcode"]
-        )
+    op.add_column(
+        "market_products",
+        sa.Column("barcode", sa.String(100), nullable=True)
+    )
+    op.create_index("ix_market_products_barcode", "market_products", ["barcode"])
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("market_products") as batch_op:
-        batch_op.drop_index("ix_market_products_barcode")
-        batch_op.drop_column("barcode")
+    op.drop_index("ix_market_products_barcode", table_name="market_products")
+    op.drop_column("market_products", "barcode")
