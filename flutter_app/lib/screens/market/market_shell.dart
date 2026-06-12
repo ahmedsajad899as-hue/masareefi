@@ -15,10 +15,12 @@ class MarketShell extends StatelessWidget {
     int currentIndex = 0;
     if (location.startsWith('/market/customers')) {
       currentIndex = 1;
-    } else if (location.startsWith('/market/suppliers')) {
+    } else if (location.startsWith('/market/products')) {
       currentIndex = 2;
-    } else if (location == '/market/market-settings') {
+    } else if (location.startsWith('/market/suppliers')) {
       currentIndex = 3;
+    } else if (location == '/market/market-settings') {
+      currentIndex = 4;
     }
 
     return Scaffold(
@@ -34,9 +36,12 @@ class MarketShell extends StatelessWidget {
               context.go('/market/customers');
               break;
             case 2:
-              context.go('/market/suppliers');
+              context.go('/market/products');
               break;
             case 3:
+              context.go('/market/suppliers');
+              break;
+            case 4:
               // Navigate to personal expense tracking
               context.go('/home');
               break;
@@ -52,6 +57,11 @@ class MarketShell extends StatelessWidget {
             icon: Icon(Icons.people_outline_rounded),
             selectedIcon: Icon(Icons.people_rounded),
             label: 'الزبائن',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2_rounded),
+            label: 'الكتالوج',
           ),
           NavigationDestination(
             icon: Icon(Icons.receipt_long_outlined),

@@ -60,6 +60,7 @@ async def create_product(
         market_owner_id=current_user.id,
         name=body.name.strip(),
         unit_price=body.unit_price,
+        barcode=body.barcode.strip() if body.barcode else None,
     )
     db.add(product)
     await db.commit()
@@ -87,6 +88,8 @@ async def update_product(
         product.name = body.name.strip()
     if body.unit_price is not None:
         product.unit_price = body.unit_price
+    if body.barcode is not None:
+        product.barcode = body.barcode.strip() if body.barcode else None
     await db.commit()
     await db.refresh(product)
     return product
@@ -179,11 +182,14 @@ async def bulk_save_products(
         if key in existing:
             p = existing[key]
             p.unit_price = item.unit_price
+            if item.barcode:
+                p.barcode = item.barcode.strip()
         else:
             p = MarketProduct(
                 market_owner_id=current_user.id,
                 name=name,
                 unit_price=item.unit_price,
+                barcode=item.barcode.strip() if item.barcode else None,
             )
             db.add(p)
             existing[key] = p
@@ -193,6 +199,27 @@ async def bulk_save_products(
     for p in saved:
         await db.refresh(p)
     return saved
+
+
+# ─────────────────────────── Barcode lookup ─────────────────────────────────
+
+@router.get("/barcode/{barcode_value}", response_model=MarketProductOut)
+async def get_product_by_barcode(
+    barcode_value: str,
+    current_user: User = Depends(get_current_market_owner),
+    db: AsyncSession = Depends(get_db),
+):
+    """Look up a catalog product by barcode value for the current owner."""
+    result = await db.execute(
+        select(MarketProduct).where(
+            MarketProduct.barcode == barcode_value,
+            MarketProduct.market_owner_id == current_user.id,
+        )
+    )
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="المنتج غير موجود في الكتالوج")
+    return product
 
 
 # ─────────────────────────── Helpers ─────────────────────────────────────────

@@ -229,6 +229,57 @@ class MyDebtSaleModel {
       );
 }
 
+// ─── Market Product (catalog) ─────────────────────────────────────────────────
+
+class MarketProductModel {
+  final String id;
+  final String name;
+  final double unitPrice;
+  final String? barcode;
+  final DateTime updatedAt;
+  final DateTime createdAt;
+
+  const MarketProductModel({
+    required this.id,
+    required this.name,
+    required this.unitPrice,
+    this.barcode,
+    required this.updatedAt,
+    required this.createdAt,
+  });
+
+  factory MarketProductModel.fromJson(Map<String, dynamic> j) =>
+      MarketProductModel(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        unitPrice: (j['unit_price'] as num).toDouble(),
+        barcode: j['barcode'] as String?,
+        updatedAt: DateTime.parse(j['updated_at'] as String),
+        createdAt: DateTime.parse(j['created_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'unit_price': unitPrice,
+        if (barcode != null) 'barcode': barcode,
+      };
+
+  MarketProductModel copyWith({
+    String? name,
+    double? unitPrice,
+    String? barcode,
+    bool clearBarcode = false,
+  }) =>
+      MarketProductModel(
+        id: id,
+        name: name ?? this.name,
+        unitPrice: unitPrice ?? this.unitPrice,
+        barcode: clearBarcode ? null : (barcode ?? this.barcode),
+        updatedAt: updatedAt,
+        createdAt: createdAt,
+      );
+}
+
 class MyMarketDebtModel {
   final String marketOwnerId;
   final String storeName;

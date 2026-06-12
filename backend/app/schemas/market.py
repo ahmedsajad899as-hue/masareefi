@@ -175,17 +175,20 @@ class MarketSettingsUpdate(BaseModel):
 class MarketProductCreate(BaseModel):
     name: str
     unit_price: float
+    barcode: str | None = None
 
 
 class MarketProductUpdate(BaseModel):
     name: str | None = None
     unit_price: float | None = None
+    barcode: str | None = None
 
 
 class MarketProductOut(BaseModel):
     id: uuid.UUID
     name: str
     unit_price: float
+    barcode: str | None = None
     updated_at: datetime
     created_at: datetime
 

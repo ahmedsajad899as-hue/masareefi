@@ -58,6 +58,11 @@ class ApiConstants {
   // Market Owner — Settings
   static const marketSettings = '/market/settings';
 
+  // Market Owner — Products (catalog)
+  static const marketProducts = '/market/products';
+  static String marketProductByBarcode(String barcode) =>
+      '/market/products/barcode/$barcode';
+
   // Market Owner — Vision
   static const marketVisionAnalyze = '/market/vision/analyze';
   static const marketVisionAnalyzeStream = '/market/vision/analyze-stream';

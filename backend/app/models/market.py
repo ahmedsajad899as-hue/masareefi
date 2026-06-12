@@ -150,6 +150,7 @@ class MarketProduct(Base):
     )
     name: Mapped[str] = mapped_column(String(300), nullable=False)
     unit_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    barcode: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

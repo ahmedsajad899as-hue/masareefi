@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../core/constants/api_constants.dart';
+import '../models/market_model.dart';
 
 class ApiService {
   ApiService._();
@@ -131,6 +132,65 @@ class ApiService {
       final r = await _dio.post(path, data: formData);
       return r.data;
     } on DioException catch (e) {
+      throw _errorMessage(e);
+    }
+  }
+
+  // ─── Market Products ──────────────────────────────────────────────────────
+
+  Future<List<MarketProductModel>> getProducts() async {
+    final data = await get(ApiConstants.marketProducts);
+    return (data as List)
+        .map((j) => MarketProductModel.fromJson(j as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<MarketProductModel> createProduct({
+    required String name,
+    required double unitPrice,
+    String? barcode,
+  }) async {
+    final data = await post(ApiConstants.marketProducts, data: {
+      'name': name,
+      'unit_price': unitPrice,
+      if (barcode != null && barcode.isNotEmpty) 'barcode': barcode,
+    });
+    return MarketProductModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<MarketProductModel> updateProduct(
+    String id, {
+    String? name,
+    double? unitPrice,
+    String? barcode,
+    bool clearBarcode = false,
+  }) async {
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (unitPrice != null) body['unit_price'] = unitPrice;
+    if (clearBarcode) {
+      body['barcode'] = null;
+    } else if (barcode != null) {
+      body['barcode'] = barcode;
+    }
+    final data = await patch('${ApiConstants.marketProducts}/$id', data: body);
+    return MarketProductModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteProduct(String id) async {
+    await delete('${ApiConstants.marketProducts}/$id');
+  }
+
+  /// Returns the product matching [barcode], or null if not found in catalog.
+  Future<MarketProductModel?> getProductByBarcode(String barcode) async {
+    try {
+      final data = await get(ApiConstants.marketProductByBarcode(barcode));
+      return MarketProductModel.fromJson(data as Map<String, dynamic>);
+    } on String catch (e) {
+      if (e.contains('غير موجود') || e.contains('404')) return null;
+      rethrow;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
       throw _errorMessage(e);
     }
   }

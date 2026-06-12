@@ -7,6 +7,8 @@ import '../../../core/constants/app_colors.dart';
 import '../../../models/market_model.dart';
 import '../../../providers/market_customers_provider.dart';
 import '../../../providers/market_sales_provider.dart';
+import '../../../services/api_service.dart';
+import '../barcode_scanner_screen.dart';
 
 class AddSaleScreen extends ConsumerStatefulWidget {
   const AddSaleScreen({super.key, this.preselectedCustomerId});
@@ -46,6 +48,46 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
         final price = double.tryParse(r.priceCtrl.text) ?? 0;
         return s + qty * price;
       });
+
+  Future<void> _scanBarcode() async {
+    final barcode = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (barcode == null || !mounted) return;
+
+    final product = await ApiService.instance.getProductByBarcode(barcode);
+
+    if (!mounted) return;
+
+    if (product != null) {
+      // Add the product as a new item row
+      setState(() {
+        final row = _ItemRow();
+        row.nameCtrl.text = product.name;
+        row.priceCtrl.text = product.unitPrice.toString();
+        row.qtyCtrl.text = '1';
+        _items.add(row);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تمت إضافة: ${product.name}'),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      // Barcode not found → open catalog screen to create product
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('الباركود غير موجود في الكتالوج، يمكنك إضافته الآن'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      if (mounted) {
+        context.push('/market/products', extra: {'barcode': barcode});
+      }
+    }
+  }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -159,6 +201,11 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
                         onPressed: () {
                           setState(() => _items.add(_ItemRow()));
                         },
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.qr_code_scanner_rounded),
+                        label: const Text('مسح باركود'),
+                        onPressed: _scanBarcode,
                       ),
                     ],
                   ),

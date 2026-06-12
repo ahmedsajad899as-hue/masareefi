@@ -25,6 +25,7 @@ import '../../screens/market/sales/vision_sale_screen.dart';
 import '../../screens/market/sales/live_vision_sale_screen.dart';
 import '../../screens/market/suppliers/supplier_invoices_screen.dart';
 import '../../screens/market/suppliers/add_supplier_invoice_screen.dart';
+import '../../screens/market/products/market_products_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -91,6 +92,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
               path: '/market/market-settings',
               builder: (_, __) => const MarketSettingsScreen()),
+          GoRoute(
+              path: '/market/products',
+              builder: (_, state) {
+                final extra = state.extra as Map<String, dynamic>?;
+                return MarketProductsScreen(
+                    initialBarcode: extra?['barcode'] as String?);
+              }),
         ],
       ),
 

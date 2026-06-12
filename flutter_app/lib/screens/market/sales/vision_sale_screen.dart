@@ -13,6 +13,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../providers/market_customers_provider.dart';
 import '../../../providers/market_sales_provider.dart';
 import '../../../services/api_service.dart';
+import '../barcode_scanner_screen.dart';
 
 class _ItemRow {
   final nameCtrl = TextEditingController();
@@ -117,6 +118,45 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
     }
   }
 
+  Future<void> _scanBarcode() async {
+    final barcode = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (barcode == null || !mounted) return;
+
+    final product = await ApiService.instance.getProductByBarcode(barcode);
+
+    if (!mounted) return;
+
+    if (product != null) {
+      setState(() {
+        final row = _ItemRow();
+        row.nameCtrl.text = product.name;
+        row.priceCtrl.text = product.unitPrice.toString();
+        row.qtyCtrl.text = '1';
+        _items.add(row);
+        _analysisDoneEmpty = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تمت إضافة: ${product.name}'),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('الباركود غير موجود في الكتالوج، يمكنك إضافته الآن'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      if (mounted) {
+        context.push('/market/products', extra: {'barcode': barcode});
+      }
+    }
+  }
+
   Future<void> _submit() async {
     if (_items.isEmpty) return;
     setState(() => _saving = true);
@@ -171,6 +211,11 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
             icon: const Icon(Icons.videocam_rounded),
             onPressed: () => context
                 .push('/market/live-vision-sale/${widget.customerId}'),
+          ),
+          IconButton(
+            tooltip: 'مسح باركود',
+            icon: const Icon(Icons.qr_code_scanner_rounded),
+            onPressed: _scanBarcode,
           ),
           if (!_saving && _items.isNotEmpty && !_analyzing)
             TextButton(
