@@ -10,6 +10,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/market_customers_provider.dart';
 import '../../providers/supplier_invoices_provider.dart';
 import '../../services/api_service.dart';
+import 'barcode_scanner_screen.dart';
 
 class MarketHomeScreen extends ConsumerStatefulWidget {
   const MarketHomeScreen({super.key});
@@ -23,6 +24,28 @@ class _MarketHomeScreenState extends ConsumerState<MarketHomeScreen> {
   double _totalPayable = 0;
   int _overdueCount = 0;
   bool _loading = true;
+
+  Future<void> _scanBarcode(BuildContext ctx) async {
+    final barcode = await Navigator.of(ctx).push<String>(
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (barcode == null || !mounted) return;
+
+    final product = await ApiService.instance.getProductByBarcode(barcode);
+    if (!mounted) return;
+
+    if (product != null) {
+      context.push('/market/sales/add', extra: {'barcode': barcode, 'product': product});
+    } else {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        const SnackBar(
+          content: Text('الباركود غير موجود في الكتالوج، يمكنك إضافته الآن'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      context.push('/market/products', extra: {'barcode': barcode});
+    }
+  }
 
   @override
   void initState() {
@@ -75,6 +98,11 @@ class _MarketHomeScreenState extends ConsumerState<MarketHomeScreen> {
       appBar: AppBar(
         title: Text(user?.storeName ?? 'لوحة التحكم'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner_rounded),
+            tooltip: 'مسح باركود',
+            onPressed: () => _scanBarcode(context),
+          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => context.push('/market/market-settings'),
@@ -185,6 +213,12 @@ class _MarketHomeScreenState extends ConsumerState<MarketHomeScreen> {
                         label: 'كل الزبائن',
                         onTap: () => context.go('/market/customers'),
                       ),
+                      _QuickAction(
+                        icon: Icons.qr_code_scanner_rounded,
+                        label: 'مسح باركود',
+                        color: AppColors.success,
+                        onTap: () => _scanBarcode(context),
+                      ),
                     ],
                   ),
                 ],
@@ -240,11 +274,13 @@ class _StatCard extends StatelessWidget {
 
 class _QuickAction extends StatelessWidget {
   const _QuickAction(
-      {required this.icon, required this.label, required this.onTap});
+      {required this.icon, required this.label, required this.onTap,
+      this.color});
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -255,12 +291,12 @@ class _QuickAction extends StatelessWidget {
         width: 90,
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.08),
+          color: (color ?? AppColors.primary).withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.primary, size: 26),
+            Icon(icon, color: color ?? AppColors.primary, size: 26),
             const SizedBox(height: 6),
             Text(label,
                 textAlign: TextAlign.center,
