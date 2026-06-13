@@ -670,7 +670,10 @@ function goTo(page) {
   localStorage.setItem('last_page', page);
 
   // Stop checkout silent camera if navigating away
-  if (page !== 'market-checkout') { checkoutStopContinuousScan(true); }
+  if (page !== 'market-checkout') {
+    checkoutStopContinuousScan(true);
+    coStopBarcodeBackground();
+  }
 
   switch (page) {
     case 'dashboard':        loadDashboard(); break;
@@ -4629,7 +4632,115 @@ function closeBarcodeModal() {
 let _checkoutItems = [];
 let _checkoutCustId = null;
 let _checkoutCustomers = [];
-let _checkoutEnterBusy = false;  // prevent overlapping captures
+let _checkoutEnterBusy = false;
+
+// ── Background barcode scanner ────────────────────────────────
+let _coBarcodeActive   = false;
+let _coBarcodeStream   = null;
+let _coBarcodeDetect   = null;
+let _coBarcodeRafId    = null;
+let _coBarcodeSeenCodes = new Set();
+
+async function coStartBarcodeBackground() {
+  if (_coBarcodeStream) return;
+  if (typeof BarcodeDetector === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    _coSetStatus('المتصفح لا يدعم مسح الباركود', false);
+    return;
+  }
+  try {
+    _coBarcodeDetect = new BarcodeDetector({
+      formats: ['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e','itf','data_matrix']
+    });
+  } catch(_) { _coSetStatus('لا يدعم BarcodeDetector', false); return; }
+  try {
+    _coBarcodeStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false
+    });
+    const video = document.getElementById('co-bc-video');
+    if (video) { video.srcObject = _coBarcodeStream; await video.play().catch(()=>{}); }
+    _coBarcodeActive = true;
+    _coSetStatus('جاري مسح الباركود...', true);
+    _coBarcodeLoop();
+  } catch(e) {
+    _coSetStatus('تعذّر فتح الكاميرا', false);
+    _coBarcodeStream = null;
+  }
+}
+
+function coStopBarcodeBackground() {
+  if (_coBarcodeRafId) { cancelAnimationFrame(_coBarcodeRafId); _coBarcodeRafId = null; }
+  if (_coBarcodeStream) { _coBarcodeStream.getTracks().forEach(t => t.stop()); _coBarcodeStream = null; }
+  _coBarcodeActive = false; _coBarcodeDetect = null;
+  _coUpdateToggleBtn(false);
+  const bar = document.getElementById('co-bc-status-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+function coToggleBarcode() {
+  if (_coBarcodeActive) {
+    coStopBarcodeBackground();
+  } else {
+    _coBarcodeSeenCodes = new Set();
+    coStartBarcodeBackground();
+  }
+}
+
+function _coBarcodeLoop() {
+  if (!_coBarcodeActive || !_coBarcodeStream) return;
+  _coBarcodeRafId = requestAnimationFrame(async () => {
+    const video = document.getElementById('co-bc-video');
+    if (video && video.readyState >= 2 && _coBarcodeDetect) {
+      try {
+        const barcodes = await _coBarcodeDetect.detect(video);
+        if (barcodes && barcodes.length) {
+          const code = barcodes[0].rawValue;
+          if (code && !_coBarcodeSeenCodes.has(code)) {
+            _coBarcodeSeenCodes.add(code);
+            _coSetStatus(`باركود: ${code} — جاري البحث...`, true);
+            try {
+              const product = await api('GET', `/market/products/barcode/${encodeURIComponent(code)}`);
+              if (product) {
+                _checkoutItems.push({ product_name: product.name, quantity: 1, unit_price: product.unit_price });
+                checkoutRenderItems();
+                document.getElementById('checkout-save-btn').disabled = false;
+                document.getElementById('checkout-print-btn').disabled = false;
+                _coSetStatus(`✅ أُضيف: ${product.name}`, true);
+                toast(`تم إضافة: ${product.name}`, 'ok');
+                setTimeout(() => { if (_coBarcodeActive) _coSetStatus('جاري مسح الباركود...', true); }, 2500);
+              }
+            } catch(_) {
+              _coSetStatus(`باركود ${code} غير موجود في الكتالوج`, true);
+              setTimeout(() => { if (_coBarcodeActive) _coSetStatus('جاري مسح الباركود...', true); }, 2500);
+            }
+          }
+        }
+      } catch(_) {}
+    }
+    if (_coBarcodeActive) _coBarcodeLoop();
+  });
+}
+
+function _coSetStatus(msg, running) {
+  const bar = document.getElementById('co-bc-status-bar');
+  const txt = document.getElementById('co-bc-status-txt');
+  const led = document.getElementById('co-bc-led');
+  if (bar) bar.style.display = running ? '' : 'none';
+  if (txt) txt.textContent = msg;
+  if (led) {
+    led.style.background  = running ? '#22c55e' : '#ef4444';
+    led.style.boxShadow   = running ? '0 0 6px #22c55e' : '0 0 6px #ef4444';
+  }
+  _coUpdateToggleBtn(running);
+}
+
+function _coUpdateToggleBtn(on) {
+  const btn = document.getElementById('co-bc-toggle-btn');
+  const lbl = document.getElementById('co-bc-toggle-lbl');
+  if (!btn) return;
+  btn.style.background = on ? '#16a34a' : '#374151';
+  btn.style.color      = on ? '#fff'    : '#9ca3af';
+  if (lbl) lbl.textContent = on ? 'باركود: تشغيل' : 'باركود: موقف';
+}
 
 function loadCheckout() {
   checkoutLoadCustomers();
@@ -4639,6 +4750,9 @@ function loadCheckout() {
   const printBtn = document.getElementById('checkout-print-btn');
   if (saveBtn) saveBtn.disabled = !hasItems;
   if (printBtn) printBtn.disabled = !hasItems;
+  // Auto-start background barcode detection on page load
+  _coBarcodeSeenCodes = new Set();
+  coStartBarcodeBackground();
 }
 
 function checkoutLoadCustomers() {
