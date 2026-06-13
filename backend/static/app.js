@@ -3336,6 +3336,8 @@ let _lvNewCount = 0;
 let _lvDupCount = 0;
 let _lvBusy = false;
 let _lvPaused = false;
+let _lvBarcodeDetector = null;   // BarcodeDetector instance for live mode
+let _lvSeenBarcodes = new Set(); // barcodes already processed this session
 
 // Mirror of backend _normalize_product_key — keeps dedup consistent with AI spelling variations
 function _lvNormName(name) {
@@ -3432,11 +3434,13 @@ async function openLiveVisionModal() {
   _lvInFlight = 0;
   _lvItems = [];
   _lvSeenItems = new Set();
+  _lvSeenBarcodes = new Set();
   _lvCustomerId = null;
   _lvNewCount = 0;
   _lvDupCount = 0;
   _lvBusy = false;
   _lvPaused = false;
+  _lvBarcodeDetector = null;
   _lvSessionId = _lvGenUUID();
 
   // Reset snapshots sidebar
@@ -3701,6 +3705,59 @@ async function _lvCamFrame(cam) {
     const bright = [...Array.from(s1), ...Array.from(s2)].some((v, idx) => idx % 4 !== 3 && v > 15);
     if (!bright) { _lvCamSetLed(cam, 'red'); return; }
     _lvCamSetLed(cam, 'yellow');
+
+    // ── Barcode-first detection (free, no AI quota) ──
+    if (!_lvBarcodeDetector && typeof BarcodeDetector !== 'undefined') {
+      try {
+        _lvBarcodeDetector = new BarcodeDetector({
+          formats: ['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e','itf','data_matrix']
+        });
+      } catch(_) { _lvBarcodeDetector = false; }
+    }
+    if (_lvBarcodeDetector) {
+      try {
+        const barcodes = await _lvBarcodeDetector.detect(canvasEl);
+        if (barcodes && barcodes.length) {
+          const code = barcodes[0].rawValue;
+          if (code && !_lvSeenBarcodes.has(code)) {
+            _lvSeenBarcodes.add(code);
+            const statusEl = document.getElementById('lv-status-txt');
+            if (statusEl) statusEl.textContent = `باركود: ${code} — جاري البحث...`;
+            try {
+              const product = await api('GET', `/market/products/barcode/${encodeURIComponent(code)}`);
+              if (product) {
+                const normKey = _lvNormName(product.name);
+                if (!_lvSeenItems.has(normKey)) {
+                  _lvItems.push({ product_name: product.name, quantity: 1, unit_price: product.unit_price });
+                  _lvSeenItems.add(normKey);
+                  _lvNewCount++;
+                  _lvLed('green');
+                  if (statusEl) statusEl.textContent = `✅ باركود: ${product.name}`;
+                  // Snapshot thumbnail
+                  const snapCanvas = document.createElement('canvas');
+                  snapCanvas.width = canvasEl.width; snapCanvas.height = canvasEl.height;
+                  snapCanvas.getContext('2d').drawImage(canvasEl, 0, 0);
+                  _lvSaveSnapshot(snapCanvas, null);
+                  _lvRenderItems();
+                  setTimeout(() => _lvLed('red'), 2000);
+                } else {
+                  if (statusEl) statusEl.textContent = `مكرر: ${product.name}`;
+                  _lvDupCount++;
+                }
+                return; // skip AI for this frame
+              }
+            } catch(_) {
+              // barcode not in catalog → fall through to AI
+              if (statusEl) statusEl.textContent = `باركود ${code} غير موجود — جاري التحليل...`;
+            }
+          } else if (code && _lvSeenBarcodes.has(code)) {
+            _lvDupCount++;
+            return; // already handled this barcode
+          }
+        }
+      } catch(_) {} // BarcodeDetector failed, fall through to AI
+    }
+
     // Downsample to max 640px for faster upload
     const targetW = Math.min(canvasEl.width, 640);
     const targetH = Math.round(canvasEl.height * targetW / canvasEl.width);
@@ -3855,6 +3912,7 @@ function _lvRemoveItem(i) {
 function lvClearItems() {
   _lvItems = [];
   _lvSeenItems = new Set();
+  _lvSeenBarcodes = new Set();
   _lvRenderItems();
 }
 
