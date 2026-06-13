@@ -1353,12 +1353,15 @@
     <section id="pg-market-catalog" class="pg" style="display:none">
       <div class="pg-head">
         <h2><i class="fas fa-box-open me-2 text-success"></i>كتلوك المنتجات</h2>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-outline-info btn-sm" onclick="catalogScanPhoto('camera')">
             <i class="fas fa-camera me-1"></i>كاميرا
           </button>
           <button class="btn btn-outline-info btn-sm" onclick="catalogScanPhoto('gallery')">
             <i class="fas fa-images me-1"></i>استيراد من صورة
+          </button>
+          <button class="btn btn-warning btn-sm text-dark" onclick="catalogOpenBarcodeAdd()" title="إضافة منتج بمسح باركوده">
+            <i class="fas fa-barcode me-1"></i>إضافة بالباركود
           </button>
           <button class="btn btn-outline-success btn-sm" onclick="catalogAddManual()">
             <i class="fas fa-plus me-1"></i>إضافة يدوية
@@ -1412,15 +1415,24 @@
       <!-- Add / edit row -->
       <div id="catalog-add-row" style="display:none" class="glass-card p-3 mb-3">
         <div class="row g-2 align-items-end">
-          <div class="col">
+          <div class="col-12 col-sm">
             <label class="form-label small">اسم المنتج</label>
             <input type="text" id="catalog-add-name" class="form-control" placeholder="مثال: رز بسمتي">
           </div>
-          <div class="col-auto" style="width:140px">
+          <div class="col-6 col-sm-auto" style="min-width:130px">
             <label class="form-label small">السعر (IQD)</label>
             <input type="number" id="catalog-add-price" class="form-control" min="0" placeholder="0">
           </div>
-          <div class="col-auto">
+          <div class="col-6 col-sm-auto" style="min-width:160px">
+            <label class="form-label small">الباركود <span class="text-muted">(اختياري)</span></label>
+            <div class="input-group">
+              <input type="text" id="catalog-add-barcode" class="form-control" placeholder="رقم الباركود" dir="ltr">
+              <button class="btn btn-outline-info" type="button" onclick="catalogScanBarcodeFor('add')" title="مسح بالكاميرا">
+                <i class="fas fa-barcode"></i>
+              </button>
+            </div>
+          </div>
+          <div class="col-auto align-self-end">
             <button class="btn btn-success" onclick="catalogSaveManual()"><i class="fas fa-check"></i></button>
             <button class="btn btn-outline-secondary ms-1" onclick="document.getElementById('catalog-add-row').style.display='none'">✕</button>
           </div>
@@ -1643,6 +1655,58 @@
     </div>
 
     <!-- ── Add Sale Modal ── -->
+    <!-- ── Catalog: Add Product by Barcode Modal ── -->
+    <div class="modal fade" id="catalogBarcodeAddModal" tabindex="-1" data-bs-backdrop="static">
+      <div class="modal-dialog">
+        <div class="modal-content" style="background:#1e1e2e;color:#fff;border:1px solid #333">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title"><i class="fas fa-barcode me-2 text-warning"></i>إضافة منتج بالباركود</h5>
+            <button type="button" class="btn-close btn-close-white" onclick="catalogCloseBarcodeAdd()"></button>
+          </div>
+          <div class="modal-body">
+            <!-- Camera preview -->
+            <div id="cba-camera-wrap" style="position:relative;background:#000;border-radius:10px;overflow:hidden;border:2px solid #f59e0b;display:none" class="mb-3">
+              <video id="cba-video" autoplay playsinline muted style="width:100%;max-height:200px;object-fit:cover;display:block"></video>
+              <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:70px;border:2px solid #f59e0b;border-radius:6px;box-shadow:0 0 0 2000px rgba(0,0,0,0.4)"></div>
+              <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.7);padding:5px 10px;display:flex;justify-content:space-between;align-items:center">
+                <span id="cba-cam-status" style="color:#fff;font-size:0.78rem">وجّه الكاميرا نحو الباركود...</span>
+                <button class="btn btn-sm btn-danger py-0 px-2" onclick="cbaStopCamera()" style="font-size:0.78rem"><i class="fas fa-stop me-1"></i>إيقاف</button>
+              </div>
+            </div>
+
+            <!-- Barcode input -->
+            <div class="mb-3">
+              <label class="form-label small fw-bold">رقم الباركود</label>
+              <div class="input-group">
+                <input type="text" id="cba-barcode" class="form-control" placeholder="امسح أو اكتب رقم الباركود..." dir="ltr">
+                <button class="btn btn-warning text-dark" type="button" onclick="cbaStartCamera()" title="مسح بالكاميرا">
+                  <i class="fas fa-camera"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Product details (shown after barcode is entered) -->
+            <div class="mb-3">
+              <label class="form-label small fw-bold">اسم المنتج <span class="text-danger">*</span></label>
+              <input type="text" id="cba-name" class="form-control" placeholder="مثال: رز بسمتي 5كغ">
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-bold">السعر (IQD)</label>
+              <input type="number" id="cba-price" class="form-control" min="0" placeholder="0">
+            </div>
+
+            <div id="cba-status" class="mt-2"></div>
+          </div>
+          <div class="modal-footer border-secondary">
+            <button class="btn btn-secondary" onclick="catalogCloseBarcodeAdd()">إلغاء</button>
+            <button class="btn btn-warning text-dark" onclick="cbaSave()">
+              <i class="fas fa-save me-1"></i>حفظ المنتج
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Barcode Scanner Modal ── -->
     <div class="modal fade" id="barcodeScanModal" tabindex="-1" data-bs-backdrop="static">
       <div class="modal-dialog">

@@ -5359,17 +5359,23 @@ function _renderCatalogList(items) {
   wrap.innerHTML = items.map(p => `
     <div class="mb-1 rounded" style="background:rgba(255,255,255,0.05)" id="catalog-row-${p.id}">
       <div class="d-flex align-items-center justify-content-between py-2 px-3">
-        <div id="catalog-view-${p.id}" class="d-flex align-items-center gap-3 flex-grow-1">
+        <div id="catalog-view-${p.id}" class="d-flex align-items-center gap-3 flex-grow-1 flex-wrap">
           <span style="flex:1">${esc(p.name)}</span>
+          ${p.barcode ? `<span class="badge" style="background:#0ea5e9;font-family:monospace;letter-spacing:1px"><i class="fas fa-barcode me-1"></i>${esc(p.barcode)}</span>` : ''}
           <span class="badge bg-success" style="min-width:90px;text-align:center">
             ${Number(p.unit_price).toLocaleString('ar-IQ')} IQD
           </span>
         </div>
-        <div id="catalog-edit-${p.id}" class="d-none d-flex align-items-center gap-2 flex-grow-1">
+        <div id="catalog-edit-${p.id}" class="d-none d-flex align-items-center gap-2 flex-grow-1 flex-wrap">
           <input type="text" class="form-control form-control-sm" id="cedit-name-${p.id}"
-                 value="${esc(p.name)}" style="flex:1">
+                 value="${esc(p.name)}" style="min-width:120px;flex:1">
           <input type="number" class="form-control form-control-sm" id="cedit-price-${p.id}"
                  value="${p.unit_price}" style="width:110px" min="0">
+          <div class="input-group input-group-sm" style="width:160px">
+            <input type="text" class="form-control form-control-sm" id="cedit-barcode-${p.id}"
+                   value="${esc(p.barcode||'')}" placeholder="باركود" dir="ltr">
+            <button class="btn btn-outline-info btn-sm" type="button" onclick="catalogScanBarcodeFor('edit','${p.id}')" title="مسح"><i class="fas fa-barcode"></i></button>
+          </div>
           <button class="btn btn-sm btn-success" onclick="catalogSaveEdit('${p.id}')">✔</button>
           <button class="btn btn-sm btn-outline-secondary" onclick="catalogCancelEdit('${p.id}')">✕</button>
         </div>
@@ -5404,15 +5410,17 @@ function catalogAddManual() {
   document.getElementById('catalog-add-row').style.display = '';
   document.getElementById('catalog-add-name').value = '';
   document.getElementById('catalog-add-price').value = '';
+  document.getElementById('catalog-add-barcode').value = '';
   document.getElementById('catalog-add-name').focus();
 }
 
 async function catalogSaveManual() {
-  const name = document.getElementById('catalog-add-name').value.trim();
-  const price = parseFloat(document.getElementById('catalog-add-price').value) || 0;
+  const name    = document.getElementById('catalog-add-name').value.trim();
+  const price   = parseFloat(document.getElementById('catalog-add-price').value) || 0;
+  const barcode = document.getElementById('catalog-add-barcode').value.trim() || null;
   if (!name) { toast('أدخل اسم المنتج', 'err'); return; }
   try {
-    const p = await api('POST', '/market/products/', { name, unit_price: price });
+    const p = await api('POST', '/market/products/', { name, unit_price: price, barcode });
     _catalogProducts.unshift(p);
     document.getElementById('catalog-add-row').style.display = 'none';
     _renderCatalogList(_catalogProducts);
@@ -5433,11 +5441,13 @@ function catalogCancelEdit(id) {
 }
 
 async function catalogSaveEdit(id) {
-  const name  = document.getElementById(`cedit-name-${id}`).value.trim();
-  const price = parseFloat(document.getElementById(`cedit-price-${id}`).value) || 0;
+  const name    = document.getElementById(`cedit-name-${id}`).value.trim();
+  const price   = parseFloat(document.getElementById(`cedit-price-${id}`).value) || 0;
+  const barcode = document.getElementById(`cedit-barcode-${id}`)?.value.trim() || null;
   if (!name) { toast('أدخل اسم المنتج', 'err'); return; }
   try {
-    const updated = await api('PATCH', `/market/products/${id}`, { name, unit_price: price });
+    const body = { name, unit_price: price, barcode };
+    const updated = await api('PATCH', `/market/products/${id}`, body);
     const idx = _catalogProducts.findIndex(p => p.id === id);
     if (idx !== -1) _catalogProducts[idx] = updated;
     _renderCatalogList(_catalogProducts);
@@ -5453,6 +5463,156 @@ async function catalogDelete(id) {
     _renderCatalogList(_catalogProducts);
     toast('تم الحذف');
   } catch(e) { toast(e.message, 'err'); }
+}
+
+// ── Catalog: Barcode scan helper (fills a field) ──────────────────────
+let _cbaStream = null;
+let _cbaDetector = null;
+let _cbaRafId = null;
+let _cbaTargetField = null;  // 'add' | 'edit'
+let _cbaTargetEditId = null; // product id when target='edit'
+let _cbaModal = null;
+
+async function catalogScanBarcodeFor(target, editId) {
+  _cbaTargetField  = target;
+  _cbaTargetEditId = editId || null;
+  // Try to use BarcodeDetector via the cbaModal (shared modal)
+  catalogOpenBarcodeAdd(false);
+}
+
+async function catalogOpenBarcodeAdd(openForNew = true) {
+  document.getElementById('cba-barcode').value  = '';
+  document.getElementById('cba-name').value     = openForNew ? '' : '';
+  document.getElementById('cba-price').value    = '';
+  document.getElementById('cba-status').innerHTML = '';
+  document.getElementById('cba-camera-wrap').style.display = 'none';
+
+  // Show/hide name+price fields based on mode
+  const nameRow  = document.getElementById('cba-name').closest('.mb-3');
+  const priceRow = document.getElementById('cba-price').closest('.mb-3');
+  if (nameRow)  nameRow.style.display  = openForNew ? '' : 'none';
+  if (priceRow) priceRow.style.display = openForNew ? '' : 'none';
+
+  if (!_cbaModal) {
+    _cbaModal = new bootstrap.Modal(document.getElementById('catalogBarcodeAddModal'));
+  }
+
+  // Update modal title
+  const title = document.querySelector('#catalogBarcodeAddModal .modal-title');
+  if (title) {
+    title.innerHTML = openForNew
+      ? '<i class="fas fa-barcode me-2 text-warning"></i>\u0625\u0636\u0627\u0641\u0629 \u0645\u0646\u062a\u062c \u0628\u0627\u0644\u0628\u0627\u0631\u0643\u0648\u062f'
+      : '<i class="fas fa-barcode me-2 text-info"></i>\u0645\u0633\u062d \u0628\u0627\u0631\u0643\u0648\u062f \u0644\u0644\u0645\u0646\u062a\u062c';
+    // Change save button
+    const saveBtn = document.querySelector('#catalogBarcodeAddModal .modal-footer .btn-warning');
+    if (saveBtn) saveBtn.style.display = openForNew ? '' : 'none';
+    // Show confirm button for fill mode
+    let fillBtn = document.getElementById('cba-fill-btn');
+    if (!fillBtn) {
+      fillBtn = document.createElement('button');
+      fillBtn.id = 'cba-fill-btn';
+      fillBtn.className = 'btn btn-info text-dark';
+      fillBtn.innerHTML = '<i class="fas fa-check me-1"></i>\u062a\u0623\u0643\u064a\u062f \u0627\u0644\u0628\u0627\u0631\u0643\u0648\u062f';
+      fillBtn.onclick = cbaFillField;
+      document.querySelector('#catalogBarcodeAddModal .modal-footer').insertBefore(fillBtn, document.querySelector('#catalogBarcodeAddModal .modal-footer .btn-secondary').nextSibling);
+    }
+    fillBtn.style.display = openForNew ? 'none' : '';
+  }
+
+  _cbaModal.show();
+
+  if (typeof BarcodeDetector !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+    try {
+      _cbaDetector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e','itf','data_matrix'] });
+      await cbaStartCamera();
+    } catch(_) {}
+  }
+}
+
+async function cbaStartCamera() {
+  try {
+    _cbaStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false
+    });
+    const video = document.getElementById('cba-video');
+    video.srcObject = _cbaStream;
+    await video.play().catch(()=>{});
+    document.getElementById('cba-camera-wrap').style.display = '';
+    _cbaRafLoop();
+  } catch(e) {
+    document.getElementById('cba-cam-status').textContent = '\u062a\u0639\u0630\u0651\u0631 \u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u0643\u0627\u0645\u064a\u0631\u0627: ' + (e.message||'');
+    document.getElementById('cba-camera-wrap').style.display = '';
+  }
+}
+
+function cbaStopCamera() {
+  if (_cbaRafId) { cancelAnimationFrame(_cbaRafId); _cbaRafId = null; }
+  if (_cbaStream) { _cbaStream.getTracks().forEach(t => t.stop()); _cbaStream = null; }
+  document.getElementById('cba-camera-wrap').style.display = 'none';
+}
+
+function _cbaRafLoop() {
+  if (!_cbaStream || !_cbaDetector) return;
+  _cbaRafId = requestAnimationFrame(async () => {
+    const video = document.getElementById('cba-video');
+    if (video && video.readyState >= 2) {
+      try {
+        const barcodes = await _cbaDetector.detect(video);
+        if (barcodes && barcodes.length) {
+          const code = barcodes[0].rawValue;
+          if (code) {
+            document.getElementById('cba-barcode').value = code;
+            cbaStopCamera();
+            document.getElementById('cba-cam-status').textContent = '\u062a\u0645 \u0627\u0644\u0643\u0634\u0641: ' + code;
+            return;
+          }
+        }
+      } catch(_) {}
+    }
+    _cbaRafLoop();
+  });
+}
+
+async function cbaSave() {
+  const barcode = document.getElementById('cba-barcode').value.trim();
+  const name    = document.getElementById('cba-name').value.trim();
+  const price   = parseFloat(document.getElementById('cba-price').value) || 0;
+  if (!name) { toast('\u0623\u062f\u062e\u0644 \u0627\u0633\u0645 \u0627\u0644\u0645\u0646\u062a\u062c', 'err'); return; }
+  const statusEl = document.getElementById('cba-status');
+  statusEl.innerHTML = '<div class="text-muted small"><i class="fas fa-spinner fa-spin me-1"></i>\u062c\u0627\u0631\u064a \u0627\u0644\u062d\u0641\u0638...</div>';
+  try {
+    const p = await api('POST', '/market/products/', { name, unit_price: price, barcode: barcode||null });
+    _catalogProducts.unshift(p);
+    _renderCatalogList(_catalogProducts);
+    catalogCloseBarcodeAdd();
+    toast('\u062a\u0645 \u062d\u0641\u0638 \u0627\u0644\u0645\u0646\u062a\u062c \u2705');
+    // If this was triggered from "not found in barcode scan" scenario
+    if (window._bcPendingBarcode && window._bcPendingBarcode === barcode) {
+      window._bcPendingBarcode = null;
+    }
+  } catch(e) {
+    statusEl.innerHTML = `<div class="alert alert-danger py-1 small">${esc(e.message)}</div>`;
+  }
+}
+
+function cbaFillField() {
+  const code = document.getElementById('cba-barcode').value.trim();
+  if (!code) { toast('\u0623\u062f\u062e\u0644 \u0631\u0642\u0645 \u0627\u0644\u0628\u0627\u0631\u0643\u0648\u062f', 'err'); return; }
+  if (_cbaTargetField === 'add') {
+    const el = document.getElementById('catalog-add-barcode');
+    if (el) el.value = code;
+  } else if (_cbaTargetField === 'edit' && _cbaTargetEditId) {
+    const el = document.getElementById(`cedit-barcode-${_cbaTargetEditId}`);
+    if (el) el.value = code;
+  }
+  catalogCloseBarcodeAdd();
+}
+
+function catalogCloseBarcodeAdd() {
+  cbaStopCamera();
+  if (_cbaModal) { _cbaModal.hide(); }
+  _cbaTargetField = null;
+  _cbaTargetEditId = null;
 }
 
 // ── Catalog: reference images per product ─────────────────────
