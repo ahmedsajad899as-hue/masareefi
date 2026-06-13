@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../providers/market_customers_provider.dart';
 import '../../../models/market_model.dart';
+import '../../../services/api_service.dart';
+import '../barcode_scanner_screen.dart';
 
 class MarketCustomersScreen extends ConsumerStatefulWidget {
   const MarketCustomersScreen({super.key});
@@ -30,6 +32,28 @@ class _MarketCustomersScreenState
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _scanBarcode() async {
+    final barcode = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (barcode == null || !mounted) return;
+
+    final product = await ApiService.instance.getProductByBarcode(barcode);
+    if (!mounted) return;
+
+    if (product != null) {
+      context.push('/market/sales/add');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('الباركود غير موجود في الكتالوج، يمكنك إضافته الآن'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      context.push('/market/products', extra: {'barcode': barcode});
+    }
   }
 
   void _showAddDialog() {
@@ -99,6 +123,11 @@ class _MarketCustomersScreenState
       appBar: AppBar(
         title: const Text('الزبائن'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner_rounded),
+            tooltip: 'مسح باركود',
+            onPressed: _scanBarcode,
+          ),
           IconButton(
             icon: const Icon(Icons.warning_amber_rounded, color: AppColors.warning),
             tooltip: 'الزبائن المتأخرين',
