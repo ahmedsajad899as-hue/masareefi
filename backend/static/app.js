@@ -2956,7 +2956,7 @@ function renderCustomerList(list) {
         </div>
       </div>
       <div class="d-flex gap-2 mt-2 justify-content-end">
-        <button class="btn btn-sm btn-warning text-dark" title="بيع جديد" onclick="event.stopPropagation(); openAddSaleModal('${c.id}')"><i class="fas fa-plus me-1"></i>بيع جديد</button>
+        <button class="btn btn-sm btn-success" title="كاميرا / باركود" onclick="event.stopPropagation(); openVisionModal('${c.id}')"><i class="fas fa-camera me-1"></i>كاميرا</button>
       </div>
     </div>
   `).join('');
@@ -2979,22 +2979,13 @@ async function openCustomerDetail(customerId) {
     if (titleEl && !document.getElementById('cdm-new-sale-btn')) {
       const btn = document.createElement('button');
       btn.id = 'cdm-new-sale-btn';
-      btn.className = 'btn btn-warning btn-sm text-dark ms-3';
-      btn.innerHTML = '<i class="fas fa-plus me-1"></i>بيع جديد';
-      btn.onclick = () => openAddSaleModal(customerId);
+      btn.className = 'btn btn-success btn-sm ms-3';
+      btn.innerHTML = '<i class="fas fa-camera me-1"></i>كاميرا';
+      btn.title = 'تصوير المشتريات وتحليلها (باركود أو AI)';
+      btn.onclick = () => openVisionModal(customerId);
       titleEl.after(btn);
-
-      const camBtn = document.createElement('button');
-      camBtn.id = 'cdm-vision-btn';
-      camBtn.className = 'btn btn-success btn-sm ms-2';
-      camBtn.innerHTML = '<i class="fas fa-camera me-1"></i>كاميرا';
-      camBtn.title = 'تصوير المشتريات وتحليلها بالذكاء الاصطناعي';
-      camBtn.onclick = () => openVisionModal(customerId);
-      btn.after(camBtn);
     } else if (document.getElementById('cdm-new-sale-btn')) {
-      document.getElementById('cdm-new-sale-btn').onclick = () => openAddSaleModal(customerId);
-      const cb = document.getElementById('cdm-vision-btn');
-      if (cb) cb.onclick = () => openVisionModal(customerId);
+      document.getElementById('cdm-new-sale-btn').onclick = () => openVisionModal(customerId);
     }
     body.innerHTML = `
       <div class="d-flex gap-1 mb-3 flex-wrap justify-content-end">
@@ -3102,9 +3093,9 @@ async function visionFileSelected(ev) {
 }
 
 async function visionFileSelectedDirect(file) {
-  if (!/^image\//.test(file.type)) { toast('يرجى اختيار صورة', 'err'); return; }
+  if (!/^\/image\//.test(file.type) && !/^image\//.test(file.type)) { toast('يرجى اختيار صورة', 'err'); return; }
   if (file.size > 20 * 1024 * 1024) { toast('حجم الصورة كبير (الحد 20MB)', 'err'); return; }
-  // Show modal now that we have a photo — always call show() to handle re-opens
+  // Show modal now that we have a photo
   const modalEl = document.getElementById('visionModal');
   const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
   modal.show();
@@ -3115,6 +3106,57 @@ async function visionFileSelectedDirect(file) {
     img.style.display = '';
   };
   reader.readAsDataURL(file);
+
+  // ── Barcode-first: try BarcodeDetector before sending to AI ──
+  if (typeof BarcodeDetector !== 'undefined') {
+    try {
+      const detector = new BarcodeDetector({
+        formats: ['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e','itf','data_matrix']
+      });
+      const statusEl = document.getElementById('vision-status');
+      statusEl.innerHTML = '<div class="text-center py-2"><div class="spinner-border spinner-border-sm text-info me-2"></div><span class="small">جاري فحص الباركود...</span></div>';
+
+      let bitmap = null;
+      if (window.createImageBitmap) {
+        bitmap = await createImageBitmap(file).catch(() => null);
+      }
+      if (!bitmap) {
+        const url = URL.createObjectURL(file);
+        bitmap = await new Promise((res, rej) => {
+          const i = new Image();
+          i.onload = () => res(i);
+          i.onerror = rej;
+          i.src = url;
+        }).catch(() => null);
+        if (bitmap) URL.revokeObjectURL(URL.createObjectURL(file));
+      }
+
+      if (bitmap) {
+        const barcodes = await detector.detect(bitmap).catch(() => []);
+        if (barcodes && barcodes.length) {
+          const code = barcodes[0].rawValue;
+          if (code) {
+            statusEl.innerHTML = `<div class="text-center py-2"><div class="spinner-border spinner-border-sm text-warning me-2"></div><span class="small">تم كشف باركود: ${code} &mdash; جاري البحث...</span></div>`;
+            try {
+              const product = await api('GET', `/market/products/barcode/${encodeURIComponent(code)}`);
+              if (product) {
+                _visionItems = [{ product_name: product.name, quantity: 1, unit_price: product.unit_price }];
+                statusEl.innerHTML = `<div class="alert alert-success py-2 small"><i class="fas fa-barcode me-2"></i>تم التعرف بالباركود: <strong>${esc(product.name)}</strong> &mdash; ${fmt(product.unit_price)}</div>`;
+                visionRenderItems();
+                document.getElementById('vision-save-btn').disabled = false;
+                return; // skip AI
+              }
+            } catch(bErr) {
+              // barcode not in catalog → fall through to AI with a hint
+              statusEl.innerHTML = `<div class="alert alert-warning py-2 small mb-2"><i class="fas fa-barcode me-1"></i>باركود ${esc(code)} غير موجود في الكتالوج &mdash; جاري تحليل الصورة بالذكاء الاصطناعي...</div>`;
+            }
+          }
+        }
+      }
+    } catch(_) { /* BarcodeDetector failed, fall through to AI */ }
+  }
+
+  // Fall back to AI analysis
   await visionAnalyze(file);
 }
 
