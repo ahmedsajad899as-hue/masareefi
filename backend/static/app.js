@@ -3304,17 +3304,6 @@ function _lvNormName(name) {
   return s;
 }
 
-// Extract brand key: first word > 2 chars that’s not purely numeric
-// Used to prevent "Kiri Fresh cream" and "جبنة Kiri" from both being added
-function _lvBrandKey(name) {
-  const words = (name || '').trim().split(/\s+/);
-  for (const w of words) {
-    const clean = w.replace(/[^a-z\u0600-\u06ff]/gi, '').toLowerCase();
-    if (clean.length > 2 && !/^\d+$/.test(clean)) return clean;
-  }
-  return _lvNormName(name).slice(0, 10);
-}
-
 // LED helper: 'green' | 'red' | 'yellow'
 function _lvLed(color) {
   const el = document.getElementById('lv-led');
@@ -3534,7 +3523,7 @@ async function _lvPickCamera(deviceId, label) {
   const idx = _lvCams.length;
   const cam = {
     id: 'lvcam' + idx, deviceId, label: label || ('كاميرا ' + (idx + 1)),
-    stream: null, interval: null, pauseUntil: 0,
+    stream: null, interval: null,
   };
   try {
     // '__environment__' = mobile back camera via facingMode (no deviceId)
@@ -3559,8 +3548,7 @@ async function _lvPickCamera(deviceId, label) {
       <span id="${cam.id}-led" style="width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 5px #ef4444;flex-shrink:0;display:inline-block"></span>
       <span style="font-size:10px;color:#fff;text-shadow:0 1px 3px #000;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cam.label}</span>
       <button onclick="_lvRemoveCam('${cam.id}')" style="pointer-events:auto;background:rgba(0,0,0,0.55);border:none;color:#ff8080;border-radius:4px;padding:0 5px;font-size:11px;cursor:pointer;line-height:18px">✕</button>
-    </div>
-    <div id="${cam.id}-info" style="position:absolute;bottom:4px;left:4px;right:4px;font-size:9px;color:rgba(255,255,255,0.65);text-align:center;text-shadow:0 1px 2px #000;pointer-events:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>`;
+    </div>`;
   grid.appendChild(card);
   document.getElementById('lv-cam-placeholder').style.display = 'none';
   document.getElementById('lv-status-bar').style.display = 'flex';
@@ -3656,8 +3644,6 @@ async function _lvCamLoop(cam) {
 async function _lvCamFrame(cam) {
   const videoEl = document.getElementById(cam.id + '-video');
   if (!videoEl || videoEl.readyState < 2) return;
-  // Respect per-camera pause after a successful detection
-  if (cam.pauseUntil && Date.now() < cam.pauseUntil) return;
   // If AI queue is already backed up, skip this frame
   if (_lvAiQueue.length >= _LV_MAX_CONCURRENT * 2) return;
   try {
@@ -3737,24 +3723,15 @@ async function _lvSendToAi({ cam, blob, canvas }) {
         const name = (it.product_name || '').trim();
         if (!name) continue;
         const normKey = _lvNormName(name);
-        // Brand dedup: extract first significant word as brand key
-        // prevents "Kiri Fresh cream" and "جبنة Kiri كريمية" from both being added
-        const brandKey = 'brand:' + _lvBrandKey(name);
-        if (_lvSeenItems.has(normKey) || _lvSeenItems.has(brandKey)) continue;
+        if (_lvSeenItems.has(normKey)) continue;
         _lvItems.push({ product_name: name, quantity: Number(it.quantity)||1, unit_price: Number(it.unit_price)||0 });
-        _lvSeenItems.add(normKey);
-        _lvSeenItems.add(brandKey);
-        added++;
+        _lvSeenItems.add(normKey); added++;
       }
       _lvNewCount += added;
       if (added > 0) {
         _lvLed('green');
         document.getElementById('lv-status-txt').textContent = `أُضيف ${added} منتج (${cam.label})`;
         _lvSaveSnapshot(canvas, null);
-        // Global pause: clear pending queue + pause ALL cameras 5s to prevent re-detecting same item
-        _lvAiQueue.length = 0;
-        const pauseEnd = Date.now() + 5000;
-        for (const c of _lvCams) c.pauseUntil = pauseEnd;
         setTimeout(() => _lvLed('red'), 2000);
       } else {
         _lvLed('red');
@@ -4388,6 +4365,164 @@ async function markSupplierPaid(invoiceId) {
     await loadMarketSuppliers();
   } catch(e) { toast(e.message, 'err'); }
   finally { loading(false); }
+}
+
+// ─────────────────────────── Barcode Scanner ─────────────────────────────
+let _bcStream     = null;
+let _bcDetector   = null;
+let _bcRafId      = null;
+let _bcFoundCode  = null;
+let _bcProduct    = null;
+let _bcModal      = null;
+
+async function openBarcodeScanModal() {
+  _bcFoundCode = null;
+  _bcProduct   = null;
+  document.getElementById('bc-manual-input').value = '';
+  document.getElementById('bc-result').innerHTML    = '';
+  document.getElementById('bc-footer').style.display = 'none';
+  document.getElementById('bc-camera-wrap').style.display = 'none';
+
+  // Load customers into select
+  try {
+    const customers = _marketCustomers && _marketCustomers.length
+      ? _marketCustomers
+      : (await api('GET', '/market/customers/') || []);
+    const sel = document.getElementById('bc-customer-sel');
+    sel.innerHTML = customers.map(c =>
+      `<option value="${c.id}">${(c.name||'').replace(/</g,'&lt;')}${c.phone?' — '+c.phone:''}</option>`
+    ).join('');
+    if (!customers.length) sel.innerHTML = '<option disabled>لا يوجد زبائن بعد</option>';
+  } catch(_) {}
+
+  _bcModal = new bootstrap.Modal(document.getElementById('barcodeScanModal'));
+  _bcModal.show();
+
+  // Try to start camera with BarcodeDetector
+  if (typeof BarcodeDetector !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+    try {
+      _bcDetector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e','itf','data_matrix'] });
+    } catch(_) { _bcDetector = null; }
+  }
+
+  if (_bcDetector) {
+    await bcStartCamera();
+  } else {
+    document.getElementById('bc-scan-status').textContent = 'المتصفح لا يدعم المسح التلقائي — أدخل الباركود يدوياً.';
+  }
+}
+
+async function bcStartCamera() {
+  try {
+    _bcStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
+      audio: false
+    });
+    const video = document.getElementById('bc-video');
+    video.srcObject = _bcStream;
+    await video.play().catch(()=>{});
+    document.getElementById('bc-camera-wrap').style.display = '';
+    _bcRafLoop();
+  } catch(e) {
+    document.getElementById('bc-scan-status').textContent = 'تعذّر تشغيل الكاميرا: ' + (e.message||'');
+  }
+}
+
+function bcStopCamera() {
+  if (_bcRafId) { cancelAnimationFrame(_bcRafId); _bcRafId = null; }
+  if (_bcStream) { _bcStream.getTracks().forEach(t => t.stop()); _bcStream = null; }
+  document.getElementById('bc-camera-wrap').style.display = 'none';
+}
+
+function _bcRafLoop() {
+  if (!_bcStream || !_bcDetector) return;
+  _bcRafId = requestAnimationFrame(async () => {
+    const video = document.getElementById('bc-video');
+    if (video && video.readyState >= 2) {
+      try {
+        const barcodes = await _bcDetector.detect(video);
+        if (barcodes && barcodes.length) {
+          const code = barcodes[0].rawValue;
+          if (code && code !== _bcFoundCode) {
+            _bcFoundCode = code;
+            document.getElementById('bc-manual-input').value = code;
+            bcStopCamera();
+            await bcLookup();
+            return;
+          }
+        }
+      } catch(_) {}
+    }
+    _bcRafLoop();
+  });
+}
+
+async function bcOnManualInput() {
+  _bcFoundCode = null;
+  document.getElementById('bc-result').innerHTML = '';
+  document.getElementById('bc-footer').style.display = 'none';
+}
+
+async function bcLookup() {
+  const code = (document.getElementById('bc-manual-input').value || '').trim();
+  if (!code) return;
+  _bcFoundCode = code;
+  bcStopCamera();
+
+  const resultEl = document.getElementById('bc-result');
+  resultEl.innerHTML = '<div class="text-muted small"><i class="fas fa-spinner fa-spin me-1"></i>جاري البحث...</div>';
+  document.getElementById('bc-footer').style.display = 'none';
+
+  try {
+    _bcProduct = await api('GET', `/market/products/barcode/${encodeURIComponent(code)}`);
+    resultEl.innerHTML = `
+      <div class="alert py-2 mb-0" style="background:#052e16;border:1px solid #16a34a;color:#86efac">
+        <i class="fas fa-check-circle me-2"></i>
+        <strong>${(_bcProduct.name||'').replace(/</g,'&lt;')}</strong> —
+        <span>${fmt(_bcProduct.unit_price)} د.ع</span>
+      </div>`;
+    document.getElementById('bc-footer').style.display = '';
+  } catch(e) {
+    if (e.status === 404 || (e.message && e.message.includes('404'))) {
+      resultEl.innerHTML = `
+        <div class="alert py-2 mb-0" style="background:#1c0a00;border:1px solid #f97316;color:#fdba74">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          الباركود <code>${code.replace(/</g,'&lt;')}</code> غير موجود في الكتالوج.
+        </div>`;
+    } else {
+      resultEl.innerHTML = `<div class="alert alert-danger py-2 mb-0 small">${e.message||'خطأ في الاتصال'}</div>`;
+    }
+    _bcProduct = null;
+  }
+}
+
+async function bcSaveSale() {
+  if (!_bcProduct) return;
+  const custId = document.getElementById('bc-customer-sel').value;
+  if (!custId) { toast('اختر الزبون أولاً', 'err'); return; }
+
+  try {
+    await api('POST', '/market/sales/', {
+      customer_id: custId,
+      sale_date: new Date().toISOString().split('T')[0],
+      total_amount: _bcProduct.unit_price,
+      description: _bcProduct.name,
+      is_paid: false,
+      items: [{ product_name: _bcProduct.name, quantity: 1, unit_price: _bcProduct.unit_price }]
+    });
+    closeBarcodeModal();
+    toast('تم تسجيل البيع بنجاح ✓', 'ok');
+    await loadMarketCustomers();
+  } catch(e) {
+    toast(e.message || 'حدث خطأ', 'err');
+  }
+}
+
+function closeBarcodeModal() {
+  bcStopCamera();
+  if (_bcModal) { _bcModal.hide(); _bcModal = null; }
+  _bcFoundCode = null;
+  _bcProduct   = null;
 }
 
 // ─────────────────────────── Quick Checkout ───────────────────────────

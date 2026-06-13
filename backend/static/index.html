@@ -1278,6 +1278,7 @@
         <div class="d-flex gap-2">
           <button class="btn btn-purple btn-sm" onclick="openLiveVisionModal()" title="كاميرا مباشرة - تحليل مستمر" style="background:#7c3aed;border-color:#7c3aed"><i class="fas fa-video me-1"></i>لايف</button>
           <button class="btn btn-success btn-sm" onclick="openVisionModal(null)" title="فاتورة بالكاميرا"><i class="fas fa-camera me-1"></i>كاميرا</button>
+          <button class="btn btn-info btn-sm text-dark" onclick="openBarcodeScanModal()" title="مسح باركود المنتج وإضافة بيع"><i class="fas fa-barcode me-1"></i>باركود</button>
           <button class="btn btn-warning btn-sm text-dark" onclick="openAddCustomerModal()"><i class="fas fa-user-plus me-1"></i>زبون جديد</button>
         </div>
       </div>
@@ -1642,7 +1643,49 @@
     </div>
 
     <!-- ── Add Sale Modal ── -->
-    <div class="modal fade" id="addSaleModal" tabindex="-1">
+    <!-- ── Barcode Scanner Modal ── -->
+    <div class="modal fade" id="barcodeScanModal" tabindex="-1" data-bs-backdrop="static">
+      <div class="modal-dialog">
+        <div class="modal-content" style="background:#1e1e2e;color:#fff;border:1px solid #333">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title"><i class="fas fa-barcode me-2 text-info"></i>مسح باركود</h5>
+            <button type="button" class="btn-close btn-close-white" onclick="closeBarcodeModal()"></button>
+          </div>
+          <div class="modal-body">
+            <!-- Camera preview -->
+            <div id="bc-camera-wrap" style="position:relative;background:#000;border-radius:10px;overflow:hidden;border:2px solid #0ea5e9;display:none">
+              <video id="bc-video" autoplay playsinline muted style="width:100%;max-height:220px;object-fit:cover;display:block"></video>
+              <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:80px;border:2px solid #0ea5e9;border-radius:6px;box-shadow:0 0 0 2000px rgba(0,0,0,0.35)"></div>
+              <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.7);padding:6px 10px;display:flex;justify-content:space-between;align-items:center">
+                <span id="bc-scan-status" style="color:#fff;font-size:0.78rem">وجّه الكاميرا نحو الباركود...</span>
+                <button class="btn btn-sm btn-danger py-0 px-2" onclick="bcStopCamera()" style="font-size:0.78rem"><i class="fas fa-stop me-1"></i>إيقاف</button>
+              </div>
+            </div>
+            <!-- Manual input (shown always as fallback) -->
+            <div class="mt-3">
+              <label class="form-label small text-muted">أو أدخل رقم الباركود يدوياً:</label>
+              <div class="input-group">
+                <input type="text" id="bc-manual-input" class="form-control" placeholder="أدخل رقم الباركود..." oninput="bcOnManualInput()" onkeydown="if(event.key==='Enter') bcLookup()">
+                <button class="btn btn-info text-dark" onclick="bcLookup()"><i class="fas fa-search"></i></button>
+              </div>
+            </div>
+            <div id="bc-result" class="mt-3"></div>
+          </div>
+          <div class="modal-footer border-secondary" id="bc-footer" style="display:none">
+            <div class="w-100">
+              <label class="form-label small">الزبون <span class="text-danger">*</span></label>
+              <select id="bc-customer-sel" class="form-select mb-2"></select>
+              <div class="d-flex gap-2">
+                <button class="btn btn-secondary flex-grow-1" onclick="closeBarcodeModal()">إلغاء</button>
+                <button class="btn btn-warning text-dark flex-grow-1" onclick="bcSaveSale()"><i class="fas fa-save me-1"></i>حفظ البيع</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Add Sale Modal ── -->
       <div class="modal-dialog">
         <div class="modal-content" style="background:#1e1e2e;color:#fff;border:1px solid #333">
           <div class="modal-header border-secondary">
@@ -1715,7 +1758,6 @@
                 <button id="lv-retry-btn" onclick="lvRetryNow()" style="display:none;background:#7c3aed;border:none;color:#fff;border-radius:12px;padding:2px 10px;font-size:11px;cursor:pointer">إعادة المحاولة</button>
                 <span class="text-muted" id="lv-counts"></span>
               </div>
-              <div id="lv-cam-specs" style="font-size:10px;color:#a78bfa;text-align:center;margin-top:3px;min-height:14px"></div>
               </div>
             </div>
             <!-- Pause/Resume button -->
