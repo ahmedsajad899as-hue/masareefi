@@ -3150,8 +3150,8 @@ async function visionFileSelectedDirect(file) {
                 return; // skip AI
               }
             } catch(bErr) {
-              // barcode not in catalog → fall through to AI with a hint
-              statusEl.innerHTML = `<div class="alert alert-warning py-2 small mb-2"><i class="fas fa-barcode me-1"></i>باركود ${esc(code)} غير موجود في الكتالوج &mdash; جاري تحليل الصورة بالذكاء الاصطناعي...</div>`;
+              // barcode not in catalog → show alert with quick-add button, fall through to AI
+              statusEl.innerHTML = `<div class="alert alert-warning py-2 small mb-2 d-flex align-items-center gap-2 flex-wrap"><i class="fas fa-barcode me-1"></i><span>باركود <strong dir="ltr">${esc(_shortBarcode(code))}</strong> غير موجود في الكتالوج</span><button class="btn btn-sm btn-warning text-dark py-0 ms-auto" onclick="catalogQuickAddBarcode('${esc(code)}')"><i class="fas fa-plus me-1"></i>إضافة للكتالوج</button></div>`;
             }
           }
         }
@@ -3750,8 +3750,8 @@ async function _lvCamFrame(cam) {
                 return; // skip AI for this frame
               }
             } catch(_) {
-              // barcode not in catalog → fall through to AI
-              if (statusEl) statusEl.textContent = `باركود ${code} غير موجود — جاري التحليل...`;
+              // barcode not in catalog → show status with quick-add option
+              if (statusEl) statusEl.innerHTML = `<span>باركود <strong dir="ltr">${esc(_shortBarcode(code))}</strong> غير موجود <button class="btn btn-xs btn-warning text-dark py-0 px-1 ms-1" style="font-size:11px" onclick="catalogQuickAddBarcode('${esc(code)}')">إضافة</button></span>`;
             }
           } else if (code && _lvSeenBarcodes.has(code)) {
             _lvDupCount++;
@@ -5532,6 +5532,11 @@ async function saveMarketSettings() {
 // ── Market Product Catalog ────────────────────────────────────
 let _catalogProducts = [];   // full list for in-page filtering
 
+// Truncate long barcode for compact display
+function _shortBarcode(bc) {
+  return (bc && bc.length > 14) ? bc.substring(0, 7) + '…' + bc.substring(bc.length - 5) : (bc || '');
+}
+
 async function loadMarketCatalog() {
   _catalogProducts = [];
   _renderCatalogList([]);
@@ -5575,7 +5580,10 @@ function _renderCatalogList(items) {
       <div class="d-flex align-items-center justify-content-between py-2 px-3">
         <div id="catalog-view-${p.id}" class="d-flex align-items-center gap-3 flex-grow-1 flex-wrap">
           <span style="flex:1">${esc(p.name)}</span>
-          ${p.barcode ? `<span class="badge" style="background:#0ea5e9;font-family:monospace;letter-spacing:1px"><i class="fas fa-barcode me-1"></i>${esc(p.barcode)}</span>` : ''}
+          <div class="d-flex flex-wrap gap-1 align-items-center">
+            ${(p.barcodes && p.barcodes.length ? p.barcodes : (p.barcode ? [p.barcode] : [])).map((bc, i) => `<span class="badge d-inline-flex align-items-center gap-1" style="background:${i===0?'#0ea5e9':'#6366f1'};font-family:monospace;font-size:11px" title="${esc(bc)}">${i===0?'<i class="fas fa-star" style="font-size:9px"></i>':''}<i class="fas fa-barcode"></i>${esc(_shortBarcode(bc))}<span onclick="catalogDeleteBarcode('${p.id}','${esc(bc).replace(/'/g,"\\'")}');event.stopPropagation()" style="cursor:pointer;margin-right:2px;opacity:0.8" title="حذف">×</span></span>`).join('')}
+            <button class="btn btn-sm py-0 px-1" style="background:transparent;border:1px dashed #6366f1;color:#a5b4fc;font-size:11px;line-height:1.8" onclick="catalogAddBarcodeFor('${p.id}');event.stopPropagation()"><i class="fas fa-plus"></i></button>
+          </div>
           <span class="badge bg-success" style="min-width:90px;text-align:center">
             ${Number(p.unit_price).toLocaleString('ar-IQ')} IQD
           </span>
@@ -5679,12 +5687,41 @@ async function catalogDelete(id) {
   } catch(e) { toast(e.message, 'err'); }
 }
 
+async function catalogDeleteBarcode(productId, barcodeValue) {
+  if (!confirm('حذف هذا الباركود؟')) return;
+  try {
+    await api('DELETE', `/market/products/${productId}/barcodes/${encodeURIComponent(barcodeValue)}`);
+    const idx = _catalogProducts.findIndex(p => p.id === productId);
+    if (idx !== -1) {
+      _catalogProducts[idx].barcodes = (_catalogProducts[idx].barcodes || []).filter(b => b !== barcodeValue);
+      _renderCatalogList(_catalogProducts);
+    }
+    toast('تم حذف الباركود');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function catalogAddBarcodeFor(productId) {
+  _cbaAddForProductId = productId;
+  _cbaTargetField = 'add-to-product';
+  await catalogOpenBarcodeAdd(false);
+}
+
+// Open add-product modal with a pre-filled barcode (from unknown barcode scan)
+async function catalogQuickAddBarcode(barcodeValue) {
+  _cbaAddForProductId = null;
+  _cbaTargetField = null;
+  await catalogOpenBarcodeAdd(true);
+  const el = document.getElementById('cba-barcode');
+  if (el) el.value = barcodeValue;
+}
+
 // ── Catalog: Barcode scan helper (fills a field) ──────────────────────
 let _cbaStream = null;
 let _cbaDetector = null;
 let _cbaRafId = null;
-let _cbaTargetField = null;  // 'add' | 'edit'
+let _cbaTargetField = null;  // 'add' | 'edit' | 'add-to-product'
 let _cbaTargetEditId = null; // product id when target='edit'
+let _cbaAddForProductId = null; // product id when adding extra barcode
 let _cbaModal = null;
 
 async function catalogScanBarcodeFor(target, editId) {
@@ -5775,10 +5812,12 @@ function _cbaRafLoop() {
         if (barcodes && barcodes.length) {
           const code = barcodes[0].rawValue;
           if (code) {
-            document.getElementById('cba-barcode').value = code;
-            cbaStopCamera();
-            document.getElementById('cba-cam-status').textContent = '\u062a\u0645 \u0627\u0644\u0643\u0634\u0641: ' + code;
-            return;
+            const current = document.getElementById('cba-barcode').value.trim();
+            // Keep camera open (continuous scanning) — only update field if new value
+            if (code !== current) {
+              document.getElementById('cba-barcode').value = code;
+              document.getElementById('cba-cam-status').textContent = '\u062a\u0645 \u0627\u0644\u0643\u0634\u0641: ' + code;
+            }
           }
         }
       } catch(_) {}
@@ -5815,11 +5854,28 @@ function cbaFillField() {
   if (_cbaTargetField === 'add') {
     const el = document.getElementById('catalog-add-barcode');
     if (el) el.value = code;
+    catalogCloseBarcodeAdd();
   } else if (_cbaTargetField === 'edit' && _cbaTargetEditId) {
     const el = document.getElementById(`cedit-barcode-${_cbaTargetEditId}`);
     if (el) el.value = code;
+    catalogCloseBarcodeAdd();
+  } else if (_cbaTargetField === 'add-to-product' && _cbaAddForProductId) {
+    cbaAddBarcodeToProduct(code, _cbaAddForProductId);
+  } else {
+    catalogCloseBarcodeAdd();
   }
-  catalogCloseBarcodeAdd();
+}
+
+async function cbaAddBarcodeToProduct(code, productId) {
+  const statusEl = document.getElementById('cba-status');
+  statusEl.innerHTML = '<div class="text-muted small"><i class="fas fa-spinner fa-spin me-1"></i>جاري الحفظ...</div>';
+  try {
+    const updated = await api('POST', `/market/products/${productId}/barcodes`, { barcode: code });
+    const idx = _catalogProducts.findIndex(p => p.id === productId);
+    if (idx !== -1) { _catalogProducts[idx] = updated; _renderCatalogList(_catalogProducts); }
+    toast('تمت إضافة الباركود ✅');
+    catalogCloseBarcodeAdd();
+  } catch(e) { toast(e.message, 'err'); statusEl.innerHTML = ''; }
 }
 
 function catalogCloseBarcodeAdd() {
@@ -5827,6 +5883,7 @@ function catalogCloseBarcodeAdd() {
   if (_cbaModal) { _cbaModal.hide(); }
   _cbaTargetField = null;
   _cbaTargetEditId = null;
+  _cbaAddForProductId = null;
 }
 
 // ── Catalog: reference images per product ─────────────────────
