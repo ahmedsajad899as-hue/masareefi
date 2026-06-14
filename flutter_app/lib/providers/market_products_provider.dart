@@ -107,6 +107,33 @@ class MarketProductsNotifier extends StateNotifier<MarketProductsState> {
       return false;
     }
   }
+
+  /// Add an extra barcode to a product and refresh local state.
+  Future<bool> addBarcode(String productId, String barcode) async {
+    try {
+      final updated = await _api.addProductBarcode(productId, barcode);
+      state = state.copyWith(
+        products: state.products.map((p) => p.id == productId ? updated : p).toList(),
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
+  /// Remove an extra barcode from a product and refresh local state.
+  Future<bool> removeBarcode(String productId, String barcodeValue) async {
+    try {
+      await _api.removeProductBarcode(productId, barcodeValue);
+      // Reload this product to get updated barcodes list
+      await load();
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────

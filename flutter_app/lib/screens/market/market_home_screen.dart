@@ -10,7 +10,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/market_customers_provider.dart';
 import '../../providers/supplier_invoices_provider.dart';
 import '../../services/api_service.dart';
-import 'barcode_scanner_screen.dart';
+import 'continuous_barcode_scanner_screen.dart';
 
 class MarketHomeScreen extends ConsumerStatefulWidget {
   const MarketHomeScreen({super.key});
@@ -26,24 +26,19 @@ class _MarketHomeScreenState extends ConsumerState<MarketHomeScreen> {
   bool _loading = true;
 
   Future<void> _scanBarcode(BuildContext ctx) async {
-    final barcode = await Navigator.of(ctx).push<String>(
-      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    final found = await Navigator.of(ctx).push<List<dynamic>>(
+      MaterialPageRoute(
+          builder: (_) => const ContinuousBarcodeScannerScreen()),
     );
-    if (barcode == null || !mounted) return;
+    if (found == null || found.isEmpty || !mounted) return;
 
-    final product = await ApiService.instance.getProductByBarcode(barcode);
-    if (!mounted) return;
-
-    if (product != null) {
-      context.push('/market/sales/add', extra: {'barcode': barcode, 'product': product});
+    // If exactly one product found, jump straight to add-sale with it pre-selected
+    if (found.length == 1) {
+      final product = found.first as MarketProductModel;
+      context.push('/market/sales/add', extra: {'product': product});
     } else {
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        const SnackBar(
-          content: Text('الباركود غير موجود في الكتالوج، يمكنك إضافته الآن'),
-          duration: Duration(seconds: 3),
-        ),
-      );
-      context.push('/market/products', extra: {'barcode': barcode});
+      // Multiple products: go to add-sale screen (user already has them from scanner)
+      context.push('/market/sales/add');
     }
   }
 

@@ -236,6 +236,7 @@ class MarketProductModel {
   final String name;
   final double unitPrice;
   final String? barcode;
+  final List<String> barcodes;
   final DateTime updatedAt;
   final DateTime createdAt;
 
@@ -244,6 +245,7 @@ class MarketProductModel {
     required this.name,
     required this.unitPrice,
     this.barcode,
+    this.barcodes = const [],
     required this.updatedAt,
     required this.createdAt,
   });
@@ -254,6 +256,7 @@ class MarketProductModel {
         name: j['name'] as String,
         unitPrice: (j['unit_price'] as num).toDouble(),
         barcode: j['barcode'] as String?,
+        barcodes: (j['barcodes'] as List<dynamic>? ?? []).cast<String>(),
         updatedAt: DateTime.parse(j['updated_at'] as String),
         createdAt: DateTime.parse(j['created_at'] as String),
       );
@@ -268,6 +271,7 @@ class MarketProductModel {
     String? name,
     double? unitPrice,
     String? barcode,
+    List<String>? barcodes,
     bool clearBarcode = false,
   }) =>
       MarketProductModel(
@@ -275,6 +279,7 @@ class MarketProductModel {
         name: name ?? this.name,
         unitPrice: unitPrice ?? this.unitPrice,
         barcode: clearBarcode ? null : (barcode ?? this.barcode),
+        barcodes: barcodes ?? this.barcodes,
         updatedAt: updatedAt,
         createdAt: createdAt,
       );

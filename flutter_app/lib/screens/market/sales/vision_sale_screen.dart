@@ -10,10 +10,11 @@ import 'package:intl/intl.dart';
 
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../models/market_model.dart';
 import '../../../providers/market_customers_provider.dart';
 import '../../../providers/market_sales_provider.dart';
 import '../../../services/api_service.dart';
-import '../barcode_scanner_screen.dart';
+import '../continuous_barcode_scanner_screen.dart';
 
 class _ItemRow {
   final nameCtrl = TextEditingController();
@@ -119,42 +120,30 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
   }
 
   Future<void> _scanBarcode() async {
-    final barcode = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    final found = await Navigator.of(context).push<List<dynamic>>(
+      MaterialPageRoute(
+          builder: (_) => const ContinuousBarcodeScannerScreen()),
     );
-    if (barcode == null || !mounted) return;
+    if (found == null || found.isEmpty || !mounted) return;
 
-    final product = await ApiService.instance.getProductByBarcode(barcode);
-
-    if (!mounted) return;
-
-    if (product != null) {
-      setState(() {
+    setState(() {
+      for (final product in found.cast<MarketProductModel>()) {
         final row = _ItemRow();
         row.nameCtrl.text = product.name;
         row.priceCtrl.text = product.unitPrice.toString();
         row.qtyCtrl.text = '1';
         _items.add(row);
         _analysisDoneEmpty = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('تمت إضافة: ${product.name}'),
-          backgroundColor: AppColors.success,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('الباركود غير موجود في الكتالوج، يمكنك إضافته الآن'),
-          duration: Duration(seconds: 3),
-        ),
-      );
-      if (mounted) {
-        context.push('/market/products', extra: {'barcode': barcode});
       }
-    }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('تمت إضافة ${found.length} منتج'),
+        backgroundColor: AppColors.success,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _submit() async {

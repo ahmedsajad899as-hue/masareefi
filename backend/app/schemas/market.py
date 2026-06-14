@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 # ───────────────────────── Market Audit Log ─────────────────────────
 
@@ -184,15 +184,42 @@ class MarketProductUpdate(BaseModel):
     barcode: str | None = None
 
 
+class AddBarcodeBody(BaseModel):
+    barcode: str
+
+
 class MarketProductOut(BaseModel):
     id: uuid.UUID
     name: str
     unit_price: float
     barcode: str | None = None
+    barcodes: list[str] = []
     updated_at: datetime
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _build_barcodes(cls, data: object) -> object:
+        """Populate ``barcodes`` from ORM relationships when validating from ORM."""
+        if hasattr(data, "extra_barcodes") and hasattr(data, "barcode"):
+            all_barcodes: list[str] = []
+            if data.barcode:  # type: ignore[union-attr]
+                all_barcodes.append(data.barcode)  # type: ignore[union-attr]
+            for eb in (data.extra_barcodes or []):  # type: ignore[union-attr]
+                if eb.barcode_value not in all_barcodes:
+                    all_barcodes.append(eb.barcode_value)
+            return {
+                "id": data.id,  # type: ignore[union-attr]
+                "name": data.name,  # type: ignore[union-attr]
+                "unit_price": data.unit_price,  # type: ignore[union-attr]
+                "barcode": data.barcode,  # type: ignore[union-attr]
+                "barcodes": all_barcodes,
+                "updated_at": data.updated_at,  # type: ignore[union-attr]
+                "created_at": data.created_at,  # type: ignore[union-attr]
+            }
+        return data
 
 
 class ProductImageOut(BaseModel):

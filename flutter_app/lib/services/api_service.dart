@@ -194,4 +194,18 @@ class ApiService {
       throw _errorMessage(e);
     }
   }
+
+  /// Add an extra barcode to an existing catalog product.
+  Future<MarketProductModel> addProductBarcode(String productId, String barcode) async {
+    final data = await post(
+      ApiConstants.marketProductBarcodes(productId),
+      data: {'barcode': barcode},
+    );
+    return MarketProductModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Remove an extra barcode from a catalog product.
+  Future<void> removeProductBarcode(String productId, String barcodeValue) async {
+    await delete(ApiConstants.marketProductBarcodeValue(productId, barcodeValue));
+  }
 }

@@ -62,6 +62,10 @@ class ApiConstants {
   static const marketProducts = '/market/products';
   static String marketProductByBarcode(String barcode) =>
       '/market/products/barcode/$barcode';
+  static String marketProductBarcodes(String productId) =>
+      '/market/products/$productId/barcodes';
+  static String marketProductBarcodeValue(String productId, String barcodeValue) =>
+      '/market/products/$productId/barcodes/${Uri.encodeComponent(barcodeValue)}';
 
   // Market Owner — Vision
   static const marketVisionAnalyze = '/market/vision/analyze';

@@ -12,11 +12,13 @@ import uuid
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models.market import MarketProduct, ProductImage
+from app.models.market import MarketProduct, ProductBarcode, ProductImage
 from app.models.user import User
 from app.schemas.market import (
+    AddBarcodeBody,
     CatalogScanItem,
     CatalogScanOut,
     MarketProductCreate,
@@ -28,6 +30,16 @@ from app.services.ai_service import extract_price_list_from_image
 from app.utils.dependencies import get_current_market_owner
 
 router = APIRouter()
+
+
+def _with_barcodes():
+    """Reusable selectinload option for extra_barcodes."""
+    return selectinload(MarketProduct.extra_barcodes)
+
+
+def _product_out(product: MarketProduct) -> MarketProductOut:
+    """Serialize a MarketProduct ORM object (with extra_barcodes loaded)."""
+    return MarketProductOut.model_validate(product)
 
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg", "image/jpg", "image/png", "image/webp",
@@ -45,9 +57,10 @@ async def list_products(
     result = await db.execute(
         select(MarketProduct)
         .where(MarketProduct.market_owner_id == current_user.id)
+        .options(_with_barcodes())
         .order_by(MarketProduct.name)
     )
-    return result.scalars().all()
+    return [_product_out(p) for p in result.scalars().all()]
 
 
 @router.post("/", response_model=MarketProductOut, status_code=status.HTTP_201_CREATED)
@@ -65,7 +78,13 @@ async def create_product(
     db.add(product)
     await db.commit()
     await db.refresh(product)
-    return product
+    # Load extra_barcodes (empty for a brand-new product, but consistent)
+    await db.execute(
+        select(MarketProduct)
+        .where(MarketProduct.id == product.id)
+        .options(_with_barcodes())
+    )
+    return _product_out(product)
 
 
 @router.patch("/{product_id}", response_model=MarketProductOut)
@@ -76,10 +95,12 @@ async def update_product(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(MarketProduct).where(
+        select(MarketProduct)
+        .where(
             MarketProduct.id == product_id,
             MarketProduct.market_owner_id == current_user.id,
         )
+        .options(_with_barcodes())
     )
     product = result.scalar_one_or_none()
     if not product:
@@ -92,7 +113,7 @@ async def update_product(
         product.barcode = body.barcode.strip() if body.barcode else None
     await db.commit()
     await db.refresh(product)
-    return product
+    return _product_out(product)
 
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -198,7 +219,16 @@ async def bulk_save_products(
     await db.commit()
     for p in saved:
         await db.refresh(p)
-    return saved
+    # Reload with extra_barcodes to build correct output
+    refreshed = []
+    for p in saved:
+        r = await db.execute(
+            select(MarketProduct)
+            .where(MarketProduct.id == p.id)
+            .options(_with_barcodes())
+        )
+        refreshed.append(r.scalar_one())
+    return [_product_out(p) for p in refreshed]
 
 
 # ─────────────────────────── Barcode lookup ─────────────────────────────────
@@ -209,17 +239,98 @@ async def get_product_by_barcode(
     current_user: User = Depends(get_current_market_owner),
     db: AsyncSession = Depends(get_db),
 ):
-    """Look up a catalog product by barcode value for the current owner."""
+    """Look up a catalog product by barcode — searches primary barcode and all extra barcodes."""
+    # 1. Check primary barcode
     result = await db.execute(
-        select(MarketProduct).where(
+        select(MarketProduct)
+        .where(
             MarketProduct.barcode == barcode_value,
             MarketProduct.market_owner_id == current_user.id,
         )
+        .options(_with_barcodes())
+    )
+    product = result.scalar_one_or_none()
+
+    # 2. Fall back to extra barcodes table
+    if not product:
+        result = await db.execute(
+            select(MarketProduct)
+            .join(ProductBarcode, ProductBarcode.product_id == MarketProduct.id)
+            .where(
+                ProductBarcode.barcode_value == barcode_value,
+                MarketProduct.market_owner_id == current_user.id,
+            )
+            .options(_with_barcodes())
+        )
+        product = result.scalar_one_or_none()
+
+    if not product:
+        raise HTTPException(status_code=404, detail="المنتج غير موجود في الكتالوج")
+    return _product_out(product)
+
+
+# ─────────────────────────── Extra barcode management ────────────────────────
+
+@router.post("/{product_id}/barcodes", response_model=MarketProductOut, status_code=status.HTTP_201_CREATED)
+async def add_extra_barcode(
+    product_id: uuid.UUID,
+    body: AddBarcodeBody,
+    current_user: User = Depends(get_current_market_owner),
+    db: AsyncSession = Depends(get_db),
+):
+    """Attach an additional barcode to an existing catalog product."""
+    result = await db.execute(
+        select(MarketProduct)
+        .where(
+            MarketProduct.id == product_id,
+            MarketProduct.market_owner_id == current_user.id,
+        )
+        .options(_with_barcodes())
     )
     product = result.scalar_one_or_none()
     if not product:
-        raise HTTPException(status_code=404, detail="المنتج غير موجود في الكتالوج")
-    return product
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    barcode_val = body.barcode.strip()
+    if not barcode_val:
+        raise HTTPException(status_code=400, detail="قيمة الباركود فارغة")
+
+    # Avoid duplicates (check primary + existing extras)
+    existing = [product.barcode] + [eb.barcode_value for eb in product.extra_barcodes]
+    if barcode_val in existing:
+        return _product_out(product)  # Already attached — idempotent
+
+    extra = ProductBarcode(
+        product_id=product.id,
+        market_owner_id=current_user.id,
+        barcode_value=barcode_val,
+    )
+    db.add(extra)
+    await db.commit()
+    await db.refresh(product)
+    return _product_out(product)
+
+
+@router.delete("/{product_id}/barcodes/{barcode_value}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_extra_barcode(
+    product_id: uuid.UUID,
+    barcode_value: str,
+    current_user: User = Depends(get_current_market_owner),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove an extra barcode from a catalog product."""
+    result = await db.execute(
+        select(ProductBarcode).where(
+            ProductBarcode.product_id == product_id,
+            ProductBarcode.market_owner_id == current_user.id,
+            ProductBarcode.barcode_value == barcode_value,
+        )
+    )
+    entry = result.scalar_one_or_none()
+    if not entry:
+        raise HTTPException(status_code=404, detail="الباركود غير موجود")
+    await db.delete(entry)
+    await db.commit()
 
 
 # ─────────────────────────── Helpers ─────────────────────────────────────────

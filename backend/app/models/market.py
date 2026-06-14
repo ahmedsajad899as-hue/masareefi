@@ -150,7 +150,7 @@ class MarketProduct(Base):
     )
     name: Mapped[str] = mapped_column(String(300), nullable=False)
     unit_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    barcode: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    barcode: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -159,6 +159,9 @@ class MarketProduct(Base):
     market_owner: Mapped["User"] = relationship("User", foreign_keys=[market_owner_id])
     images: Mapped[list["ProductImage"]] = relationship(
         "ProductImage", back_populates="product", cascade="all, delete-orphan"
+    )
+    extra_barcodes: Mapped[list["ProductBarcode"]] = relationship(
+        "ProductBarcode", back_populates="product", cascade="all, delete-orphan"
     )
 
 
@@ -181,4 +184,27 @@ class ProductImage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     product: Mapped["MarketProduct"] = relationship("MarketProduct", back_populates="images")
+    market_owner: Mapped["User"] = relationship("User", foreign_keys=[market_owner_id])
+
+
+class ProductBarcode(Base):
+    """Additional barcodes for a catalog product — one product can have many barcodes.
+
+    The primary barcode is still stored in ``MarketProduct.barcode`` for
+    backward compatibility.  Every extra barcode is stored here.  The lookup
+    endpoint searches both sources.
+    """
+    __tablename__ = "market_product_barcodes"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(), ForeignKey("market_products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    market_owner_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    barcode_value: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    product: Mapped["MarketProduct"] = relationship("MarketProduct", back_populates="extra_barcodes")
     market_owner: Mapped["User"] = relationship("User", foreign_keys=[market_owner_id])
