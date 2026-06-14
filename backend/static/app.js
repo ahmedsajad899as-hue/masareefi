@@ -3150,8 +3150,9 @@ async function visionFileSelectedDirect(file) {
                 return; // skip AI
               }
             } catch(bErr) {
-              // barcode not in catalog → show alert with quick-add button, fall through to AI
+              // barcode not in catalog → show alert with quick-add button and STOP (don't run AI)
               statusEl.innerHTML = `<div class="alert alert-warning py-2 small mb-2 d-flex align-items-center gap-2 flex-wrap"><i class="fas fa-barcode me-1"></i><span>باركود <strong dir="ltr">${esc(_shortBarcode(code))}</strong> غير موجود في الكتالوج</span><button class="btn btn-sm btn-warning text-dark py-0 ms-auto" onclick="catalogQuickAddBarcode('${esc(code)}')"><i class="fas fa-plus me-1"></i>إضافة للكتالوج</button></div>`;
+              return; // stop — don't fall through to AI
             }
           }
         }
@@ -3750,8 +3751,9 @@ async function _lvCamFrame(cam) {
                 return; // skip AI for this frame
               }
             } catch(_) {
-              // barcode not in catalog → show status with quick-add option
-              if (statusEl) statusEl.innerHTML = `<span>باركود <strong dir="ltr">${esc(_shortBarcode(code))}</strong> غير موجود <button class="btn btn-xs btn-warning text-dark py-0 px-1 ms-1" style="font-size:11px" onclick="catalogQuickAddBarcode('${esc(code)}')">إضافة</button></span>`;
+              // barcode not in catalog → show status with quick-add option and stop this frame
+              if (statusEl) statusEl.innerHTML = `<span style="color:#fcd34d">باركود <strong dir="ltr">${esc(_shortBarcode(code))}</strong> غير موجود</span> <button class="btn btn-sm btn-warning text-dark py-0 px-2 ms-1" style="font-size:11px" onclick="catalogQuickAddBarcode('${esc(code)}')"><i class="fas fa-plus me-1"></i>إضافة للكتالوج</button>`;
+              return; // stop — don't send to AI for this frame
             }
           } else if (code && _lvSeenBarcodes.has(code)) {
             _lvDupCount++;
@@ -5713,6 +5715,25 @@ async function catalogQuickAddBarcode(barcodeValue) {
   await catalogOpenBarcodeAdd(true);
   const el = document.getElementById('cba-barcode');
   if (el) el.value = barcodeValue;
+  cbaOnBarcodeInput(barcodeValue);
+}
+
+let _cbaLookupTimer = null;
+async function cbaOnBarcodeInput(val) {
+  const statusEl = document.getElementById('cba-lookup-status');
+  if (!statusEl) return;
+  clearTimeout(_cbaLookupTimer);
+  if (!val || val.trim().length < 3) { statusEl.innerHTML = ''; return; }
+  _cbaLookupTimer = setTimeout(async () => {
+    try {
+      const product = await api('GET', `/market/products/barcode/${encodeURIComponent(val.trim())}`);
+      if (product) {
+        statusEl.innerHTML = `<span class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i>هذا الباركود مسجّل مسبقاً للمنتج: <strong>${esc(product.name)}</strong></span>`;
+      }
+    } catch(_) {
+      statusEl.innerHTML = `<span class="text-success"><i class="fas fa-check-circle me-1"></i>باركود جديد — غير موجود في الكتالوج</span>`;
+    }
+  }, 500);
 }
 
 // ── Catalog: Barcode scan helper (fills a field) ──────────────────────

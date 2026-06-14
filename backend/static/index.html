@@ -1690,11 +1690,12 @@
             <div class="mb-3">
               <label class="form-label small fw-bold">رقم الباركود</label>
               <div class="input-group">
-                <input type="text" id="cba-barcode" class="form-control" placeholder="امسح أو اكتب رقم الباركود..." dir="ltr">
+                <input type="text" id="cba-barcode" class="form-control" placeholder="امسح أو اكتب رقم الباركود..." dir="ltr" oninput="cbaOnBarcodeInput(this.value)">
                 <button class="btn btn-warning text-dark" type="button" onclick="cbaStartCamera()" title="مسح بالكاميرا">
                   <i class="fas fa-camera"></i>
                 </button>
               </div>
+              <div id="cba-lookup-status" class="mt-1" style="font-size:12px"></div>
             </div>
 
             <!-- Product details (shown after barcode is entered) -->
