@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../core/constants/app_colors.dart';
 import '../../../providers/supplier_invoices_provider.dart';
@@ -65,7 +65,7 @@ class _AddSupplierInvoiceScreenState
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('حدث خطأ أثناء الحفظ'),
+            content: Text('Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø§Ù„Ø­ÙØ¸'),
             backgroundColor: AppColors.error),
       );
     }
@@ -78,12 +78,12 @@ class _AddSupplierInvoiceScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('فاتورة مورد جديدة'),
+        title: const Text('ÙØ§ØªÙˆØ±Ø© Ù…ÙˆØ±Ø¯ Ø¬Ø¯ÙŠØ¯Ø©'),
         actions: [
           if (!_saving)
             TextButton(
               onPressed: _submit,
-              child: const Text('حفظ',
+              child: const Text('Ø­ÙØ¸',
                   style: TextStyle(fontWeight: FontWeight.bold)),
             ),
         ],
@@ -99,11 +99,11 @@ class _AddSupplierInvoiceScreenState
                   TextFormField(
                     controller: _supplierCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'اسم المورد / الشركة',
+                      labelText: 'Ø§Ø³Ù… Ø§Ù„Ù…ÙˆØ±Ø¯ / Ø§Ù„Ø´Ø±ÙƒØ©',
                       prefixIcon: Icon(Icons.local_shipping_rounded),
                     ),
                     validator: (v) =>
-                        v == null || v.trim().isEmpty ? 'مطلوب' : null,
+                        v == null || v.trim().isEmpty ? 'Ù…Ø·Ù„ÙˆØ¨' : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -112,7 +112,7 @@ class _AddSupplierInvoiceScreenState
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.calendar_today_rounded,
                         color: AppColors.primary),
-                    title: const Text('تاريخ الفاتورة'),
+                    title: const Text('ØªØ§Ø±ÙŠØ® Ø§Ù„ÙØ§ØªÙˆØ±Ø©'),
                     subtitle: Text(dateFmt.format(_invoiceDate)),
                     trailing: const Icon(Icons.edit_calendar_rounded),
                     onTap: () async {
@@ -131,9 +131,9 @@ class _AddSupplierInvoiceScreenState
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.event_rounded,
                         color: AppColors.warning),
-                    title: const Text('تاريخ الاستحقاق (اختياري)'),
+                    title: const Text('ØªØ§Ø±ÙŠØ® Ø§Ù„Ø§Ø³ØªØ­Ù‚Ø§Ù‚ (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)'),
                     subtitle: Text(
-                        _dueDate != null ? dateFmt.format(_dueDate!) : 'غير محدد'),
+                        _dueDate != null ? dateFmt.format(_dueDate!) : 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯'),
                     trailing: _dueDate != null
                         ? IconButton(
                             icon: const Icon(Icons.clear_rounded),
@@ -158,12 +158,12 @@ class _AddSupplierInvoiceScreenState
                   Row(
                     children: [
                       const Expanded(
-                          child: Text('المواد',
+                          child: Text('Ø§Ù„Ù…ÙˆØ§Ø¯',
                               style:
                                   TextStyle(fontWeight: FontWeight.bold))),
                       TextButton.icon(
                         icon: const Icon(Icons.add_rounded),
-                        label: const Text('إضافة مادة'),
+                        label: const Text('Ø¥Ø¶Ø§ÙØ© Ù…Ø§Ø¯Ø©'),
                         onPressed: () =>
                             setState(() => _items.add(_ItemRow())),
                       ),
@@ -198,11 +198,11 @@ class _AddSupplierInvoiceScreenState
                             TextFormField(
                               controller: row.nameCtrl,
                               decoration: const InputDecoration(
-                                  labelText: 'اسم المادة',
+                                  labelText: 'Ø§Ø³Ù… Ø§Ù„Ù…Ø§Ø¯Ø©',
                                   prefixIcon:
                                       Icon(Icons.inventory_2_rounded)),
                               validator: (v) => v == null || v.isEmpty
-                                  ? 'مطلوب'
+                                  ? 'Ù…Ø·Ù„ÙˆØ¨'
                                   : null,
                             ),
                             const SizedBox(height: 8),
@@ -216,12 +216,12 @@ class _AddSupplierInvoiceScreenState
                                             decimal: true),
                                     textDirection: TextDirection.ltr,
                                     decoration: const InputDecoration(
-                                        labelText: 'الكمية'),
+                                        labelText: 'Ø§Ù„ÙƒÙ…ÙŠØ©'),
                                     validator: (v) {
                                       if (v == null || v.isEmpty)
-                                        return 'مطلوب';
+                                        return 'Ù…Ø·Ù„ÙˆØ¨';
                                       if (double.tryParse(v) == null)
-                                        return 'رقم غير صحيح';
+                                        return 'Ø±Ù‚Ù… ØºÙŠØ± ØµØ­ÙŠØ­';
                                       return null;
                                     },
                                     onChanged: (_) => setState(() {}),
@@ -236,12 +236,12 @@ class _AddSupplierInvoiceScreenState
                                             decimal: true),
                                     textDirection: TextDirection.ltr,
                                     decoration: const InputDecoration(
-                                        labelText: 'السعر (د.ع)'),
+                                        labelText: 'Ø§Ù„Ø³Ø¹Ø± (Ø¯.Ø¹)'),
                                     validator: (v) {
                                       if (v == null || v.isEmpty)
-                                        return 'مطلوب';
+                                        return 'Ù…Ø·Ù„ÙˆØ¨';
                                       if (double.tryParse(v) == null)
-                                        return 'رقم غير صحيح';
+                                        return 'Ø±Ù‚Ù… ØºÙŠØ± ØµØ­ÙŠØ­';
                                       return null;
                                     },
                                     onChanged: (_) => setState(() {}),
@@ -264,11 +264,11 @@ class _AddSupplierInvoiceScreenState
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('الإجمالي:',
+                          const Text('Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ:',
                               style: TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 16)),
                           Text(
-                            '${fmt.format(_total)} د.ع',
+                            '${fmt.format(_total)} Ø¯.Ø¹',
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18,
@@ -283,7 +283,7 @@ class _AddSupplierInvoiceScreenState
                   TextField(
                     controller: _notesCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'ملاحظات (اختياري)',
+                      labelText: 'Ù…Ù„Ø§Ø­Ø¸Ø§Øª (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)',
                       prefixIcon: Icon(Icons.note_rounded),
                     ),
                     maxLines: 2,
@@ -292,7 +292,7 @@ class _AddSupplierInvoiceScreenState
                   ElevatedButton.icon(
                     onPressed: _submit,
                     icon: const Icon(Icons.save_rounded),
-                    label: const Text('حفظ الفاتورة'),
+                    label: const Text('Ø­ÙØ¸ Ø§Ù„ÙØ§ØªÙˆØ±Ø©'),
                     style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.all(14)),
                   ),

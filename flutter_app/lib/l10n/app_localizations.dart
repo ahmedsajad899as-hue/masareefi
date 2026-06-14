@@ -374,7 +374,7 @@ class AppLocalizations {
   String get recentExpenses => _t('recentExpenses');
   String get viewAll => _t('viewAll');
   String get progress => _t('progress');
-  String get of => _t('of');
+  String get ofLabel => _t('of');
 
   String greeting() {
     final hour = DateTime.now().hour;

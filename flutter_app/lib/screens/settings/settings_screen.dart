@@ -206,7 +206,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ElevatedButton(
             onPressed: () async {
               if (nameCtrl.text.trim().isEmpty) return;
-              await ref.read(authProvider.notifier).updateProfile({'full_name': nameCtrl.text.trim()});
+              await ref.read(authProvider.notifier).updateProfile(fullName: nameCtrl.text.trim());
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: Text(l.save),

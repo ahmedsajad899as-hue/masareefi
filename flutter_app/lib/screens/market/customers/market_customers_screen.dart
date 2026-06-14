@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../core/constants/app_colors.dart';
 import '../../../providers/market_customers_provider.dart';
@@ -48,7 +48,7 @@ class _MarketCustomersScreenState
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('الباركود غير موجود في الكتالوج، يمكنك إضافته الآن'),
+          content: Text('Ø§Ù„Ø¨Ø§Ø±ÙƒÙˆØ¯ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯ ÙÙŠ Ø§Ù„ÙƒØªØ§Ù„ÙˆØ¬ØŒ ÙŠÙ…ÙƒÙ†Ùƒ Ø¥Ø¶Ø§ÙØªÙ‡ Ø§Ù„Ø¢Ù†'),
           duration: Duration(seconds: 3),
         ),
       );
@@ -63,14 +63,14 @@ class _MarketCustomersScreenState
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('إضافة زبون جديد'),
+        title: const Text('Ø¥Ø¶Ø§ÙØ© Ø²Ø¨ÙˆÙ† Ø¬Ø¯ÙŠØ¯'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameCtrl,
               decoration: const InputDecoration(
-                  labelText: 'الاسم', prefixIcon: Icon(Icons.person_rounded)),
+                  labelText: 'Ø§Ù„Ø§Ø³Ù…', prefixIcon: Icon(Icons.person_rounded)),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -78,21 +78,21 @@ class _MarketCustomersScreenState
               keyboardType: TextInputType.phone,
               textDirection: TextDirection.ltr,
               decoration: const InputDecoration(
-                  labelText: 'رقم الهاتف',
+                  labelText: 'Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ',
                   prefixIcon: Icon(Icons.phone_rounded)),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: notesCtrl,
               decoration: const InputDecoration(
-                  labelText: 'ملاحظات (اختياري)',
+                  labelText: 'Ù…Ù„Ø§Ø­Ø¸Ø§Øª (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)',
                   prefixIcon: Icon(Icons.note_rounded)),
             ),
           ],
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+              onPressed: () => Navigator.pop(ctx), child: const Text('Ø¥Ù„ØºØ§Ø¡')),
           ElevatedButton(
             onPressed: () async {
               if (nameCtrl.text.trim().isEmpty) return;
@@ -107,7 +107,7 @@ class _MarketCustomersScreenState
                         : notesCtrl.text.trim(),
                   );
             },
-            child: const Text('إضافة'),
+            child: const Text('Ø¥Ø¶Ø§ÙØ©'),
           ),
         ],
       ),
@@ -121,16 +121,16 @@ class _MarketCustomersScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('الزبائن'),
+        title: const Text('Ø§Ù„Ø²Ø¨Ø§Ø¦Ù†'),
         actions: [
           IconButton(
             icon: const Icon(Icons.qr_code_scanner_rounded),
-            tooltip: 'مسح باركود',
+            tooltip: 'Ù…Ø³Ø­ Ø¨Ø§Ø±ÙƒÙˆØ¯',
             onPressed: _scanBarcode,
           ),
           IconButton(
             icon: const Icon(Icons.warning_amber_rounded, color: AppColors.warning),
-            tooltip: 'الزبائن المتأخرين',
+            tooltip: 'Ø§Ù„Ø²Ø¨Ø§Ø¦Ù† Ø§Ù„Ù…ØªØ£Ø®Ø±ÙŠÙ†',
             onPressed: () => context.push('/market/customers/overdue'),
           ),
         ],
@@ -141,7 +141,7 @@ class _MarketCustomersScreenState
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
-                hintText: 'بحث باسم أو رقم الهاتف...',
+                hintText: 'Ø¨Ø­Ø« Ø¨Ø§Ø³Ù… Ø£Ùˆ Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ...',
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: _searchCtrl.text.isNotEmpty
                     ? IconButton(
@@ -173,7 +173,7 @@ class _MarketCustomersScreenState
             heroTag: 'live_vision_fab',
             onPressed: () => context.push('/market/live-vision'),
             backgroundColor: Colors.deepPurple,
-            tooltip: 'كاميرا مباشرة (لايف)',
+            tooltip: 'ÙƒØ§Ù…ÙŠØ±Ø§ Ù…Ø¨Ø§Ø´Ø±Ø© (Ù„Ø§ÙŠÙ)',
             child: const Icon(Icons.videocam_rounded),
           ),
           const SizedBox(height: 10),
@@ -181,7 +181,7 @@ class _MarketCustomersScreenState
             heroTag: 'add_customer_fab',
             onPressed: _showAddDialog,
             icon: const Icon(Icons.person_add_rounded),
-            label: const Text('زبون جديد'),
+            label: const Text('Ø²Ø¨ÙˆÙ† Ø¬Ø¯ÙŠØ¯'),
           ),
         ],
       ),
@@ -195,7 +195,7 @@ class _MarketCustomersScreenState
                       Icon(Icons.people_outline_rounded,
                           size: 64, color: Colors.grey),
                       SizedBox(height: 12),
-                      Text('لا يوجد زبائن بعد',
+                      Text('Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ø²Ø¨Ø§Ø¦Ù† Ø¨Ø¹Ø¯',
                           style: TextStyle(color: Colors.grey)),
                     ],
                   ),
@@ -218,19 +218,19 @@ class _MarketCustomersScreenState
                           final ok = await showDialog<bool>(
                             context: context,
                             builder: (ctx) => AlertDialog(
-                              title: const Text('حذف الزبون'),
-                              content: Text('هل تريد حذف ${c.name}؟'),
+                              title: const Text('Ø­Ø°Ù Ø§Ù„Ø²Ø¨ÙˆÙ†'),
+                              content: Text('Ù‡Ù„ ØªØ±ÙŠØ¯ Ø­Ø°Ù ${c.name}ØŸ'),
                               actions: [
                                 TextButton(
                                     onPressed: () =>
                                         Navigator.pop(ctx, false),
-                                    child: const Text('إلغاء')),
+                                    child: const Text('Ø¥Ù„ØºØ§Ø¡')),
                                 ElevatedButton(
                                     style: ElevatedButton.styleFrom(
                                         backgroundColor: AppColors.error),
                                     onPressed: () =>
                                         Navigator.pop(ctx, true),
-                                    child: const Text('حذف')),
+                                    child: const Text('Ø­Ø°Ù')),
                               ],
                             ),
                           );
@@ -290,14 +290,14 @@ class _CustomerTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '${fmt.format(customer.totalDebt)} د.ع',
+                    '${fmt.format(customer.totalDebt)} Ø¯.Ø¹',
                     style: const TextStyle(
                         color: AppColors.error,
                         fontWeight: FontWeight.bold,
                         fontSize: 13),
                   ),
                   Text(
-                    '${customer.unpaidSalesCount} فاتورة',
+                    '${customer.unpaidSalesCount} ÙØ§ØªÙˆØ±Ø©',
                     style: const TextStyle(fontSize: 11, color: Colors.grey),
                   ),
                 ],
@@ -306,7 +306,7 @@ class _CustomerTile extends StatelessWidget {
             ],
             if (customer.linkedUserId != null)
               const Tooltip(
-                message: 'مرتبط بحساب تطبيق',
+                message: 'Ù…Ø±ØªØ¨Ø· Ø¨Ø­Ø³Ø§Ø¨ ØªØ·Ø¨ÙŠÙ‚',
                 child: Icon(Icons.link_rounded,
                     color: AppColors.success, size: 18),
               ),

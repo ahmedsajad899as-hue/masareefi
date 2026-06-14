@@ -79,6 +79,10 @@ class ApiService {
     await _storage.deleteAll();
   }
 
+  Future<String?> readToken(String key) async {
+    return _storage.read(key: key);
+  }
+
   Future<bool> hasTokens() async {
     final token = await _storage.read(key: 'access_token');
     return token != null;

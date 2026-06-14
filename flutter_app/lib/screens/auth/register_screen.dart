@@ -252,6 +252,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ],
 
                 const SizedBox(height: 32),
+                AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   child: isLoading
                       ? const CircularProgressIndicator(color: AppColors.primary)

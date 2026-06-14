@@ -1,9 +1,9 @@
-import 'package:dio/dio.dart';
+﻿import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../core/constants/api_constants.dart';
 import '../../core/constants/app_colors.dart';
@@ -183,7 +183,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // ─── Voice Section ────────────────────────────────────────────
+            // â”€â”€â”€ Voice Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if (_editId == null) ...[
               _VoiceSectionWidget(
                 l: l,
@@ -212,14 +212,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               const Divider(height: 40),
               Align(
                 child: Text(
-                  l.isArabic ? '— أو أدخل يدوياً —' : '— or enter manually —',
+                  l.isArabic ? 'â€” Ø£Ùˆ Ø£Ø¯Ø®Ù„ ÙŠØ¯ÙˆÙŠØ§Ù‹ â€”' : 'â€” or enter manually â€”',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
               const SizedBox(height: 16),
             ],
 
-            // ─── Manual Form ──────────────────────────────────────────────
+            // â”€â”€â”€ Manual Form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Form(
               key: _formKey,
               child: Column(
@@ -325,7 +325,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 }
 
-// ─── Voice Section Widget ──────────────────────────────────────────────────────
+// â”€â”€â”€ Voice Section Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _VoiceSectionWidget extends StatelessWidget {
   const _VoiceSectionWidget({
@@ -415,7 +415,7 @@ class _VoiceSectionWidget extends StatelessWidget {
   }
 }
 
-// ─── Parsed Expenses Review ────────────────────────────────────────────────────
+// â”€â”€â”€ Parsed Expenses Review â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _ParsedExpensesReview extends ConsumerWidget {
   const _ParsedExpensesReview({
@@ -482,7 +482,7 @@ class _ParsedExpensesReview extends ConsumerWidget {
                       color: AppColors.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(matched?.icon ?? '💰', style: const TextStyle(fontSize: 18)),
+                    child: Text(matched?.icon ?? 'ðŸ’°', style: const TextStyle(fontSize: 18)),
                   );
                 }(),
                 const SizedBox(width: 10),

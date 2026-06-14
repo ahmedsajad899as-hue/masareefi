@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../utils/pick_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_colors.dart';
@@ -65,8 +65,8 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
     if (_analyzing) return;
 
     // pickImageFile() is platform-aware:
-    //   • Web    → fresh dart:html FileUploadInputElement (reliable repeated picks)
-    //   • Native → file_picker package
+    //   â€¢ Web    â†’ fresh dart:html FileUploadInputElement (reliable repeated picks)
+    //   â€¢ Native â†’ file_picker package
     final picked = await pickImageFile();
     if (picked == null) return;
 
@@ -108,7 +108,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('فشل تحليل الصورة: $e'),
+            content: Text('ÙØ´Ù„ ØªØ­Ù„ÙŠÙ„ Ø§Ù„ØµÙˆØ±Ø©: $e'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -139,7 +139,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('تمت إضافة ${found.length} منتج'),
+        content: Text('ØªÙ…Øª Ø¥Ø¶Ø§ÙØ© ${found.length} Ù…Ù†ØªØ¬'),
         backgroundColor: AppColors.success,
         duration: const Duration(seconds: 2),
       ),
@@ -162,7 +162,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
     if (items.isEmpty) {
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى إضافة منتج واحد على الأقل')),
+        const SnackBar(content: Text('ÙŠØ±Ø¬Ù‰ Ø¥Ø¶Ø§ÙØ© Ù…Ù†ØªØ¬ ÙˆØ§Ø­Ø¯ Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„')),
       );
       return;
     }
@@ -182,7 +182,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('حدث خطأ أثناء الحفظ'),
+          content: Text('Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø§Ù„Ø­ÙØ¸'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -193,16 +193,16 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('فاتورة بالكاميرا'),
+        title: const Text('ÙØ§ØªÙˆØ±Ø© Ø¨Ø§Ù„ÙƒØ§Ù…ÙŠØ±Ø§'),
         actions: [
           IconButton(
-            tooltip: 'وضع الكاميرا المباشر',
+            tooltip: 'ÙˆØ¶Ø¹ Ø§Ù„ÙƒØ§Ù…ÙŠØ±Ø§ Ø§Ù„Ù…Ø¨Ø§Ø´Ø±',
             icon: const Icon(Icons.videocam_rounded),
             onPressed: () => context
                 .push('/market/live-vision-sale/${widget.customerId}'),
           ),
           IconButton(
-            tooltip: 'مسح باركود',
+            tooltip: 'Ù…Ø³Ø­ Ø¨Ø§Ø±ÙƒÙˆØ¯',
             icon: const Icon(Icons.qr_code_scanner_rounded),
             onPressed: _scanBarcode,
           ),
@@ -210,7 +210,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
             TextButton(
               onPressed: _submit,
               child: const Text(
-                'حفظ',
+                'Ø­ÙØ¸',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -244,14 +244,14 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
                               size: 56, color: AppColors.primary),
                           SizedBox(height: 10),
                           Text(
-                            'اضغط لالتقاط صورة أو اختيار من المعرض',
+                            'Ø§Ø¶ØºØ· Ù„Ø§Ù„ØªÙ‚Ø§Ø· ØµÙˆØ±Ø© Ø£Ùˆ Ø§Ø®ØªÙŠØ§Ø± Ù…Ù† Ø§Ù„Ù…Ø¹Ø±Ø¶',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                                 color: AppColors.primary, fontSize: 13),
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'سيتم تحليل المنتجات تلقائياً بالذكاء الاصطناعي',
+                            'Ø³ÙŠØªÙ… ØªØ­Ù„ÙŠÙ„ Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹ Ø¨Ø§Ù„Ø°ÙƒØ§Ø¡ Ø§Ù„Ø§ØµØ·Ù†Ø§Ø¹ÙŠ',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.grey, fontSize: 11),
                           ),
@@ -268,7 +268,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
                     children: [
                       CircularProgressIndicator(),
                       SizedBox(height: 10),
-                      Text('جاري تحليل الصورة بالذكاء الاصطناعي...',
+                      Text('Ø¬Ø§Ø±ÙŠ ØªØ­Ù„ÙŠÙ„ Ø§Ù„ØµÙˆØ±Ø© Ø¨Ø§Ù„Ø°ÙƒØ§Ø¡ Ø§Ù„Ø§ØµØ·Ù†Ø§Ø¹ÙŠ...',
                           style: TextStyle(color: Colors.grey)),
                     ],
                   ),
@@ -293,7 +293,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
                       const SizedBox(width: 8),
                       const Expanded(
                         child: Text(
-                          'لم يتم استخراج منتجات تلقائياً. أضفها يدوياً.',
+                          'Ù„Ù… ÙŠØªÙ… Ø§Ø³ØªØ®Ø±Ø§Ø¬ Ù…Ù†ØªØ¬Ø§Øª ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹. Ø£Ø¶ÙÙ‡Ø§ ÙŠØ¯ÙˆÙŠØ§Ù‹.',
                           style: TextStyle(fontSize: 13),
                         ),
                       ),
@@ -301,7 +301,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
                   ),
                 ),
               ],
-              const Text('المنتجات المستخرجة',
+              const Text('Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª Ø§Ù„Ù…Ø³ØªØ®Ø±Ø¬Ø©',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               const SizedBox(height: 8),
               ..._items.asMap().entries.map(
@@ -309,7 +309,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
               TextButton.icon(
                 onPressed: () => setState(() => _items.add(_ItemRow())),
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('إضافة منتج'),
+                label: const Text('Ø¥Ø¶Ø§ÙØ© Ù…Ù†ØªØ¬'),
               ),
               const SizedBox(height: 12),
               Container(
@@ -322,10 +322,10 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('الإجمالي',
+                    const Text('Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ',
                         style: TextStyle(fontWeight: FontWeight.bold)),
                     Text(
-                      '${fmt.format(_total)} د.ع',
+                      '${fmt.format(_total)} Ø¯.Ø¹',
                       style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           color: AppColors.primary,
@@ -338,7 +338,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
               TextField(
                 controller: _notesCtrl,
                 decoration: const InputDecoration(
-                  labelText: 'ملاحظة (اختياري)',
+                  labelText: 'Ù…Ù„Ø§Ø­Ø¸Ø© (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.note_alt_outlined),
                 ),
@@ -356,7 +356,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
                             strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.save_rounded),
-                label: Text(_saving ? 'جاري الحفظ...' : 'حفظ الفاتورة'),
+                label: Text(_saving ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø­ÙØ¸...' : 'Ø­ÙØ¸ Ø§Ù„ÙØ§ØªÙˆØ±Ø©'),
               ),
             ],
           ],
@@ -378,7 +378,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
                 controller: row.nameCtrl,
                 onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
-                  labelText: 'المنتج',
+                  labelText: 'Ø§Ù„Ù…Ù†ØªØ¬',
                   isDense: true,
                   border: OutlineInputBorder(),
                 ),
@@ -391,7 +391,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
                 onChanged: (_) => setState(() {}),
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'كمية',
+                  labelText: 'ÙƒÙ…ÙŠØ©',
                   isDense: true,
                   border: OutlineInputBorder(),
                 ),
@@ -405,7 +405,7 @@ class _VisionSaleScreenState extends ConsumerState<VisionSaleScreen> {
                 onChanged: (_) => setState(() {}),
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'سعر',
+                  labelText: 'Ø³Ø¹Ø±',
                   isDense: true,
                   border: OutlineInputBorder(),
                 ),

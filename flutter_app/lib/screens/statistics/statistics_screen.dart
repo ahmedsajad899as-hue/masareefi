@@ -249,7 +249,7 @@ class _CategoryPieCardState extends State<_CategoryPieCard> {
                   )),
                   const SizedBox(width: 4),
                   Text(
-                    widget.lang == 'ar' ? cat.categoryNameAr : cat.categoryNameEn,
+                    widget.lang == 'ar' ? cat.nameAr : cat.nameEn,
                     style: const TextStyle(fontSize: 12),
                   ),
                 ],

@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../core/constants/app_colors.dart';
 import '../../../models/market_model.dart';
@@ -67,7 +67,7 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('تمت إضافة ${found.length} منتج'),
+        content: Text('ØªÙ…Øª Ø¥Ø¶Ø§ÙØ© ${found.length} Ù…Ù†ØªØ¬'),
         backgroundColor: AppColors.success,
         duration: const Duration(seconds: 2),
       ),
@@ -78,7 +78,7 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCustomerId == null) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('يرجى اختيار الزبون')));
+          .showSnackBar(const SnackBar(content: Text('ÙŠØ±Ø¬Ù‰ Ø§Ø®ØªÙŠØ§Ø± Ø§Ù„Ø²Ø¨ÙˆÙ†')));
       return;
     }
     setState(() => _saving = true);
@@ -105,7 +105,7 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('حدث خطأ أثناء الحفظ'), backgroundColor: AppColors.error),
+            content: Text('Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø§Ù„Ø­ÙØ¸'), backgroundColor: AppColors.error),
       );
     }
   }
@@ -117,12 +117,12 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('تسجيل دين جديد'),
+        title: const Text('ØªØ³Ø¬ÙŠÙ„ Ø¯ÙŠÙ† Ø¬Ø¯ÙŠØ¯'),
         actions: [
           if (!_saving)
             TextButton(
               onPressed: _submit,
-              child: const Text('حفظ',
+              child: const Text('Ø­ÙØ¸',
                   style: TextStyle(fontWeight: FontWeight.bold)),
             ),
         ],
@@ -138,7 +138,7 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
                   DropdownButtonFormField<String>(
                     value: _selectedCustomerId,
                     decoration: const InputDecoration(
-                      labelText: 'الزبون',
+                      labelText: 'Ø§Ù„Ø²Ø¨ÙˆÙ†',
                       prefixIcon: Icon(Icons.person_rounded),
                     ),
                     items: customersState.customers
@@ -148,7 +148,7 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
                             ))
                         .toList(),
                     onChanged: (v) => setState(() => _selectedCustomerId = v),
-                    validator: (v) => v == null ? 'يرجى اختيار الزبون' : null,
+                    validator: (v) => v == null ? 'ÙŠØ±Ø¬Ù‰ Ø§Ø®ØªÙŠØ§Ø± Ø§Ù„Ø²Ø¨ÙˆÙ†' : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -157,7 +157,7 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.calendar_today_rounded,
                         color: AppColors.primary),
-                    title: const Text('تاريخ الشراء'),
+                    title: const Text('ØªØ§Ø±ÙŠØ® Ø§Ù„Ø´Ø±Ø§Ø¡'),
                     subtitle: Text(
                         DateFormat('yyyy/MM/dd', 'ar').format(_saleDate)),
                     trailing: const Icon(Icons.edit_calendar_rounded),
@@ -177,19 +177,19 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
                   Row(
                     children: [
                       const Expanded(
-                          child: Text('المواد المشتراة',
+                          child: Text('Ø§Ù„Ù…ÙˆØ§Ø¯ Ø§Ù„Ù…Ø´ØªØ±Ø§Ø©',
                               style:
                                   TextStyle(fontWeight: FontWeight.bold))),
                       TextButton.icon(
                         icon: const Icon(Icons.add_rounded),
-                        label: const Text('إضافة مادة'),
+                        label: const Text('Ø¥Ø¶Ø§ÙØ© Ù…Ø§Ø¯Ø©'),
                         onPressed: () {
                           setState(() => _items.add(_ItemRow()));
                         },
                       ),
                       TextButton.icon(
                         icon: const Icon(Icons.qr_code_scanner_rounded),
-                        label: const Text('مسح باركود'),
+                        label: const Text('Ù…Ø³Ø­ Ø¨Ø§Ø±ÙƒÙˆØ¯'),
                         onPressed: _scanBarcode,
                       ),
                     ],
@@ -223,11 +223,11 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
                             TextFormField(
                               controller: row.nameCtrl,
                               decoration: const InputDecoration(
-                                  labelText: 'اسم المادة',
+                                  labelText: 'Ø§Ø³Ù… Ø§Ù„Ù…Ø§Ø¯Ø©',
                                   prefixIcon:
                                       Icon(Icons.inventory_2_rounded)),
                               validator: (v) => v == null || v.isEmpty
-                                  ? 'مطلوب'
+                                  ? 'Ù…Ø·Ù„ÙˆØ¨'
                                   : null,
                             ),
                             const SizedBox(height: 8),
@@ -241,11 +241,11 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
                                             decimal: true),
                                     textDirection: TextDirection.ltr,
                                     decoration: const InputDecoration(
-                                        labelText: 'الكمية'),
+                                        labelText: 'Ø§Ù„ÙƒÙ…ÙŠØ©'),
                                     validator: (v) {
-                                      if (v == null || v.isEmpty) return 'مطلوب';
+                                      if (v == null || v.isEmpty) return 'Ù…Ø·Ù„ÙˆØ¨';
                                       if (double.tryParse(v) == null)
-                                        return 'رقم غير صحيح';
+                                        return 'Ø±Ù‚Ù… ØºÙŠØ± ØµØ­ÙŠØ­';
                                       return null;
                                     },
                                     onChanged: (_) => setState(() {}),
@@ -260,11 +260,11 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
                                             decimal: true),
                                     textDirection: TextDirection.ltr,
                                     decoration: const InputDecoration(
-                                        labelText: 'السعر (د.ع)'),
+                                        labelText: 'Ø§Ù„Ø³Ø¹Ø± (Ø¯.Ø¹)'),
                                     validator: (v) {
-                                      if (v == null || v.isEmpty) return 'مطلوب';
+                                      if (v == null || v.isEmpty) return 'Ù…Ø·Ù„ÙˆØ¨';
                                       if (double.tryParse(v) == null)
-                                        return 'رقم غير صحيح';
+                                        return 'Ø±Ù‚Ù… ØºÙŠØ± ØµØ­ÙŠØ­';
                                       return null;
                                     },
                                     onChanged: (_) => setState(() {}),
@@ -287,11 +287,11 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('الإجمالي:',
+                          const Text('Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ:',
                               style: TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 16)),
                           Text(
-                            '${fmt.format(_total)} د.ع',
+                            '${fmt.format(_total)} Ø¯.Ø¹',
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18,
@@ -308,7 +308,7 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
                   TextField(
                     controller: _notesCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'ملاحظات (اختياري)',
+                      labelText: 'Ù…Ù„Ø§Ø­Ø¸Ø§Øª (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)',
                       prefixIcon: Icon(Icons.note_rounded),
                     ),
                     maxLines: 2,
@@ -319,7 +319,7 @@ class _AddSaleScreenState extends ConsumerState<AddSaleScreen> {
                   ElevatedButton.icon(
                     onPressed: _submit,
                     icon: const Icon(Icons.save_rounded),
-                    label: const Text('حفظ الدين'),
+                    label: const Text('Ø­ÙØ¸ Ø§Ù„Ø¯ÙŠÙ†'),
                     style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.all(14)),
                   ),

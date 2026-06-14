@@ -105,7 +105,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     try {
-      final storage = await _api._storage.read(key: 'refresh_token');
+      final storage = await _api.readToken('refresh_token');
       if (storage != null) {
         await _api.post(ApiConstants.logout, data: {'refresh_token': storage});
       }
